@@ -1,7 +1,8 @@
 *** Settings ***
 Documentation     The IPsec lab as modelled in the shared Nautobot: devices match the routers, p2p links are cabled,
-...               VTIs are objects with source/peer relationships, eBGP peerings match the live sessions, the rendered
-...               NAC device model matches the committed file, Golden Config is compliant.
+...               the VPN lives in the core VPN app (VPN, tunnels, hub/spoke endpoints, profile with Phase 1/2 policies),
+...               eBGP peerings match the live sessions, the rendered NAC device model matches the committed file,
+...               Golden Config is compliant.
 Resource          ../resources/common.resource
 Suite Teardown    Suite Teardown Close Connections
 
@@ -39,51 +40,92 @@ WAN links are modelled as cables between the hub and spoke ports with /30 addres
         Should Not Be True    ${i}[enabled]    msg=${i}[device][name]/${i}[name] is unwired but enabled
     END
 
-The VTIs are modelled as objects: ipsec mode, IPsec profile, tunnel source and a symmetric tunnel peer
-    ${d}=    Nautobot Graphql    { interfaces(device:["${HUB}","spoke1","spoke2"], name:["Tunnel1","Tunnel2"]) { device { name } name cf_tunnel_mode cf_tunnel_key cf_tunnel_ipsec_profile cf_nhrp_role ip_addresses { address parent { role { name } } } rel_tunnel_source_source { name ip_addresses { address } } rel_tunnel_peer { name device { name } ip_addresses { address } rel_tunnel_source_source { ip_addresses { address } } } } }
-    Length Should Be    ${d}[interfaces]    4
-    FOR    ${t}    IN    @{d}[interfaces]
-        ${r}=    Set Variable    ${t}[device][name]
-        ${s}=    Set Variable If    '${r}' == '${HUB}'    spoke${t}[name][-1]    ${r}
+The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, hub/spoke endpoints
+    ${d}=    Nautobot Graphql    { vpns(name:"IPSEC_VPN") { name service_type status { name } vpn_profile { name } vpn_tunnels { name tunnel_id encapsulation status { name } vpn_profile { name } endpoint_a { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } endpoint_z { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } } } }
+    Length Should Be    ${d}[vpns]    1
+    ${vpn}=    Set Variable    ${d}[vpns][0]
+    Should Be Equal    ${vpn}[service_type]    IPSEC
+    Should Be Equal    ${vpn}[status][name]    Active
+    Should Be Equal    ${vpn}[vpn_profile][name]    ${IPSEC_PROFILE}
+    Length Should Be    ${vpn}[vpn_tunnels]    2
+    FOR    ${t}    IN    @{vpn}[vpn_tunnels]
+        ${s}=    Set Variable    ${t}[endpoint_z][device][name]
         ${x}=    Set Variable    ${TUNNELS}[${s}]
-        Should Be Equal    ${t}[name]    Tunnel${x}[id]
-        Should Be Equal    ${t}[cf_tunnel_mode]    ipsec-ipv4
-        Should Be Equal    ${t}[cf_tunnel_key]    ${None}
-        Should Be Equal    ${t}[cf_nhrp_role]    ${None}
-        Should Be Equal    ${t}[cf_tunnel_ipsec_profile]    ${IPSEC_PROFILE}
-        Should Be Equal    ${t}[ip_addresses][0][parent][role][name]    vpn-tunnel
-        IF    '${r}' == '${HUB}'
-            Should Be Equal    ${t}[ip_addresses][0][address]    ${x}[hub_ip]/30
-            Should Be Equal    ${t}[rel_tunnel_source_source][name]    ${x}[hub_if]
-            Should Be Equal    ${t}[rel_tunnel_peer][device][name]    ${s}
-            Should Be Equal    ${t}[rel_tunnel_peer][ip_addresses][0][address]    ${x}[spoke_ip]/30
-            Should Be Equal    ${t}[rel_tunnel_peer][rel_tunnel_source_source][ip_addresses][0][address]    ${x}[spoke_wan]/30
-        ELSE
-            Should Be Equal    ${t}[ip_addresses][0][address]    ${x}[spoke_ip]/30
-            Should Be Equal    ${t}[rel_tunnel_source_source][name]    ${x}[spoke_if]
-            Should Be Equal    ${t}[rel_tunnel_peer][device][name]    ${HUB}
-            Should Be Equal    ${t}[rel_tunnel_peer][ip_addresses][0][address]    ${x}[hub_ip]/30
-            Should Be Equal    ${t}[rel_tunnel_peer][rel_tunnel_source_source][ip_addresses][0][address]    ${x}[hub_wan]/30
-        END
-        # the router's tunnel destination is exactly the peer's tunnel-source address from the model
-        ${dst}=    Fetch From Left    ${t}[rel_tunnel_peer][rel_tunnel_source_source][ip_addresses][0][address]    /
-        ${cfg}=    Show    ${r}    show run interface ${t}[name] | include tunnel destination
-        Should Contain    ${cfg}    tunnel destination ${dst}
+        Should Be Equal    ${t}[name]    ${HUB}-${s}
+        Should Be Equal    ${t}[tunnel_id]    ${x}[id]
+        Should Be Equal    ${t}[encapsulation]    IPSEC_TUNNEL
+        Should Be Equal    ${t}[status][name]    Active
+        Should Be Equal    ${t}[vpn_profile][name]    ${IPSEC_PROFILE}
+        # endpoint A = hub: source GiN with the WAN address, tunnel interface TunnelN, protects its LAN + loopback
+        ${a}=    Set Variable    ${t}[endpoint_a]
+        Should Be Equal    ${a}[device][name]    ${HUB}
+        Should Be Equal    ${a}[role][name]    hub
+        Should Be Equal    ${a}[source_interface][name]    ${x}[hub_if]
+        Should Be Equal    ${a}[source_ipaddress][address]    ${x}[hub_wan]/30
+        Should Be Equal    ${a}[tunnel_interface][name]    Tunnel${x}[id]
+        Should Be Equal    ${a}[tunnel_interface][type]    TUNNEL
+        Should Be Equal    ${a}[tunnel_interface][ip_addresses][0][address]    ${x}[hub_ip]/30
+        ${pfx}=    Evaluate    sorted(p['prefix'] for p in $a['protected_prefixes'])
+        Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$HUB]['router_id'] + '/32', $ROUTERS[$HUB]['lan']]) }}
+        # endpoint Z = the spoke
+        ${z}=    Set Variable    ${t}[endpoint_z]
+        Should Be Equal    ${z}[role][name]    spoke
+        Should Be Equal    ${z}[source_interface][name]    ${x}[spoke_if]
+        Should Be Equal    ${z}[source_ipaddress][address]    ${x}[spoke_wan]/30
+        Should Be Equal    ${z}[tunnel_interface][name]    Tunnel${x}[id]
+        Should Be Equal    ${z}[tunnel_interface][ip_addresses][0][address]    ${x}[spoke_ip]/30
+        ${pfx}=    Evaluate    sorted(p['prefix'] for p in $z['protected_prefixes'])
+        Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$s]['router_id'] + '/32', $ROUTERS[$s]['lan']]) }}
+        # each router's tunnel destination is exactly the other endpoint's source address in the model
+        ${cfg}=    Show    ${HUB}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode
+        Should Contain    ${cfg}    tunnel source ${a}[source_interface][name]
+        Should Contain    ${cfg}    tunnel destination ${{ $z['source_ipaddress']['address'].split('/')[0] }}
+        Should Contain    ${cfg}    tunnel mode ipsec ipv4
+        ${cfg}=    Show    ${s}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode
+        Should Contain    ${cfg}    tunnel source ${z}[source_interface][name]
+        Should Contain    ${cfg}    tunnel destination ${{ $a['source_ipaddress']['address'].split('/')[0] }}
+        Should Contain    ${cfg}    tunnel mode ipsec ipv4
+    END
+    # the old interface-level modelling is gone from this lab
+    ${d}=    Nautobot Graphql    { interfaces(device:["${HUB}","spoke1","spoke2"], name:["Tunnel1","Tunnel2"]) { cf_tunnel_mode cf_tunnel_ipsec_profile rel_tunnel_source_source { name } } }
+    FOR    ${i}    IN    @{d}[interfaces]
+        Should Be Equal    ${i}[cf_tunnel_mode]    ${None}
+        Should Be Equal    ${i}[cf_tunnel_ipsec_profile]    ${None}
+        Should Be Equal    ${i}[rel_tunnel_source_source]    ${None}
     END
 
-The IKEv2/IPsec suite comes from the crypto config context and matches the routers
-    ${d}=    Nautobot Graphql    { devices(location:"${NAUTOBOT_LOCATION}") { name config_context } }
-    Length Should Be    ${d}[devices]    3
-    FOR    ${dev}    IN    @{d}[devices]
-        ${cr}=    Set Variable    ${dev}[config_context][crypto]
-        Should Be Equal    ${cr}[ikev2_profile][name]    ${IKEV2_PROFILE}
-        Should Be Equal    ${cr}[ipsec_profile][name]    ${IPSEC_PROFILE}
-        ${sa}=    Show    ${dev}[name]    show crypto ikev2 proposal ${cr}[ikev2_proposal][name]
+The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers
+    ${d}=    Nautobot Graphql    { vpn_profiles(name:"${IPSEC_PROFILE}") { name keepalive_enabled keepalive_interval keepalive_retries extra_options vpn_phase1_policies { name ike_version encryption_algorithm integrity_algorithm dh_group lifetime_seconds authentication_method } vpn_phase2_policies { name encryption_algorithm integrity_algorithm lifetime } } }
+    Length Should Be    ${d}[vpn_profiles]    1
+    ${prof}=    Set Variable    ${d}[vpn_profiles][0]
+    ${ios}=    Set Variable    ${prof}[extra_options][ios]
+    Should Be Equal    ${ios}[ikev2_profile]    ${IKEV2_PROFILE}
+    Should Be Equal    ${ios}[ipsec_profile]    ${IPSEC_PROFILE}
+    ${p1}=    Set Variable    ${prof}[vpn_phase1_policies][0]
+    ${p2}=    Set Variable    ${prof}[vpn_phase2_policies][0]
+    Should Be Equal    ${p1}[ike_version]    IKEV2
+    Should Be Equal    ${p1}[authentication_method]    PSK
+    Should Be Equal    ${p1}[encryption_algorithm]    ${{ ['AES-256-CBC'] }}
+    Should Be Equal    ${p1}[integrity_algorithm]    ${{ ['SHA256'] }}
+    Should Be Equal    ${p1}[dh_group]    ${{ ['14'] }}
+    Should Be Equal    ${p2}[encryption_algorithm]    ${{ ['AES-256-CBC'] }}
+    Should Be Equal    ${p2}[integrity_algorithm]    ${{ ['SHA256'] }}
+    Should Be True    ${prof}[keepalive_enabled]
+    FOR    ${r}    IN    @{ROUTER_NAMES}
+        ${sa}=    Show    ${r}    show crypto ikev2 proposal ${ios}[ikev2_proposal]
         Should Contain    ${sa}    Encryption : AES-CBC-256
         Should Contain    ${sa}    Integrity  : SHA256
         Should Contain    ${sa}    DH Group   : DH_GROUP_2048_MODP/Group 14
-        ${ts}=    Show    ${dev}[name]    show crypto ipsec transform-set ${cr}[ipsec_transform_set][name]
-        Should Match Regexp    ${ts}    \\{ ${cr}[ipsec_transform_set][esp] ${cr}[ipsec_transform_set][esp_hmac]\\s*\\}
+        ${ts}=    Show    ${r}    show crypto ipsec transform-set ${ios}[transform_set]
+        Should Match Regexp    ${ts}    \\{ esp-256-aes esp-sha256-hmac\\s*\\}
+        ${prof_out}=    Show    ${r}    show crypto ikev2 profile ${ios}[ikev2_profile]
+        Should Contain    ${prof_out}    Keyring: ${ios}[ikev2_keyring]
+        Should Contain    ${prof_out}    DPD: interval ${prof}[keepalive_interval], retry-interval ${prof}[keepalive_retries], on-demand
+        ${sa}=    Show    ${r}    show crypto ikev2 sa | include READY
+        Should Match Regexp    ${sa}    READY
+    END
+    ${d}=    Nautobot Graphql    { devices(location:"${NAUTOBOT_LOCATION}") { name config_context } }
+    FOR    ${dev}    IN    @{d}[devices]
         Should Be Equal    ${dev}[config_context][oob][gateway]    ${OOB_GATEWAY}
     END
 

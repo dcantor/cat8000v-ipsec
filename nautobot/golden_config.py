@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Golden Config for the C8000v IPsec VTI routers in the shared Nautobot: a GoldenConfigSetting scoped to
 location c8000v-ipsec-lab (same Gitea repos, template c8000v-ipsec.j2), the shared SoT query extended with the
-tunnel_peer relationship, a wan-interface compliance feature, then backup -> intended -> compliance.
+core VPN app's tunnel endpoints, a wan-interface compliance feature, then backup -> intended -> compliance.
 Usage: NAUTOBOT_TOKEN=... GITEA_PASSWORD=... golden_config.py [--no-run]"""
 import argparse, base64, os, sys, time
 from pathlib import Path
@@ -19,15 +19,23 @@ nb = pynautobot.api(a.url, token=a.token)
 gc = nb.plugins.golden_config
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 
-# the shared SoT query (switch lab, extended by the DMVPN lab) gets the tunnel_peer relationship for the VTIs
+# the shared SoT query (switch lab, extended by the DMVPN lab) gets the core VPN app's tunnel endpoint per interface
 gq = nb.extras.graphql_queries.get(name="golden-config-lab")
 Q = gq.query
-old = "                 rel_tunnel_source_source { name ip_addresses { address } }\n"
-new = old + "                 rel_tunnel_peer { rel_tunnel_source_source { ip_addresses { address } } }\n"
-if "rel_tunnel_peer" not in Q and old in Q:
-    Q = Q.replace(old, new)
+VPN_EP = ("                 vpn_tunnel_endpoints_tunnel { source_interface { name } source_ipaddress { address }\n"
+          "                   vpn_profile { name keepalive_enabled keepalive_interval keepalive_retries extra_options\n"
+          "                     vpn_phase1_policies { ike_version encryption_algorithm integrity_algorithm dh_group authentication_method }\n"
+          "                     vpn_phase2_policies { encryption_algorithm integrity_algorithm } }\n"
+          "                   endpoint_a_vpn_tunnels { encapsulation endpoint_z { source_ipaddress { address } } }\n"
+          "                   endpoint_z_vpn_tunnels { encapsulation endpoint_a { source_ipaddress { address } } } }\n")
+anchor = "                 rel_tunnel_source_source { name ip_addresses { address } }\n"
+legacy = "                 rel_tunnel_peer { rel_tunnel_source_source { ip_addresses { address } } }\n"
+Q = Q.replace(legacy, "")   # the relationship was dropped when this lab moved to the core VPN model
+if "vpn_tunnel_endpoints_tunnel" not in Q and anchor in Q:
+    Q = Q.replace(anchor, anchor + VPN_EP)
+if Q != gq.query:
     requests.patch(f"{a.url}/api/extras/graphql-queries/{gq.id}/", json={"query": Q}, headers=H, timeout=30).raise_for_status()
-    print("  extended GraphQL query golden-config-lab (tunnel_peer)")
+    print("  extended GraphQL query golden-config-lab (vpn tunnel endpoints)")
 
 # template -> Gitea
 tpl = Path(__file__).resolve().parent / "golden-config-templates" / TPL

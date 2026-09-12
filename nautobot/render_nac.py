@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Render nac/data/devices.nac.yaml for the C8000v IPsec VTI + eBGP lab from Nautobot.
 
-Per router: management host, WAN GiN interfaces from the cabled links, loopbacks, VTI tunnels from the
-TunnelN objects (tunnel_mode / tunnel_ipsec_profile custom fields, tunnel_source -> GiN, tunnel_peer ->
-far tunnel whose own tunnel_source gives the tunnel destination), the IKEv2/IPsec suite from the "crypto"
-config context, and eBGP from nautobot-bgp-models (one AS per site). Only the PSK stays in
-device_groups.nac.yaml.  Usage: NAUTOBOT_TOKEN=... render_nac.py [--check]
+Per router: management host, WAN GiN interfaces from the cabled links, loopbacks, VTI tunnels from the core
+VPN app (the TunnelN interface's VPN tunnel endpoint: source interface/address, the VPN tunnel it terminates
+and the far endpoint's source address = tunnel destination), the IKEv2/IPsec suite from the endpoint's VPN
+profile (Phase 1 / Phase 2 policies, Cisco object names in extra_options.ios), and eBGP from
+nautobot-bgp-models (one AS per site). Only the PSK stays in device_groups.nac.yaml.  Usage: NAUTOBOT_TOKEN=... render_nac.py [--check]
 """
 import argparse, ipaddress, os, sys
 from pathlib import Path
@@ -26,38 +26,49 @@ data = r.json()
 if data.get("errors"): sys.exit(f"GraphQL errors: {data['errors']}")
 devices = sorted(data["data"]["devices"], key=lambda d: d["name"])
 bgp_ri = {x["device"]["name"]: x for x in data["data"]["bgp_routing_instances"]}
-MODES = {"gre-multipoint": "gre multipoint", "gre": "gre ip", "ipsec-ipv4": "ipsec ipv4"}
+# GraphQL renders choice values as enum names (IPSEC_TUNNEL, AES_256_CBC, IKEV2); keys below use that form
+ENCAP = {"IPSEC_TUNNEL": "ipsec ipv4", "GRE": "gre ip"}
+IKE_ENC = {"AES_256_CBC": "aes_cbc_256", "AES_192_CBC": "aes_cbc_192", "AES_128_CBC": "aes_cbc_128", "AES_256_GCM": "aes_gcm_256", "AES_128_GCM": "aes_gcm_128"}
+ESP_ENC = {"AES_256_CBC": "esp-256-aes", "AES_192_CBC": "esp-192-aes", "AES_128_CBC": "esp-aes", "AES_256_GCM": "esp-gcm 256", "AES_128_GCM": "esp-gcm"}
+ESP_HMAC = {"SHA256": "esp-sha256-hmac", "SHA384": "esp-sha384-hmac", "SHA512": "esp-sha512-hmac", "SHA1": "esp-sha-hmac", "MD5": "esp-md5-hmac"}
 
 def parts(cidr):
     i = ipaddress.IPv4Interface(cidr); return str(i.ip), str(i.network.netmask)
 
+def norm(v): return str(v).upper().replace("-", "_")   # "IPsec-Tunnel" and "IPSEC_TUNNEL" -> IPSEC_TUNNEL
+
+def far_end(ep):
+    """The VPN tunnel this endpoint terminates and its other endpoint (A<->Z)."""
+    for t in ep["endpoint_a_vpn_tunnels"]: return t, t["endpoint_z"]
+    for t in ep["endpoint_z_vpn_tunnels"]: return t, t["endpoint_a"]
+    return None, None
+
 def tunnel_cli(i, ip, mask):
-    src, peer = i["rel_tunnel_source_source"], i["rel_tunnel_peer"]
-    lines = [f"interface {i['name']}", f" description {i['description']}", f" ip address {ip} {mask}", " ip mtu 1400", " ip tcp adjust-mss 1360"]
-    if src: lines.append(f" tunnel source {src['name']}")
-    if peer and peer["rel_tunnel_source_source"]:
-        lines.append(f" tunnel destination {peer['rel_tunnel_source_source']['ip_addresses'][0]['address'].split('/')[0]}")
-    if i["cf_tunnel_mode"]: lines.append(f" tunnel mode {MODES[i['cf_tunnel_mode']]}")
-    if i["cf_tunnel_key"] is not None: lines.append(f" tunnel key {i['cf_tunnel_key']}")
-    if i["cf_tunnel_ipsec_profile"]: lines.append(f" tunnel protection ipsec profile {i['cf_tunnel_ipsec_profile']}")
+    ep = i["vpn_tunnel_endpoints_tunnel"]; tun, peer = far_end(ep); ios = ep["vpn_profile"]["extra_options"]["ios"]
+    lines = [f"interface {i['name']}", f" description {i['description']}", f" ip address {ip} {mask}", " ip mtu 1400", " ip tcp adjust-mss 1360",
+             f" tunnel source {ep['source_interface']['name']}"]
+    if peer: lines.append(f" tunnel destination {peer['source_ipaddress']['address'].split('/')[0]}")
+    lines.append(f" tunnel mode {ENCAP[norm(tun['encapsulation'])]}")
+    lines.append(f" tunnel protection ipsec profile {ios['ipsec_profile']}")
     return "\n".join(lines) + "\n"
 
-def crypto_model(c):
-    enc = {"aes-cbc-256": "aes_cbc_256", "aes-cbc-128": "aes_cbc_128", "aes-gcm-256": "aes_gcm_256"}[c["ikev2_proposal"]["encryption"]]
-    return {"ikev2": {"proposals": [{"name": c["ikev2_proposal"]["name"], "encryption": [enc], "integrity": [c["ikev2_proposal"]["integrity"]], "group": [str(c["ikev2_proposal"]["group"])]}],
-                      "policies": [{"name": c["ikev2_policy"]["name"], "proposals": [c["ikev2_proposal"]["name"]]}],
-                      "keyrings": [{"name": c["ikev2_keyring"]["name"], "peers": [{"name": c["ikev2_keyring"]["peer"], "ipv4_address": c["ikev2_keyring"]["peer_address"],
-                                                                                  "ipv4_mask": c["ikev2_keyring"]["peer_mask"], "pre_shared_key": "${vpn_psk}"}]}],
-                      "profiles": [{"name": c["ikev2_profile"]["name"],
-                                    "match_identity_remote_ipv4_addresses": [{"address": c["ikev2_keyring"]["peer_address"], "mask": c["ikev2_keyring"]["peer_mask"]}],
-                                    "authentication_local_pre_share": True, "authentication_remote_pre_share": True, "keyring_local": c["ikev2_keyring"]["name"],
-                                    "dpd_interval": c["ikev2_profile"]["dpd_interval"], "dpd_retry": c["ikev2_profile"]["dpd_retry"], "dpd_query": "on-demand"}]},
-            "ipsec_transform_sets": [{"name": c["ipsec_transform_set"]["name"], "esp": c["ipsec_transform_set"]["esp"], "esp_hmac": c["ipsec_transform_set"]["esp_hmac"]}],
-            "ipsec_profiles": [{"name": c["ipsec_profile"]["name"], "set_transform_set": [c["ipsec_transform_set"]["name"]], "set_ikev2_profile": c["ikev2_profile"]["name"]}]}
+def crypto_model(prof):
+    """NAC crypto: block from a VPN profile (one Phase 1 and one Phase 2 policy)."""
+    ios, p1, p2 = prof["extra_options"]["ios"], prof["vpn_phase1_policies"][0], prof["vpn_phase2_policies"][0]
+    assert norm(p1["ike_version"]) == "IKEV2" and norm(p1["authentication_method"]) == "PSK", "renderer supports IKEv2 + PSK only"
+    return {"ikev2": {"proposals": [{"name": ios["ikev2_proposal"], "encryption": [IKE_ENC[norm(e)] for e in p1["encryption_algorithm"]],
+                                     "integrity": [x.lower() for x in p1["integrity_algorithm"]], "group": list(p1["dh_group"])}],
+                      "policies": [{"name": ios["ikev2_policy"], "proposals": [ios["ikev2_proposal"]]}],
+                      "keyrings": [{"name": ios["ikev2_keyring"], "peers": [{"name": ios["keyring_peer"], "ipv4_address": "0.0.0.0", "ipv4_mask": "0.0.0.0", "pre_shared_key": "${vpn_psk}"}]}],
+                      "profiles": [{"name": ios["ikev2_profile"], "match_identity_remote_ipv4_addresses": [{"address": "0.0.0.0", "mask": "0.0.0.0"}],
+                                    "authentication_local_pre_share": True, "authentication_remote_pre_share": True, "keyring_local": ios["ikev2_keyring"],
+                                    **({"dpd_interval": prof["keepalive_interval"], "dpd_retry": prof["keepalive_retries"], "dpd_query": "on-demand"} if prof["keepalive_enabled"] else {})}]},
+            "ipsec_transform_sets": [{"name": ios["transform_set"], "esp": ESP_ENC[norm(p2["encryption_algorithm"][0])], "esp_hmac": ESP_HMAC[norm(p2["integrity_algorithm"][0])]}],
+            "ipsec_profiles": [{"name": ios["ipsec_profile"], "set_transform_set": [ios["transform_set"]], "set_ikev2_profile": ios["ikev2_profile"]}]}
 
 def render(dev):
     name, ctx = dev["name"], dev["config_context"] or {}
-    ethernets, loopbacks, networks, templates, router_id = [], [], [], [], None
+    ethernets, loopbacks, networks, templates, router_id, profiles = [], [], [], [], None, {}
     for i in dev["interfaces"]:
         ips = i["ip_addresses"]
         if not ips: continue
@@ -73,8 +84,10 @@ def render(dev):
         elif n.startswith("Loopback"):
             loopbacks.append({"id": int(n[8:]), "description": i["description"], "ipv4": {"address": ip, "address_mask": mask}})
             if n == "Loopback0": router_id = ip
-        elif n.startswith("Tunnel"):
+        elif n.startswith("Tunnel") and i["vpn_tunnel_endpoints_tunnel"]:
             templates.append({"name": f"tunnel_{name}_{n.lower()}", "type": "cli", "content": tunnel_cli(i, ip, mask)})
+            profiles[i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]["name"]] = i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]
+    assert len(profiles) <= 1, f"{name}: one VPN profile per router is supported, got {list(profiles)}"
     ri = bgp_ri[name]
     neighbors, afn = [], []
     for ep in sorted(ri["endpoints"], key=lambda e: e["peer"]["source_ip"]["address"] if e["peer"] else ""):
@@ -89,7 +102,7 @@ def render(dev):
             "templates": [t["name"] for t in templates], "_templates": templates,
             "variables": {"router_id": router_id, "bgp_asn": ri["autonomous_system"]["asn"]},
             "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
-                              **({"crypto": crypto_model(ctx["crypto"])} if ctx.get("crypto") else {}),
+                              **({"crypto": crypto_model(next(iter(profiles.values())))} if profiles else {}),
                               "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks},
                               "routing": {"bgp": bgp}}}
 

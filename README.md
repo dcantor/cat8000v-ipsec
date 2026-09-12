@@ -57,8 +57,10 @@ and modelled in the shared Nautobot (`nautobot/`).
 
 Modelled in the shared Nautobot of the cat9000v lab (http://10.0.0.10:8080,
 from the LAN http://192.168.50.231:8080, `admin`/`admin`); the NMS has a fourth
-NIC on `ipsec-oob` (10.2.0.10). See [nautobot/README.md](nautobot/README.md) for
-how the tunnels and BGP are modelled and how `devices.nac.yaml` is rendered.
+NIC on `ipsec-oob` (10.2.0.10). The VPN is modelled in Nautobot's **core VPN app**
+(VPN → tunnels → hub/spoke endpoints, profile with Phase 1/2 policies) and BGP in
+nautobot-bgp-models; see [nautobot/README.md](nautobot/README.md) for the mapping
+and how `devices.nac.yaml` is rendered from it.
 
 ## Design notes
 
@@ -74,8 +76,9 @@ how the tunnels and BGP are modelled and how `devices.nac.yaml` is rendered.
   no route reflection needed. `log-neighbor-changes`, router-id = Loopback0.
 - **Crypto**: IKEv2 proposal AES-CBC-256 / SHA256 / group 14, keyring `VPN-KEYRING`
   (any peer, PSK), profile `VPN-IKEV2` (DPD 30/5 on-demand), transform-set `VPN-TS`
-  (esp-aes 256, esp-sha256-hmac), IPsec profile `VPN-IPSEC`. The suite is modelled
-  in Nautobot (config context `crypto`); only the PSK lives in NAC data.
+  (esp-aes 256, esp-sha256-hmac), IPsec profile `VPN-IPSEC`. The suite is a VPN
+  Profile with Phase 1 / Phase 2 policies in Nautobot's core VPN app; only the PSK
+  lives in NAC data.
 - **NAC quirks** (same as the DMVPN lab): provider `CiscoDevNet/iosxe` 0.15 over
   RESTCONF, `save_config=false` + a `cisco-ia:save-config` RPC from `lab.sh nac`,
   tunnel interfaces via `iosxe_cli` templates (the provider has no VTI resource),

@@ -5,13 +5,23 @@
     primary_ip4 { address }
     config_context
     interfaces {
-      name description enabled mgmt_only
+      name type description enabled mgmt_only
       vrf { name }
       ip_addresses { address parent { role { name } prefix tags { name } } }
-      cf_tunnel_mode cf_tunnel_key cf_tunnel_ipsec_profile
-      rel_tunnel_source_source { name ip_addresses { address } }
-      rel_tunnel_peer { name device { name } ip_addresses { address } rel_tunnel_source_source { ip_addresses { address } } }
       connected_interface { name device { name } }
+      vpn_tunnel_endpoints_tunnel {
+        role { name }
+        source_interface { name }
+        source_ipaddress { address }
+        protected_prefixes { prefix }
+        vpn_profile {
+          name keepalive_enabled keepalive_interval keepalive_retries nat_traversal extra_options
+          vpn_phase1_policies { name ike_version encryption_algorithm integrity_algorithm dh_group lifetime_seconds authentication_method }
+          vpn_phase2_policies { name encryption_algorithm integrity_algorithm pfs_group lifetime }
+        }
+        endpoint_a_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name } endpoint_z { device { name } source_ipaddress { address } tunnel_interface { name } } }
+        endpoint_z_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name } endpoint_a { device { name } source_ipaddress { address } tunnel_interface { name } } }
+      }
     }
   }
   bgp_routing_instances(device: ["hub", "spoke1", "spoke2"]) {

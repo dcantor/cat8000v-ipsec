@@ -1,7 +1,17 @@
 {#- Intended configuration for the C8000v IPsec VTI routers, rendered from Nautobot (query golden-config-lab).
     Features under compliance: management ACL, static routes, loopbacks, wan-interface, tunnel, crypto, BGP, banner. -#}
 {%- set masks = {'24': '255.255.255.0', '30': '255.255.255.252', '32': '255.255.255.255'} -%}
-{%- set cr = config_context.crypto -%}
+{#- crypto suite from the VPN profile of this router's tunnel endpoints (core vpn app); Cisco names in extra_options.ios -#}
+{%- set ns = namespace(prof=none) -%}
+{%- for i in interfaces if i.vpn_tunnel_endpoints_tunnel %}{% set ns.prof = i.vpn_tunnel_endpoints_tunnel.vpn_profile %}{% endfor -%}
+{%- set prof = ns.prof -%}
+{%- set ios = prof.extra_options.ios -%}
+{%- set p1 = prof.vpn_phase1_policies[0] -%}
+{%- set p2 = prof.vpn_phase2_policies[0] -%}
+{%- set ike_enc = {'AES_256_CBC': 'aes-cbc-256', 'AES_192_CBC': 'aes-cbc-192', 'AES_128_CBC': 'aes-cbc-128', 'AES_256_GCM': 'aes-gcm-256', 'AES_128_GCM': 'aes-gcm-128'} -%}
+{%- set esp_enc = {'AES_256_CBC': 'esp-aes 256', 'AES_192_CBC': 'esp-aes 192', 'AES_128_CBC': 'esp-aes', 'AES_256_GCM': 'esp-gcm 256', 'AES_128_GCM': 'esp-gcm'} -%}
+{%- set esp_hmac = {'SHA256': 'esp-sha256-hmac', 'SHA384': 'esp-sha384-hmac', 'SHA512': 'esp-sha512-hmac', 'SHA1': 'esp-sha-hmac', 'MD5': 'esp-md5-hmac'} -%}
+{%- set encap = {'IPSEC_TUNNEL': 'ipsec ipv4', 'GRE': 'gre ip'} -%}
 hostname {{ hostname }}
 !
 {% for va in vrf_assignments | sort(attribute='vrf.name') %}
@@ -40,45 +50,44 @@ interface {{ i.name }}
 {% endif %}
 !
 {% endfor %}
-{% for i in interfaces | sort(attribute='name') if i.name.startswith('Tunnel') and i.ip_addresses %}
-{% set peer = i.rel_tunnel_peer %}
+{% for i in interfaces | sort(attribute='name') if i.name.startswith('Tunnel') and i.ip_addresses and i.vpn_tunnel_endpoints_tunnel %}
+{% set ep = i.vpn_tunnel_endpoints_tunnel %}
+{% set tun = (ep.endpoint_a_vpn_tunnels + ep.endpoint_z_vpn_tunnels) | first %}
+{% set far = tun.endpoint_z if ep.endpoint_a_vpn_tunnels else tun.endpoint_a %}
 interface {{ i.name }}
  description {{ i.description }}
  ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
  ip mtu 1400
  ip tcp adjust-mss 1360
- tunnel source {{ i.rel_tunnel_source_source.name }}
- tunnel mode {{ {'gre-multipoint': 'gre multipoint', 'gre': 'gre ip', 'ipsec-ipv4': 'ipsec ipv4'}[i.cf_tunnel_mode] }}
-{% if peer and peer.rel_tunnel_source_source %}
- tunnel destination {{ peer.rel_tunnel_source_source.ip_addresses[0].address.split('/')[0] }}
-{% endif %}
-{% if i.cf_tunnel_key is not none %}
- tunnel key {{ i.cf_tunnel_key }}
-{% endif %}
- tunnel protection ipsec profile {{ i.cf_tunnel_ipsec_profile }}
+ tunnel source {{ ep.source_interface.name }}
+ tunnel mode {{ encap[tun.encapsulation | upper | replace('-', '_')] }}
+ tunnel destination {{ far.source_ipaddress.address.split('/')[0] }}
+ tunnel protection ipsec profile {{ ep.vpn_profile.extra_options.ios.ipsec_profile }}
 !
 {% endfor %}
-crypto ikev2 proposal {{ cr.ikev2_proposal.name }}
- encryption {{ cr.ikev2_proposal.encryption }}
- integrity {{ cr.ikev2_proposal.integrity }}
- group {{ cr.ikev2_proposal.group }}
+crypto ikev2 proposal {{ ios.ikev2_proposal }}
+ encryption{% for e in p1.encryption_algorithm %} {{ ike_enc[e | upper | replace('-', '_')] }}{% endfor +%}
+ integrity {{ p1.integrity_algorithm | map('lower') | join(' ') }}
+ group {{ p1.dh_group | join(' ') }}
 !
-crypto ikev2 policy {{ cr.ikev2_policy.name }}
- proposal {{ cr.ikev2_proposal.name }}
+crypto ikev2 policy {{ ios.ikev2_policy }}
+ proposal {{ ios.ikev2_proposal }}
 !
-crypto ikev2 profile {{ cr.ikev2_profile.name }}
- match identity remote address {{ cr.ikev2_keyring.peer_address }}
+crypto ikev2 profile {{ ios.ikev2_profile }}
+ match identity remote address 0.0.0.0
  authentication remote pre-share
  authentication local pre-share
- keyring local {{ cr.ikev2_keyring.name }}
- dpd {{ cr.ikev2_profile.dpd_interval }} {{ cr.ikev2_profile.dpd_retry }} on-demand
+ keyring local {{ ios.ikev2_keyring }}
+{% if prof.keepalive_enabled %}
+ dpd {{ prof.keepalive_interval }} {{ prof.keepalive_retries }} on-demand
+{% endif %}
 !
-crypto ipsec transform-set {{ cr.ipsec_transform_set.name }} {{ {'esp-256-aes': 'esp-aes 256', 'esp-aes': 'esp-aes', 'esp-192-aes': 'esp-aes 192'}[cr.ipsec_transform_set.esp] }} {{ cr.ipsec_transform_set.esp_hmac }}
+crypto ipsec transform-set {{ ios.transform_set }} {{ esp_enc[p2.encryption_algorithm[0] | upper | replace('-', '_')] }} {{ esp_hmac[p2.integrity_algorithm[0] | upper] }}
  mode tunnel
 !
-crypto ipsec profile {{ cr.ipsec_profile.name }}
- set transform-set {{ cr.ipsec_transform_set.name }}
- set ikev2-profile {{ cr.ikev2_profile.name }}
+crypto ipsec profile {{ ios.ipsec_profile }}
+ set transform-set {{ ios.transform_set }}
+ set ikev2-profile {{ ios.ikev2_profile }}
 !
 {% set own = [] %}
 {% for i in interfaces %}{% for ip in i.ip_addresses if ip.parent %}{% for t in ip.parent.tags if t.name == 'bgp:advertise' and ip.parent.prefix not in own %}{% set _ = own.append(ip.parent.prefix) %}{% endfor %}{% endfor %}{% endfor %}
