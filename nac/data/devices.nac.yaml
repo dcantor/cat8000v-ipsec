@@ -1,0 +1,322 @@
+---
+# GENERATED from Nautobot by nautobot/render_nac.py — do not edit by hand.
+# Source of truth: http://10.0.0.10:8080 (location c8000v-ipsec-lab, saved GraphQL query nac-c8000v-ipsec-model)
+iosxe:
+  templates:
+  - name: tunnel_hub_tunnel1
+    type: cli
+    content: "interface Tunnel1\n description IPsec VTI to spoke1\n ip address 172.17.1.1 255.255.255.252\n ip mtu 1400\n\
+      \ ip tcp adjust-mss 1360\n tunnel source GigabitEthernet2\n tunnel destination 100.65.1.2\n tunnel mode ipsec ipv4\n\
+      \ tunnel protection ipsec profile VPN-IPSEC\n"
+  - name: tunnel_hub_tunnel2
+    type: cli
+    content: "interface Tunnel2\n description IPsec VTI to spoke2\n ip address 172.17.2.1 255.255.255.252\n ip mtu 1400\n\
+      \ ip tcp adjust-mss 1360\n tunnel source GigabitEthernet3\n tunnel destination 100.65.2.2\n tunnel mode ipsec ipv4\n\
+      \ tunnel protection ipsec profile VPN-IPSEC\n"
+  - name: tunnel_spoke1_tunnel1
+    type: cli
+    content: "interface Tunnel1\n description IPsec VTI to hub\n ip address 172.17.1.2 255.255.255.252\n ip mtu 1400\n ip\
+      \ tcp adjust-mss 1360\n tunnel source GigabitEthernet2\n tunnel destination 100.65.1.1\n tunnel mode ipsec ipv4\n tunnel\
+      \ protection ipsec profile VPN-IPSEC\n"
+  - name: tunnel_spoke2_tunnel2
+    type: cli
+    content: "interface Tunnel2\n description IPsec VTI to hub\n ip address 172.17.2.2 255.255.255.252\n ip mtu 1400\n ip\
+      \ tcp adjust-mss 1360\n tunnel source GigabitEthernet2\n tunnel destination 100.65.2.1\n tunnel mode ipsec ipv4\n tunnel\
+      \ protection ipsec profile VPN-IPSEC\n"
+  devices:
+  - name: hub
+    host: 10.2.0.11
+    protocol: restconf
+    device_groups:
+    - IPSEC_VPN
+    templates:
+    - tunnel_hub_tunnel1
+    - tunnel_hub_tunnel2
+    variables:
+      router_id: 10.255.1.1
+      bgp_asn: 65200
+    configuration:
+      system:
+        hostname: hub
+        ip_domain_name: lab.local
+      crypto:
+        ikev2:
+          proposals:
+          - name: VPN-PROP
+            encryption:
+            - aes_cbc_256
+            integrity:
+            - sha256
+            group:
+            - '14'
+          policies:
+          - name: VPN-POL
+            proposals:
+            - VPN-PROP
+          keyrings:
+          - name: VPN-KEYRING
+            peers:
+            - name: ANY
+              ipv4_address: 0.0.0.0
+              ipv4_mask: 0.0.0.0
+              pre_shared_key: ${vpn_psk}
+          profiles:
+          - name: VPN-IKEV2
+            match_identity_remote_ipv4_addresses:
+            - address: 0.0.0.0
+              mask: 0.0.0.0
+            authentication_local_pre_share: true
+            authentication_remote_pre_share: true
+            keyring_local: VPN-KEYRING
+            dpd_interval: 30
+            dpd_retry: 5
+            dpd_query: on-demand
+        ipsec_transform_sets:
+        - name: VPN-TS
+          esp: esp-256-aes
+          esp_hmac: esp-sha256-hmac
+        ipsec_profiles:
+        - name: VPN-IPSEC
+          set_transform_set:
+          - VPN-TS
+          set_ikev2_profile: VPN-IKEV2
+      interfaces:
+        ethernets:
+        - type: GigabitEthernet
+          id: '2'
+          description: WAN to spoke1 Gi2
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.1.1
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '3'
+          description: WAN to spoke2 Gi2
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.2.1
+            address_mask: 255.255.255.252
+        loopbacks:
+        - id: 0
+          description: Router ID
+          ipv4:
+            address: 10.255.1.1
+            address_mask: 255.255.255.255
+        - id: 10
+          description: site LAN
+          ipv4:
+            address: 192.168.11.1
+            address_mask: 255.255.255.0
+      routing:
+        bgp:
+          as_number: 65200
+          router_id: 10.255.1.1
+          log_neighbor_changes: true
+          neighbors:
+          - ip: 172.17.1.2
+            remote_as: 65201
+            description: eBGP spoke1 (Tunnel1)
+          - ip: 172.17.2.2
+            remote_as: 65202
+            description: eBGP spoke2 (Tunnel2)
+          address_family:
+            ipv4_unicast:
+              neighbors:
+              - ip: 172.17.1.2
+                activate: true
+              - ip: 172.17.2.2
+                activate: true
+              networks:
+              - network: 10.255.1.1
+                mask: 255.255.255.255
+              - network: 192.168.11.0
+  - name: spoke1
+    host: 10.2.0.12
+    protocol: restconf
+    device_groups:
+    - IPSEC_VPN
+    templates:
+    - tunnel_spoke1_tunnel1
+    variables:
+      router_id: 10.255.1.2
+      bgp_asn: 65201
+    configuration:
+      system:
+        hostname: spoke1
+        ip_domain_name: lab.local
+      crypto:
+        ikev2:
+          proposals:
+          - name: VPN-PROP
+            encryption:
+            - aes_cbc_256
+            integrity:
+            - sha256
+            group:
+            - '14'
+          policies:
+          - name: VPN-POL
+            proposals:
+            - VPN-PROP
+          keyrings:
+          - name: VPN-KEYRING
+            peers:
+            - name: ANY
+              ipv4_address: 0.0.0.0
+              ipv4_mask: 0.0.0.0
+              pre_shared_key: ${vpn_psk}
+          profiles:
+          - name: VPN-IKEV2
+            match_identity_remote_ipv4_addresses:
+            - address: 0.0.0.0
+              mask: 0.0.0.0
+            authentication_local_pre_share: true
+            authentication_remote_pre_share: true
+            keyring_local: VPN-KEYRING
+            dpd_interval: 30
+            dpd_retry: 5
+            dpd_query: on-demand
+        ipsec_transform_sets:
+        - name: VPN-TS
+          esp: esp-256-aes
+          esp_hmac: esp-sha256-hmac
+        ipsec_profiles:
+        - name: VPN-IPSEC
+          set_transform_set:
+          - VPN-TS
+          set_ikev2_profile: VPN-IKEV2
+      interfaces:
+        ethernets:
+        - type: GigabitEthernet
+          id: '2'
+          description: WAN to hub Gi2
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.1.2
+            address_mask: 255.255.255.252
+        loopbacks:
+        - id: 0
+          description: Router ID
+          ipv4:
+            address: 10.255.1.2
+            address_mask: 255.255.255.255
+        - id: 10
+          description: site LAN
+          ipv4:
+            address: 192.168.12.1
+            address_mask: 255.255.255.0
+      routing:
+        bgp:
+          as_number: 65201
+          router_id: 10.255.1.2
+          log_neighbor_changes: true
+          neighbors:
+          - ip: 172.17.1.1
+            remote_as: 65200
+            description: eBGP hub (Tunnel1)
+          address_family:
+            ipv4_unicast:
+              neighbors:
+              - ip: 172.17.1.1
+                activate: true
+              networks:
+              - network: 10.255.1.2
+                mask: 255.255.255.255
+              - network: 192.168.12.0
+  - name: spoke2
+    host: 10.2.0.13
+    protocol: restconf
+    device_groups:
+    - IPSEC_VPN
+    templates:
+    - tunnel_spoke2_tunnel2
+    variables:
+      router_id: 10.255.1.3
+      bgp_asn: 65202
+    configuration:
+      system:
+        hostname: spoke2
+        ip_domain_name: lab.local
+      crypto:
+        ikev2:
+          proposals:
+          - name: VPN-PROP
+            encryption:
+            - aes_cbc_256
+            integrity:
+            - sha256
+            group:
+            - '14'
+          policies:
+          - name: VPN-POL
+            proposals:
+            - VPN-PROP
+          keyrings:
+          - name: VPN-KEYRING
+            peers:
+            - name: ANY
+              ipv4_address: 0.0.0.0
+              ipv4_mask: 0.0.0.0
+              pre_shared_key: ${vpn_psk}
+          profiles:
+          - name: VPN-IKEV2
+            match_identity_remote_ipv4_addresses:
+            - address: 0.0.0.0
+              mask: 0.0.0.0
+            authentication_local_pre_share: true
+            authentication_remote_pre_share: true
+            keyring_local: VPN-KEYRING
+            dpd_interval: 30
+            dpd_retry: 5
+            dpd_query: on-demand
+        ipsec_transform_sets:
+        - name: VPN-TS
+          esp: esp-256-aes
+          esp_hmac: esp-sha256-hmac
+        ipsec_profiles:
+        - name: VPN-IPSEC
+          set_transform_set:
+          - VPN-TS
+          set_ikev2_profile: VPN-IKEV2
+      interfaces:
+        ethernets:
+        - type: GigabitEthernet
+          id: '2'
+          description: WAN to hub Gi3
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.2.2
+            address_mask: 255.255.255.252
+        loopbacks:
+        - id: 0
+          description: Router ID
+          ipv4:
+            address: 10.255.1.3
+            address_mask: 255.255.255.255
+        - id: 10
+          description: site LAN
+          ipv4:
+            address: 192.168.13.1
+            address_mask: 255.255.255.0
+      routing:
+        bgp:
+          as_number: 65202
+          router_id: 10.255.1.3
+          log_neighbor_changes: true
+          neighbors:
+          - ip: 172.17.2.1
+            remote_as: 65200
+            description: eBGP hub (Tunnel2)
+          address_family:
+            ipv4_unicast:
+              neighbors:
+              - ip: 172.17.2.1
+                activate: true
+              networks:
+              - network: 10.255.1.3
+                mask: 255.255.255.255
+              - network: 192.168.13.0

@@ -1,0 +1,41 @@
+hostname spoke2
+!
+aaa new-model
+aaa authentication login default local
+aaa authorization exec default local
+username admin privilege 15 secret admin
+enable secret admin
+ip domain name lab.local
+!
+! crypto (IKEv2/IPsec) needs the network-advantage feature set - boot level requires a reload
+license boot level network-advantage addon dna-advantage
+no ip domain lookup
+!
+vrf definition Mgmt-vrf
+ address-family ipv4
+ exit-address-family
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.13 255.255.255.0
+ negotiation auto
+ no shutdown
+!
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+!
+ip ssh version 2
+!
+! NETCONF/RESTCONF for the Network-as-Code Terraform provider
+netconf-yang
+restconf
+ip http secure-server
+ip http authentication local
+!
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+line vty 0 4
+ transport input ssh
+!
+end

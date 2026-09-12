@@ -1,0 +1,73 @@
+---
+# Baseline for every router (lowest precedence): identity, hardening, management plane.
+iosxe:
+  global:
+    variables:
+      domain_name: lab.local
+      oob_prefix: 10.2.0.0
+      oob_wildcard: 0.0.0.255
+    configuration:
+      system:
+        ip_domain_name: "${domain_name}"
+        ip_domain_lookup: false
+        ssh:
+          version: 2
+          time_out: 60
+          authentication_retries: 3
+        login_on_success_log: true
+        login_on_failure_log: true
+      service:
+        password_encryption: true
+        tcp_keepalives_in: true
+        tcp_keepalives_out: true
+        timestamps:
+          log_datetime: true
+          log_datetime_msec: true
+          log_datetime_localtime: true
+          log_datetime_show_timezone: true
+      aaa:
+        new_model: true
+        authentication:
+          logins:
+            - name: default
+              methods: [local]
+        authorization:
+          execs:
+            - name: default
+              methods: [local]
+      logging:
+        buffered_size: 64000
+        buffered_severity: informational
+      cdp:
+        run: true
+      lldp:
+        run: true
+      access_lists:
+        standard:
+          - name: MGMT-ACCESS
+            entries:
+              - sequence: 10
+                remark: OOB management network
+              - sequence: 20
+                action: permit
+                prefix: "${oob_prefix}"
+                prefix_mask: "${oob_wildcard}"
+              - sequence: 30
+                action: deny
+                any: true
+                log: true
+      line:
+        vtys:
+          - number_from: 0
+            number_to: 4
+            login_authentication: default
+            transport_input: [ssh]
+            exec_timeout_minutes: 10
+            exec_timeout_seconds: 0
+            logging_synchronous: true
+            access_classes:
+              - access_list: MGMT-ACCESS
+                direction: in
+                vrf_also: true
+      banner:
+        motd: "C8000v IPsec VTI lab - managed by Network-as-Code (Terraform)."

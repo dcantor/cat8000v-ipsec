@@ -1,0 +1,29 @@
+{
+  devices(location: "c8000v-ipsec-lab") {
+    name
+    role { name }
+    primary_ip4 { address }
+    config_context
+    interfaces {
+      name description enabled mgmt_only
+      vrf { name }
+      ip_addresses { address parent { role { name } prefix tags { name } } }
+      cf_tunnel_mode cf_tunnel_key cf_tunnel_ipsec_profile
+      rel_tunnel_source_source { name ip_addresses { address } }
+      rel_tunnel_peer { name device { name } ip_addresses { address } rel_tunnel_source_source { ip_addresses { address } } }
+      connected_interface { name device { name } }
+    }
+  }
+  bgp_routing_instances(device: ["hub", "spoke1", "spoke2"]) {
+    device { name }
+    autonomous_system { asn }
+    router_id { address }
+    extra_attributes
+    endpoints {
+      description enabled
+      source_ip { address }
+      address_families { afi_safi }
+      peer { source_ip { address } autonomous_system { asn } }
+    }
+  }
+}

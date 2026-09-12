@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+# Catalyst 8000v IPsec VTI + eBGP lab controller (libvirt/KVM): hub, spoke1, spoke2
+set -euo pipefail
+source "$(dirname "$(readlink -f "$0")")/lab.conf"
+
+# Re-exec under the libvirt group if this login session doesn't have it yet.
+if ! id -nG | tr ' ' '\n' | grep -qx libvirt && getent group libvirt | grep -qw "$USER"; then
+  exec sg libvirt -c "$(printf '%q ' "$0" "$@")"
+fi
+
+V() { virsh -q -c "$LIBVIRT_URI" "$@"; }
+die() { echo "error: $*" >&2; exit 1; }
+node_dir() { echo "$LAB_DIR/nodes/$1"; }
+defined() { V dominfo "$1" &>/dev/null; }
+running() { [[ "$(V domstate "$1" 2>/dev/null)" == "running" ]]; }
+nodes_or_all() { [[ $# -gt 0 ]] && echo "$*" || echo "${ALL_NODES[*]}"; }
+
+# ---- networks -------------------------------------------------------------
+ensure_networks() {
+  local n
+  for n in "$OOB_NET"; do
+    if ! V net-info "$n" &>/dev/null; then
+      V net-define "$LAB_DIR/networks/$n.xml"
+      V net-autostart "$n" >/dev/null
+    fi
+    [[ "$(V net-info "$n" | awk '/Active/{print $2}')" == "yes" ]] || V net-start "$n"
+  done
+}
+
+# ---- point-to-point WAN links (UDP tunnels between VMs) --------------------
+port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }
+link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
+  local me="$1:$2" l a b pfx
+  for l in "${LINKS[@]}"; do
+    read -r a b pfx <<<"$l"
+    [[ "$a" == "$me" ]] && { echo "${b%%:*} ${b##*:} $pfx 1"; return; }
+    [[ "$b" == "$me" ]] && { echo "${a%%:*} ${a##*:} $pfx 2"; return; }
+  done
+  return 0
+}
+wan_ip() {      # node port -> address on that link (.1 for the first end, .2 for the second)
+  local peer; peer="$(link_peer "$1" "$2")"; [[ -z "$peer" ]] && return
+  read -r _ _ pfx end <<<"$peer"
+  python3 -c "import ipaddress,sys; n=ipaddress.IPv4Network('$pfx'); print(list(n.hosts())[int('$end')-1])"
+}
+
+# ---- XML generation -------------------------------------------------------
+serial_xml() {
+  cat <<X
+    <serial type='tcp'>
+      <source mode='bind' host='127.0.0.1' service='${CONSOLE_PORT[$1]}'/>
+      <protocol type='raw'/>
+      <log file='$(node_dir "$1")/console.log' append='on'/>
+      <target port='0'/>
+    </serial>
+X
+}
+
+no_offload_xml() {   # IOS-XE's TCP stack rejects partially-checksummed segments from the host tap
+  cat <<X
+      <driver name='qemu'>
+        <host csum='off' gso='off' tso4='off' tso6='off' ecn='off' ufo='off'/>
+        <guest csum='off' tso4='off' tso6='off' ecn='off' ufo='off'/>
+      </driver>
+X
+}
+
+router_xml() {     # Gi1 = OOB mgmt; Gi2/Gi3 = point-to-point WAN links (UDP tunnels, black-holed when unwired)
+  local n="$1" i="${NODE_IDX[$1]}" d; d="$(node_dir "$n")"
+  cat <<X
+<domain type='kvm'>
+  <name>$n</name>
+  <title>Catalyst 8000v ${ROLE[$n]} ($n)</title>
+  <memory unit='MiB'>$C8000V_RAM_MIB</memory>
+  <vcpu placement='static'>$C8000V_VCPU</vcpu>
+  <cpu mode='host-passthrough' check='none'/>
+  <os><type arch='x86_64' machine='pc'>hvm</type><boot dev='hd'/></os>
+  <features><acpi/><apic/></features>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff><on_reboot>restart</on_reboot><on_crash>restart</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='$d/disk.qcow2'/>
+      <target dev='hda' bus='ide'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='$d/config.iso'/>
+      <target dev='hdc' bus='ide'/>
+      <readonly/>
+    </disk>
+    <!-- GigabitEthernet1: OOB management ${MGMT_IP[$n]} (Mgmt-vrf) -->
+    <interface type='network'>
+      <mac address='$MAC_OUI:0$i:01'/>
+      <source network='$OOB_NET'/>
+      <model type='virtio'/>
+$(no_offload_xml)
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+X
+  local p peer remote
+  for p in 2 3; do
+    peer="$(link_peer "$n" "$p")"
+    if [[ -n "$peer" ]]; then
+      read -r pn pp pfx _ <<<"$peer"; remote="$(port_local "$pn" "$pp")"
+      echo "    <!-- GigabitEthernet$p: $(wan_ip "$n" "$p") <-> $pn Gi$pp ($pfx) -->"
+    else
+      remote=$(( UDP_BASE + 10000 + i*100 + p )); echo "    <!-- GigabitEthernet$p: unwired -->"
+    fi
+    cat <<X
+    <interface type='udp'>
+      <mac address='$MAC_OUI:0$i:0$p'/>
+      <source address='127.0.0.1' port='$remote'>
+        <local address='127.0.0.1' port='$(port_local "$n" "$p")'/>
+      </source>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='$(printf '0x%02x' $((2+p)))' function='0x0'/>
+    </interface>
+X
+  done
+  serial_xml "$n"
+  cat <<X
+    <memballoon model='none'/>
+  </devices>
+</domain>
+X
+}
+
+# ---- build ------------------------------------------------------------------
+build_router() {
+  local n="$1" d; d="$(node_dir "$n")"
+  [[ -f "$C8000V_IMAGE" ]] || die "base image not found: $C8000V_IMAGE"
+  if [[ ! -f "$d/disk.qcow2" ]]; then
+    echo "[$n] creating overlay disk on $(basename "$C8000V_IMAGE")"
+    qemu-img create -q -f qcow2 -b "$C8000V_IMAGE" -F qcow2 "$d/disk.qcow2"
+  fi
+  echo "[$n] building day-0 config ISO"
+  # temp file + rename: libvirt chowns the previous ISO to libvirt-qemu
+  genisoimage -quiet -o "$d/config.iso.tmp" -l -J -r -V config "$d/iosxe_config.txt" && mv -f "$d/config.iso.tmp" "$d/config.iso"
+  router_xml "$n" > "$d/domain.xml"
+  V define "$d/domain.xml" >/dev/null
+}
+
+save_config() {   # write memory: RESTCONF RPC first, serial console as fallback
+  local n="$1" user="${IOSXE_USERNAME:-admin}" pass="${IOSXE_PASSWORD:-admin}"
+  curl -sk -u "$user:$pass" -m 30 -X POST "https://${MGMT_IP[$n]}/restconf/operations/cisco-ia:save-config" \
+       -H 'Content-Type: application/yang-data+json' -H 'Accept: application/yang-data+json' 2>/dev/null | grep -qi success && return 0
+  timeout 90 python3 "$LAB_DIR/tools/console.py" send 127.0.0.1 "${CONSOLE_PORT[$n]}" "write memory" >/dev/null 2>&1
+}
+
+restconf_ready() { [[ "$(curl -sk -u "${IOSXE_USERNAME:-admin}:${IOSXE_PASSWORD:-admin}" -m 8 -o /dev/null -w '%{http_code}' \
+                     "https://${MGMT_IP[$1]}/restconf/data/Cisco-IOS-XE-native:native/hostname" -H 'Accept: application/yang-data+json' 2>/dev/null)" == "200" ]]; }
+
+# ---- commands ---------------------------------------------------------------
+cmd_up() {
+  ensure_networks
+  for n in $(nodes_or_all "$@"); do
+    defined "$n" || build_router "$n"
+    # pre-create the console log so virtlogd appends to our file instead of a root-only one
+    [[ -f "$(node_dir "$n")/console.log" ]] || { touch "$(node_dir "$n")/console.log"; chmod 644 "$(node_dir "$n")/console.log"; }
+    if running "$n"; then echo "[$n] already running"; else V start "$n"; echo "[$n] started (console: 127.0.0.1:${CONSOLE_PORT[$n]})"; fi
+  done
+}
+
+cmd_down() {
+  for n in $(nodes_or_all "$@"); do
+    running "$n" || { echo "[$n] not running"; continue; }
+    echo "[$n] saving config, then powering off"
+    save_config "$n" || echo "[$n] warning: could not save config"
+    V destroy "$n" >/dev/null; echo "[$n] stopped"
+  done
+}
+
+cmd_rebuild() {    # re-define domains from lab.conf/templates without touching disks
+  for n in $(nodes_or_all "$@"); do
+    running "$n" && die "$n is running; stop it first"
+    defined "$n" && V undefine "$n" >/dev/null
+    build_router "$n"; echo "[$n] redefined"
+  done
+}
+
+cmd_clean() {      # destroy VMs and delete overlay disks (base image untouched)
+  for n in $(nodes_or_all "$@"); do
+    running "$n" && V destroy "$n" >/dev/null
+    defined "$n" && V undefine "$n" >/dev/null
+    rm -f "$(node_dir "$n")"/{disk.qcow2,config.iso,domain.xml,console.log}
+    echo "[$n] removed"
+  done
+}
+
+cmd_status() {
+  printf '%-7s %-6s %-10s %-10s %-6s %-16s %-8s\n' NODE ROLE STATE MGMT-IP AS LAN CONSOLE
+  for n in "${ALL_NODES[@]}"; do
+    printf '%-7s %-6s %-10s %-10s %-6s %-16s %-8s\n' "$n" "${ROLE[$n]}" "$(V domstate "$n" 2>/dev/null || echo undefined)" \
+      "${MGMT_IP[$n]}" "${BGP_AS[$n]}" "${LAN[$n]}" "${CONSOLE_PORT[$n]}"
+  done
+  echo; echo "WAN links (point-to-point) and IPsec VTI tunnels:"
+  local l a b pfx t; for l in "${LINKS[@]}"; do read -r a b pfx <<<"$l"; echo "  ${a%%:*} Gi${a##*:} $(wan_ip "${a%%:*}" "${a##*:}")  <->  ${b%%:*} Gi${b##*:} $(wan_ip "${b%%:*}" "${b##*:}")   ($pfx)"; done
+  for t in "${TUNNELS[@]}"; do read -r id sp pfx <<<"$t"; echo "  Tunnel$id: hub <-> $sp  $pfx  (ipsec ipv4, IKEv2 PSK, eBGP)"; done
+}
+
+cmd_console() {
+  local n="${1:?node}"; running "$n" || die "$n is not running"
+  echo "Connecting to $n console (exit: Ctrl-] then q)"; echo
+  socat -,raw,echo=0,escape=0x1d "tcp:127.0.0.1:${CONSOLE_PORT[$n]}"
+}
+
+cmd_ssh() {
+  local n="${1:?node}"; shift || true
+  ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "admin@${MGMT_IP[$n]}" "$@"
+}
+
+cmd_bootstrap() {  # wait for boot, (re)apply day-0, generate SSH keys; then wait for RESTCONF
+  for n in $(nodes_or_all "$@"); do
+    local d; d="$(node_dir "$n")"
+    echo "[$n] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
+    python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 900 >/dev/null
+    echo "[$n] applying config + generating SSH keys"
+    python3 "$LAB_DIR/tools/console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/iosxe_config.txt" >/dev/null
+    python3 "$LAB_DIR/tools/console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/post-boot.txt" >/dev/null
+    # the crypto feature set needs the license boot level, which only takes effect after a reload
+    if ! python3 "$LAB_DIR/tools/console.py" send 127.0.0.1 "${CONSOLE_PORT[$n]}" "show version | include ^License Level" 2>/dev/null | grep -q 'network-advantage'; then
+      echo "[$n] license boot level not active yet: reloading once"
+      python3 - "${CONSOLE_PORT[$n]}" <<'PY'
+import socket, sys, time
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1]))); s.settimeout(2)
+for cmd in ("\r", "write memory\r", "reload\r", "\r", "\r"):
+    s.sendall(cmd.encode()); time.sleep(4)
+    try: s.recv(65536)
+    except socket.timeout: pass
+s.close()
+PY
+      sleep 60
+      python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 900 >/dev/null
+    fi
+    for _ in $(seq 60); do restconf_ready "$n" && break; sleep 10; done
+    restconf_ready "$n" && echo "[$n] ready: ssh admin@${MGMT_IP[$n]} (admin), RESTCONF up" || echo "[$n] warning: RESTCONF not answering yet"
+  done
+}
+
+cmd_wait() {       # block until RESTCONF answers on the given nodes (used after up)
+  for n in $(nodes_or_all "$@"); do
+    for _ in $(seq 90); do restconf_ready "$n" && break; sleep 10; done
+    restconf_ready "$n" && echo "[$n] RESTCONF ready" || echo "[$n] RESTCONF NOT ready"
+  done
+}
+
+cmd_log() { tail -n "${2:-50}" -f "$(node_dir "${1:?node}")/console.log"; }
+
+cmd_nac() {        # run terraform in nac/ with router credentials in the environment
+  export PATH="$HOME/.local/bin:$PATH"
+  command -v terraform >/dev/null || die "terraform not found in PATH"
+  local user="${IOSXE_USERNAME:-admin}" pass="${IOSXE_PASSWORD:-admin}"
+  cd "$LAB_DIR/nac"
+  IOSXE_USERNAME="$user" IOSXE_PASSWORD="$pass" terraform "$@"
+  local rc=$?
+  if [[ $rc -eq 0 && "${1:-}" == "apply" ]]; then
+    for n in "${ROUTERS[@]}"; do save_config "$n" && echo "[$n] running-config saved to startup-config" || echo "[$n] warning: save failed" >&2; done
+  fi
+  return $rc
+}
+
+# ---- Nautobot (shared NMS of the cat9000v lab: http://10.0.0.10:8080) ----------------
+NAUTOBOT_URL="${NAUTOBOT_URL:-http://10.0.0.10:8080}"
+nautobot_token() { ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@10.0.0.10 'grep ^NAUTOBOT_SUPERUSER_API_TOKEN /opt/nautobot/.env | cut -d= -f2'; }
+nautobot_py() {
+  [[ -x "$LAB_DIR/tests/.venv/bin/python" ]] || "$LAB_DIR/tests/setup.sh"
+  NAUTOBOT_URL="$NAUTOBOT_URL" NAUTOBOT_TOKEN="$(nautobot_token)" "$LAB_DIR/tests/.venv/bin/python" "$LAB_DIR/nautobot/$1" "${@:2}"
+}
+cmd_nautobot() {
+  local sub="${1:-render}"; shift || true
+  case "$sub" in
+    onboard) nautobot_py onboard.py "$@" ;;        # discover r1-r3 (Sync Devices From Network)
+    seed)    nautobot_py seed.py "$@" ;;           # load the DMVPN intent (idempotent)
+    render)  nautobot_py render_nac.py "$@" ;;     # regenerate nac/data/devices.nac.yaml (--check to verify)
+    golden)  GITEA_PASSWORD="$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@10.0.0.10 'grep ^GITEA_PASSWORD /opt/nautobot/.env | cut -d= -f2')" \
+             nautobot_py golden_config.py "$@" ;;  # Golden Config scope/template for the routers + backup/intended/compliance
+    token)   nautobot_token ;;
+    *) die "usage: lab.sh nautobot {onboard|seed|render [--check]|golden|token}" ;;
+  esac
+}
+
+cmd_test() {       # Robot Framework suite; results in results/<date>_<time>/
+  [[ -x "$LAB_DIR/tests/.venv/bin/robot" ]] || "$LAB_DIR/tests/setup.sh"
+  exec "$LAB_DIR/tests/run.sh" "$@"
+}
+
+usage() {
+  cat <<U
+usage: $(basename "$0") <command> [node...]
+  up [node..]        create (if needed) and start routers        (default: all)
+  down [node..]      save configs and stop routers               (default: all)
+  status             show nodes, addresses, console ports
+  console <node>     attach to serial console
+  ssh <node> [cmd]   ssh to a router's OOB management IP (admin/admin)
+  bootstrap [node..] wait for boot, generate SSH keys, wait for RESTCONF (first boot)
+  wait [node..]      wait until RESTCONF answers
+  log <node> [n]     follow a node's console log
+  nac <tf args..>    run terraform in nac/ (init | plan | apply)
+  test [robot args]  run the Robot Framework tests
+  nautobot <cmd>     onboard|seed|render|golden|token  (shared Nautobot at $NAUTOBOT_URL)
+  rebuild [node..]   re-generate domain XML / day-0 ISO (keeps disks)
+  clean [node..]     stop, undefine and delete overlay disks
+nodes: ${ALL_NODES[*]}
+U
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|rebuild|clean) "cmd_$cmd" "$@" ;;
+  *) usage; exit 1 ;;
+esac

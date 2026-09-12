@@ -1,0 +1,110 @@
+{#- Intended configuration for the C8000v IPsec VTI routers, rendered from Nautobot (query golden-config-lab).
+    Features under compliance: management ACL, static routes, loopbacks, wan-interface, tunnel, crypto, BGP, banner. -#}
+{%- set masks = {'24': '255.255.255.0', '30': '255.255.255.252', '32': '255.255.255.255'} -%}
+{%- set cr = config_context.crypto -%}
+hostname {{ hostname }}
+!
+{% for va in vrf_assignments | sort(attribute='vrf.name') %}
+vrf definition {{ va.vrf.name }}
+ !
+ address-family ipv4
+ exit-address-family
+!
+{% endfor %}
+ip domain name {{ config_context.domain_name }}
+!
+ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.gateway }}
+!
+ip access-list standard {{ config_context.oob.acl }}
+ 10 remark OOB management network
+ 20 permit {{ config_context.oob.prefix | ipaddress_network('network_address') }} {{ config_context.oob.prefix | ipaddress_network('hostmask') }}
+ 30 deny any log
+!
+{% for i in interfaces | sort(attribute='name') if i.name.startswith('Loopback') and i.ip_addresses %}
+interface {{ i.name }}
+ description {{ i.description }}
+ ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
+!
+{% endfor %}
+{% for i in interfaces | sort(attribute='name') if i.name.startswith('GigabitEthernet') and i.name != 'GigabitEthernet1' %}
+interface {{ i.name }}
+{% if i.enabled and i.ip_addresses %}
+ description {{ i.description }}
+ ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
+ negotiation auto
+ cdp enable
+{% else %}
+ no ip address
+ shutdown
+ negotiation auto
+{% endif %}
+!
+{% endfor %}
+{% for i in interfaces | sort(attribute='name') if i.name.startswith('Tunnel') and i.ip_addresses %}
+{% set peer = i.rel_tunnel_peer %}
+interface {{ i.name }}
+ description {{ i.description }}
+ ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source {{ i.rel_tunnel_source_source.name }}
+ tunnel mode {{ {'gre-multipoint': 'gre multipoint', 'gre': 'gre ip', 'ipsec-ipv4': 'ipsec ipv4'}[i.cf_tunnel_mode] }}
+{% if peer and peer.rel_tunnel_source_source %}
+ tunnel destination {{ peer.rel_tunnel_source_source.ip_addresses[0].address.split('/')[0] }}
+{% endif %}
+{% if i.cf_tunnel_key is not none %}
+ tunnel key {{ i.cf_tunnel_key }}
+{% endif %}
+ tunnel protection ipsec profile {{ i.cf_tunnel_ipsec_profile }}
+!
+{% endfor %}
+crypto ikev2 proposal {{ cr.ikev2_proposal.name }}
+ encryption {{ cr.ikev2_proposal.encryption }}
+ integrity {{ cr.ikev2_proposal.integrity }}
+ group {{ cr.ikev2_proposal.group }}
+!
+crypto ikev2 policy {{ cr.ikev2_policy.name }}
+ proposal {{ cr.ikev2_proposal.name }}
+!
+crypto ikev2 profile {{ cr.ikev2_profile.name }}
+ match identity remote address {{ cr.ikev2_keyring.peer_address }}
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local {{ cr.ikev2_keyring.name }}
+ dpd {{ cr.ikev2_profile.dpd_interval }} {{ cr.ikev2_profile.dpd_retry }} on-demand
+!
+crypto ipsec transform-set {{ cr.ipsec_transform_set.name }} {{ {'esp-256-aes': 'esp-aes 256', 'esp-aes': 'esp-aes', 'esp-192-aes': 'esp-aes 192'}[cr.ipsec_transform_set.esp] }} {{ cr.ipsec_transform_set.esp_hmac }}
+ mode tunnel
+!
+crypto ipsec profile {{ cr.ipsec_profile.name }}
+ set transform-set {{ cr.ipsec_transform_set.name }}
+ set ikev2-profile {{ cr.ikev2_profile.name }}
+!
+{% set own = [] %}
+{% for i in interfaces %}{% for ip in i.ip_addresses if ip.parent %}{% for t in ip.parent.tags if t.name == 'bgp:advertise' and ip.parent.prefix not in own %}{% set _ = own.append(ip.parent.prefix) %}{% endfor %}{% endfor %}{% endfor %}
+{% for ri in bgp_routing_instances %}
+router bgp {{ ri.autonomous_system.asn }}
+ bgp router-id {{ ri.router_id.address.split('/')[0] }}
+ bgp log-neighbor-changes
+{% for ep in ri.endpoints | sort(attribute='peer.source_ip.address') if ep.enabled and ep.peer %}
+ neighbor {{ ep.peer.source_ip.address.split('/')[0] }} remote-as {{ ep.peer.autonomous_system.asn }}
+ neighbor {{ ep.peer.source_ip.address.split('/')[0] }} description {{ ep.description }}
+{% endfor %}
+ !
+ address-family ipv4
+{% set lo = [] %}{% set nets = [] %}
+{% for p in own %}{% if p.endswith('/32') %}{% set _ = lo.append(p) %}{% else %}{% set _ = nets.append(p) %}{% endif %}{% endfor %}
+{% for p in lo + (nets | sort) %}
+{% if p.endswith('/24') and p.startswith('192.') %}
+  network {{ p.split('/')[0] }}
+{% else %}
+  network {{ p.split('/')[0] }} mask {{ masks[p.split('/')[1]] }}
+{% endif %}
+{% endfor %}
+{% for ep in ri.endpoints | sort(attribute='peer.source_ip.address') if ep.enabled and ep.peer %}
+  neighbor {{ ep.peer.source_ip.address.split('/')[0] }} activate
+{% endfor %}
+ exit-address-family
+!
+{% endfor %}
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
