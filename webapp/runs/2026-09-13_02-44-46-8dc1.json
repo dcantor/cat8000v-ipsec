@@ -1,0 +1,2355 @@
+{
+ "id": "2026-09-13_02-44-46-8dc1",
+ "mode": "deploy",
+ "status": "failed",
+ "started": 1789281886.939643,
+ "finished": 1789282050.2771742,
+ "steps": [
+  {
+   "name": "validate",
+   "title": "Validate intent",
+   "status": "success",
+   "started": 1789281886.9400113,
+   "finished": 1789281886.952207,
+   "summary": "3 devices, 2 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "name": "save",
+   "title": "Save intent",
+   "status": "success",
+   "started": 1789281886.9524596,
+   "finished": 1789281886.9528651,
+   "summary": "lab-intent.json written"
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "success",
+   "started": 1789281886.9529974,
+   "finished": 1789281903.2403195,
+   "summary": "seed complete: 8 changes:"
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "success",
+   "started": 1789281903.2406244,
+   "finished": 1789281904.0791492,
+   "summary": "nac/data/devices.nac.yaml + device_groups.nac.yaml regenerated from Nautobot"
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "success",
+   "started": 1789281904.079468,
+   "finished": 1789281914.4029593,
+   "summary": "Plan: 1 to add, 5 to change, 1 to destroy."
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "success",
+   "started": 1789281914.403522,
+   "finished": 1789281931.5100987,
+   "summary": "Apply complete! Resources: 1 added, 5 changed, 1 destroyed."
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "success",
+   "started": 1789281931.5685294,
+   "finished": 1789281953.6466665,
+   "summary": "51/51 compliance rows compliant"
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "failed",
+   "started": 1789281953.6476982,
+   "finished": 1789282050.2771647,
+   "summary": "24/26 tests passed"
+  }
+ ],
+ "tests": {
+  "suites": [
+   {
+    "name": "01 Management",
+    "tests": [
+     {
+      "name": "Routers are reachable over the OOB network with SSH and RESTCONF",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "10.874389",
+      "start": "2026-09-13T02:46:00.671200"
+     },
+     {
+      "name": "Management interface lives in Mgmt-vrf with a default route to the host",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.044506",
+      "start": "2026-09-13T02:46:11.545812"
+     },
+     {
+      "name": "License boot level provides the security feature set",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.497263",
+      "start": "2026-09-13T02:46:14.590509"
+     },
+     {
+      "name": "AAA, SSH and VTY hardening from the NAC baseline",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "7.957161",
+      "start": "2026-09-13T02:46:16.087934"
+     }
+    ],
+    "passed": 4,
+    "failed": 0
+   },
+   {
+    "name": "02 Underlay",
+    "tests": [
+     {
+      "name": "WAN point-to-point interfaces are up with the modelled addresses",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "5.012826",
+      "start": "2026-09-13T02:46:24.081434"
+     },
+     {
+      "name": "Each spoke reaches the hub across its own link and nothing else",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "6.528380",
+      "start": "2026-09-13T02:46:29.094425"
+     },
+     {
+      "name": "CDP shows the hub on each spoke's WAN port and both spokes on the hub",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.969880",
+      "start": "2026-09-13T02:46:35.622976"
+     },
+     {
+      "name": "Loopbacks carry the router-id and the site LAN",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.519343",
+      "start": "2026-09-13T02:46:37.593045"
+     }
+    ],
+    "passed": 4,
+    "failed": 0
+   },
+   {
+    "name": "03 Ipsec Vti",
+    "tests": [
+     {
+      "name": "Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec profile",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "4.722876",
+      "start": "2026-09-13T02:46:39.147454"
+     },
+     {
+      "name": "Tunnels are up/up at both ends and the tunnel subnet is reachable",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.015887",
+      "start": "2026-09-13T02:46:43.870488"
+     },
+     {
+      "name": "IKEv2 SAs are READY with the modelled proposal and PSK authentication",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.967400",
+      "start": "2026-09-13T02:46:46.886543"
+     },
+     {
+      "name": "Traffic through the tunnels is encrypted with the modelled transform set",
+      "status": "FAIL",
+      "message": "spoke1: ESP encaps counter did not advance (245 -> 245)",
+      "elapsed": "1.531498",
+      "start": "2026-09-13T02:46:49.854100"
+     },
+     {
+      "name": "The hub holds exactly one IKEv2 session per spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.510984",
+      "start": "2026-09-13T02:46:51.385906"
+     }
+    ],
+    "passed": 4,
+    "failed": 1
+   },
+   {
+    "name": "04 Routing",
+    "tests": [
+     {
+      "name": "Hub has an Established eBGP session with each spoke over its tunnel",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.527041",
+      "start": "2026-09-13T02:46:51.932472"
+     },
+     {
+      "name": "Every spoke peers with the hub only and receives four prefixes",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.983202",
+      "start": "2026-09-13T02:46:54.459672"
+     },
+     {
+      "name": "Spokes see each other's LAN and loopback via the hub with the AS path hub-spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.985139",
+      "start": "2026-09-13T02:46:57.443033"
+     },
+     {
+      "name": "Hub learns each spoke's LAN directly from that spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.490705",
+      "start": "2026-09-13T02:46:59.428333"
+     },
+     {
+      "name": "Site LANs reach each other through the encrypted tunnels",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.529377",
+      "start": "2026-09-13T02:46:59.919201"
+     }
+    ],
+    "passed": 5,
+    "failed": 0
+   },
+   {
+    "name": "05 Nac Compliance",
+    "tests": [
+     {
+      "name": "Terraform plan reports no drift from the NAC data model",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "4.110066",
+      "start": "2026-09-13T02:47:03.492480"
+     }
+    ],
+    "passed": 1,
+    "failed": 0
+   },
+   {
+    "name": "06 Nautobot",
+    "tests": [
+     {
+      "name": "Routers exist in Nautobot with role, serial, platform and management IP matching reality",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "5.583899",
+      "start": "2026-09-13T02:47:07.605619"
+     },
+     {
+      "name": "WAN links are modelled as cables between the hub and spoke ports with /30 addresses",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.317648",
+      "start": "2026-09-13T02:47:13.189699"
+     },
+     {
+      "name": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, hub/spoke endpoints",
+      "status": "FAIL",
+      "message": "['10.255.1.3/32', '192.168.13.0/24'] != ['10.255.1.3/32', '192.168.23.0/24']",
+      "elapsed": "1.148322",
+      "start": "2026-09-13T02:47:13.507513"
+     },
+     {
+      "name": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "6.155574",
+      "start": "2026-09-13T02:47:14.655977"
+     },
+     {
+      "name": "BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the live sessions",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.600430",
+      "start": "2026-09-13T02:47:20.811726"
+     },
+     {
+      "name": "NAC device model rendered from Nautobot matches the committed file",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.445322",
+      "start": "2026-09-13T02:47:22.412319"
+     },
+     {
+      "name": "Golden Config: router backups are in Gitea and every compliance row is compliant",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.596706",
+      "start": "2026-09-13T02:47:22.857852"
+     }
+    ],
+    "passed": 6,
+    "failed": 1
+   }
+  ],
+  "total": 26,
+  "passed": 24,
+  "failed": 2
+ },
+ "results_dir": "2026-09-13_02-45-53",
+ "error": "2 test(s) failed",
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042001",
+ "log": [
+  {
+   "t": 1789281886.9522033,
+   "line": "3 devices, 2 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "t": 1789281886.9528627,
+   "line": "lab-intent.json written"
+  },
+  {
+   "t": 1789281886.9531312,
+   "line": "$ ./lab.sh nautobot seed"
+  },
+  {
+   "t": 1789281903.2094905,
+   "line": "seed complete: 8 changes:"
+  },
+  {
+   "t": 1789281903.2094953,
+   "line": "  updated VPN-IPSEC: keepalive_interval, keepalive_retries"
+  },
+  {
+   "t": 1789281903.2094977,
+   "line": "  updated IPSEC_VPN: extra_attributes"
+  },
+  {
+   "t": 1789281903.2094998,
+   "line": "  updated spoke2: comments"
+  },
+  {
+   "t": 1789281903.2095025,
+   "line": "  prefix:192.168.23.0/24"
+  },
+  {
+   "t": 1789281903.2095048,
+   "line": "  updated 192.168.23.0/24: Global: role, description"
+  },
+  {
+   "t": 1789281903.209506,
+   "line": "  tag bgp:advertise on 192.168.23.0/24"
+  },
+  {
+   "t": 1789281903.209507,
+   "line": "  ip:192.168.23.1/24"
+  },
+  {
+   "t": 1789281903.2095094,
+   "line": "  unassigned old address from spoke2/Loopback10"
+  },
+  {
+   "t": 1789281903.2408137,
+   "line": "$ ./lab.sh nautobot render"
+  },
+  {
+   "t": 1789281904.050367,
+   "line": "wrote /home/dcantor/cat8000v-ipsec/nac/data/devices.nac.yaml: 3 devices (+ device_groups.nac.yaml)"
+  },
+  {
+   "t": 1789281904.079673,
+   "line": "$ ./lab.sh nac plan -no-color -input=false -detailed-exitcode -parallelism=1"
+  },
+  {
+   "t": 1789281905.6191206,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Refreshing state... [id=338d877b90c11471ad9ea780f31b17c4d53280a8]"
+  },
+  {
+   "t": 1789281905.6793437,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281905.7601376,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281905.8197298,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281905.999927,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281906.0293841,
+   "line": "module.iosxe.iosxe_banner.banner[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281906.0509603,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281906.2878706,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281906.3068907,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281906.326483,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281906.3479764,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281906.5100412,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281906.5646515,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281906.6282666,
+   "line": "module.iosxe.iosxe_service.service[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281906.6575987,
+   "line": "module.iosxe.iosxe_service.service[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281906.6823497,
+   "line": "module.iosxe.iosxe_service.service[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281906.7044914,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"hub/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281906.7279546,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke2/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281906.7546287,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke1/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281906.780294,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke1/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281906.811896,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"hub/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281906.8458335,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke2/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281906.881658,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke2/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281906.8961973,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"hub/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281906.9146514,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke1/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281906.9330187,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"hub/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281906.955311,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke1/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281906.9828844,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke2/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281907.003443,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281907.081904,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281907.1597824,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281907.2431476,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281907.3215642,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281907.3999507,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281907.4827392,
+   "line": "module.iosxe.iosxe_line.line[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281907.543033,
+   "line": "module.iosxe.iosxe_line.line[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281907.6263528,
+   "line": "module.iosxe.iosxe_line.line[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281907.6732936,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke1/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281907.6931245,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke2/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281907.7178967,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"hub/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281907.741942,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281907.8051627,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281907.862301,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281907.9282448,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789281908.1242468,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281908.3320167,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281908.5483413,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281908.764353,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke2/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281908.7887368,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"hub/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281908.8166554,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke1/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281908.9987056,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281909.0872893,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281909.8413622,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281909.932559,
+   "line": "module.iosxe.iosxe_logging.logging[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281909.997747,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281910.1111174,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281910.1666126,
+   "line": "module.iosxe.iosxe_system.system[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281911.3545647,
+   "line": "module.iosxe.iosxe_system.system[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281912.4301012,
+   "line": "module.iosxe.iosxe_system.system[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281913.3926804,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281913.4646208,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281913.537232,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281913.609985,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281913.6548793,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281913.7008257,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281913.7484672,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200]"
+  },
+  {
+   "t": 1789281913.8054383,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201]"
+  },
+  {
+   "t": 1789281913.8526592,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202]"
+  },
+  {
+   "t": 1789281913.901828,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281913.9492097,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281913.9917724,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281914.051496,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789281914.0901957,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789281914.1171675,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789281914.149279,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789281914.1768675,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789281914.1912851,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789281914.2062268,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789281914.2216074,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789281914.2365181,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/tunnel_hub_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281914.2410107,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke1/tunnel_spoke1_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281914.2457802,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke2/tunnel_spoke2_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281914.2516644,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/tunnel_hub_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281914.3899453,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3899515,
+   "line": "Terraform used the selected providers to generate the following execution"
+  },
+  {
+   "t": 1789281914.3899539,
+   "line": "plan. Resource actions are indicated with the following symbols:"
+  },
+  {
+   "t": 1789281914.389967,
+   "line": "  ~ update in-place"
+  },
+  {
+   "t": 1789281914.389969,
+   "line": "-/+ destroy and then create replacement"
+  },
+  {
+   "t": 1789281914.3899717,
+   "line": ""
+  },
+  {
+   "t": 1789281914.389974,
+   "line": "Terraform will perform the following actions:"
+  },
+  {
+   "t": 1789281914.3899815,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3899825,
+   "line": "  # module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281914.3899837,
+   "line": "  ~ resource \"iosxe_bgp_address_family_ipv4\" \"bgp_address_family_ipv4\" {"
+  },
+  {
+   "t": 1789281914.3899848,
+   "line": "        id                         = \"Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast\""
+  },
+  {
+   "t": 1789281914.3899875,
+   "line": "      ~ ipv4_unicast_networks      = ["
+  },
+  {
+   "t": 1789281914.3899899,
+   "line": "          ~ {"
+  },
+  {
+   "t": 1789281914.3899925,
+   "line": "              ~ network = \"192.168.13.0\" -> \"192.168.23.0\""
+  },
+  {
+   "t": 1789281914.3899932,
+   "line": "            },"
+  },
+  {
+   "t": 1789281914.3899949,
+   "line": "        ]"
+  },
+  {
+   "t": 1789281914.3899958,
+   "line": "        # (4 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3899982,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.3900464,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3900487,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281914.3900514,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281914.3900537,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281914.390056,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281914.3900585,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.3900592,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.3900619,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3900642,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.3900807,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3900833,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281914.3900857,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281914.390087,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281914.3900895,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281914.3900917,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.390094,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.390095,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3900976,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.3901155,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3901172,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281914.3901181,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281914.3901193,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281914.390122,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281914.3901227,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.3901243,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281914.3901253,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3901267,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.3901482,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3901503,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"] will be updated in-place"
+  },
+  {
+   "t": 1789281914.390152,
+   "line": "  ~ resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789281914.3901527,
+   "line": "        id                = \"Cisco-IOS-XE-native:native/interface/Loopback=10\""
+  },
+  {
+   "t": 1789281914.3901541,
+   "line": "      ~ ipv4_address      = \"192.168.13.1\" -> \"192.168.23.1\""
+  },
+  {
+   "t": 1789281914.3901567,
+   "line": "        name              = 10"
+  },
+  {
+   "t": 1789281914.3901591,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3901606,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.39029,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3902934,
+   "line": "  # module.iosxe.module.model.local_sensitive_file.model[0] must be replaced"
+  },
+  {
+   "t": 1789281914.3902955,
+   "line": "-/+ resource \"local_sensitive_file\" \"model\" {"
+  },
+  {
+   "t": 1789281914.3902981,
+   "line": "      ~ content              = (sensitive value) # forces replacement"
+  },
+  {
+   "t": 1789281914.390299,
+   "line": "      ~ content_base64sha256 = \"0X0/SFUWOOFVfx9r1NU+jg6TXckbr2RDfcKSckQc7Ck=\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903015,
+   "line": "      ~ content_base64sha512 = \"NH/6FXuba64oZ7Ob9Ou7pCBZ4tzxHqpPypQRaZTeSmwBuDW7fWt3fVFu9CxubcYtSEpUYN0HWWqqjozxxSm6Pw==\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903039,
+   "line": "      ~ content_md5          = \"c53d8a7b0281c9a4173cac2e7d4dacc1\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903046,
+   "line": "      ~ content_sha1         = \"338d877b90c11471ad9ea780f31b17c4d53280a8\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.390306,
+   "line": "      ~ content_sha256       = \"d17d3f48551638e1557f1f6bd4d53e8e0e935dc91baf64437dc29272441cec29\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903072,
+   "line": "      ~ content_sha512       = \"347ffa157b9b6bae2867b39bf4ebbba42059e2dcf11eaa4fca94116994de4a6c01b835bb7d6b777d516ef42c6e6dc62d484a5460dd07596aaa8e8cf1c529ba3f\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903084,
+   "line": "      ~ id                   = \"338d877b90c11471ad9ea780f31b17c4d53280a8\" -> (known after apply)"
+  },
+  {
+   "t": 1789281914.3903093,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281914.3903108,
+   "line": "    }"
+  },
+  {
+   "t": 1789281914.3903117,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3903131,
+   "line": "Plan: 1 to add, 5 to change, 1 to destroy."
+  },
+  {
+   "t": 1789281914.3903275,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3903298,
+   "line": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  },
+  {
+   "t": 1789281914.3903325,
+   "line": ""
+  },
+  {
+   "t": 1789281914.3903346,
+   "line": "Note: You didn't use the -out option to save this plan, so Terraform can't"
+  },
+  {
+   "t": 1789281914.390337,
+   "line": "guarantee to take exactly these actions if you run \"terraform apply\" now."
+  },
+  {
+   "t": 1789281914.403935,
+   "line": "$ ./lab.sh nac apply -auto-approve -no-color -input=false -parallelism=1"
+  },
+  {
+   "t": 1789281915.9098299,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Refreshing state... [id=338d877b90c11471ad9ea780f31b17c4d53280a8]"
+  },
+  {
+   "t": 1789281915.950498,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281915.9992812,
+   "line": "module.iosxe.iosxe_banner.banner[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281916.051718,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789281916.1270635,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281916.1854706,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281916.248319,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789281916.3348804,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281916.3560746,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281916.3721123,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789281916.3880546,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281916.4042027,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281916.4199939,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789281916.4363496,
+   "line": "module.iosxe.iosxe_service.service[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281916.4614763,
+   "line": "module.iosxe.iosxe_service.service[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281916.485608,
+   "line": "module.iosxe.iosxe_service.service[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789281916.508541,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke1/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281916.5254712,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke2/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281916.5433078,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"hub/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789281916.5624049,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke2/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281916.5763445,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"hub/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281916.5936658,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke1/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789281916.6108544,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke2/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281916.6412163,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"hub/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281916.6745121,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke1/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789281916.7042322,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"hub/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281916.7233262,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke1/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281916.7436326,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke2/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789281916.7633095,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281916.823051,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281916.8772929,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281916.939914,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke2/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281916.9600275,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke1/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281916.9826303,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"hub/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789281917.0115988,
+   "line": "module.iosxe.iosxe_line.line[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281917.0587158,
+   "line": "module.iosxe.iosxe_line.line[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281917.0992622,
+   "line": "module.iosxe.iosxe_line.line[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789281917.1445272,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281917.2236006,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281917.3058593,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281917.3884552,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281917.4691355,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281917.5490487,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789281917.6292834,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"hub/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281917.6492097,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke1/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281917.670289,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke2/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789281917.7032042,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281917.901906,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789281918.1050587,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281918.2915733,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789281918.4962347,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281918.5536401,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281918.608206,
+   "line": "module.iosxe.iosxe_logging.logging[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789281918.6626537,
+   "line": "module.iosxe.iosxe_system.system[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281919.7612357,
+   "line": "module.iosxe.iosxe_system.system[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281920.9220114,
+   "line": "module.iosxe.iosxe_system.system[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789281921.9002023,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281921.999753,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281922.0863454,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789281922.1770592,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200]"
+  },
+  {
+   "t": 1789281922.245228,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201]"
+  },
+  {
+   "t": 1789281922.2920473,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202]"
+  },
+  {
+   "t": 1789281922.3424482,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281922.425329,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281922.5155935,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789281922.5902061,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281922.636797,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281922.6800413,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789281922.7445953,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281922.7966347,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281922.8435373,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281922.891121,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789281922.925057,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789281922.9565434,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789281922.9905975,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789281923.0328512,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789281923.0473745,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789281923.064791,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789281923.0791285,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789281923.094239,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke2/tunnel_spoke2_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281923.098345,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/tunnel_hub_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281923.103806,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/tunnel_hub_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281923.109026,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke1/tunnel_spoke1_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789281923.2533643,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2533703,
+   "line": "Terraform used the selected providers to generate the following execution"
+  },
+  {
+   "t": 1789281923.253373,
+   "line": "plan. Resource actions are indicated with the following symbols:"
+  },
+  {
+   "t": 1789281923.2544484,
+   "line": "  ~ update in-place"
+  },
+  {
+   "t": 1789281923.2544522,
+   "line": "-/+ destroy and then create replacement"
+  },
+  {
+   "t": 1789281923.254454,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2544565,
+   "line": "Terraform will perform the following actions:"
+  },
+  {
+   "t": 1789281923.254459,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2544615,
+   "line": "  # module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281923.2544637,
+   "line": "  ~ resource \"iosxe_bgp_address_family_ipv4\" \"bgp_address_family_ipv4\" {"
+  },
+  {
+   "t": 1789281923.2544665,
+   "line": "        id                         = \"Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast\""
+  },
+  {
+   "t": 1789281923.2544687,
+   "line": "      ~ ipv4_unicast_networks      = ["
+  },
+  {
+   "t": 1789281923.2544901,
+   "line": "          ~ {"
+  },
+  {
+   "t": 1789281923.2544928,
+   "line": "              ~ network = \"192.168.13.0\" -> \"192.168.23.0\""
+  },
+  {
+   "t": 1789281923.254495,
+   "line": "            },"
+  },
+  {
+   "t": 1789281923.2544975,
+   "line": "        ]"
+  },
+  {
+   "t": 1789281923.2545,
+   "line": "        # (4 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.254502,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.254505,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2545075,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281923.2545135,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281923.2546017,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281923.254604,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281923.2546062,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.254608,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.25461,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.2546117,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.2546134,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2546148,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281923.2546175,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281923.2546246,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281923.254627,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281923.254629,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.2546303,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.2546327,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.2546337,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.254636,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2546406,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"] will be updated in-place"
+  },
+  {
+   "t": 1789281923.2546432,
+   "line": "  ~ resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789281923.2546444,
+   "line": "      ~ dpd_interval                         = 30 -> 20"
+  },
+  {
+   "t": 1789281923.2546456,
+   "line": "      ~ dpd_retry                            = 5 -> 3"
+  },
+  {
+   "t": 1789281923.2546477,
+   "line": "        id                                   = \"Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.2546494,
+   "line": "        name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789281923.25465,
+   "line": "        # (6 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.254651,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.2546527,
+   "line": ""
+  },
+  {
+   "t": 1789281923.254655,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"] will be updated in-place"
+  },
+  {
+   "t": 1789281923.2546575,
+   "line": "  ~ resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789281923.2546587,
+   "line": "        id                = \"Cisco-IOS-XE-native:native/interface/Loopback=10\""
+  },
+  {
+   "t": 1789281923.25466,
+   "line": "      ~ ipv4_address      = \"192.168.13.1\" -> \"192.168.23.1\""
+  },
+  {
+   "t": 1789281923.2546608,
+   "line": "        name              = 10"
+  },
+  {
+   "t": 1789281923.2546637,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.2546647,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.254666,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2546682,
+   "line": "  # module.iosxe.module.model.local_sensitive_file.model[0] must be replaced"
+  },
+  {
+   "t": 1789281923.2546709,
+   "line": "-/+ resource \"local_sensitive_file\" \"model\" {"
+  },
+  {
+   "t": 1789281923.254672,
+   "line": "      ~ content              = (sensitive value) # forces replacement"
+  },
+  {
+   "t": 1789281923.2546742,
+   "line": "      ~ content_base64sha256 = \"0X0/SFUWOOFVfx9r1NU+jg6TXckbr2RDfcKSckQc7Ck=\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.254677,
+   "line": "      ~ content_base64sha512 = \"NH/6FXuba64oZ7Ob9Ou7pCBZ4tzxHqpPypQRaZTeSmwBuDW7fWt3fVFu9CxubcYtSEpUYN0HWWqqjozxxSm6Pw==\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.254678,
+   "line": "      ~ content_md5          = \"c53d8a7b0281c9a4173cac2e7d4dacc1\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.2546825,
+   "line": "      ~ content_sha1         = \"338d877b90c11471ad9ea780f31b17c4d53280a8\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.2546997,
+   "line": "      ~ content_sha256       = \"d17d3f48551638e1557f1f6bd4d53e8e0e935dc91baf64437dc29272441cec29\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.254702,
+   "line": "      ~ content_sha512       = \"347ffa157b9b6bae2867b39bf4ebbba42059e2dcf11eaa4fca94116994de4a6c01b835bb7d6b777d516ef42c6e6dc62d484a5460dd07596aaa8e8cf1c529ba3f\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.2547035,
+   "line": "      ~ id                   = \"338d877b90c11471ad9ea780f31b17c4d53280a8\" -> (known after apply)"
+  },
+  {
+   "t": 1789281923.2547054,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789281923.2547076,
+   "line": "    }"
+  },
+  {
+   "t": 1789281923.2547095,
+   "line": ""
+  },
+  {
+   "t": 1789281923.2547102,
+   "line": "Plan: 1 to add, 5 to change, 1 to destroy."
+  },
+  {
+   "t": 1789281923.3951495,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Destroying... [id=338d877b90c11471ad9ea780f31b17c4d53280a8]"
+  },
+  {
+   "t": 1789281923.3969476,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Destruction complete after 0s"
+  },
+  {
+   "t": 1789281923.620158,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Creating..."
+  },
+  {
+   "t": 1789281923.6292398,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Creation complete after 0s [id=ce9f2a61e4881346fca364f9fe5a25f06a00a632]"
+  },
+  {
+   "t": 1789281923.7067308,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Modifying... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281923.9688787,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Modifications complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281923.9979763,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Modifying... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281924.2372599,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Modifications complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281924.2763588,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Modifying... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281924.5019782,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Modifications complete after 1s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789281924.5299516,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Modifying... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281924.8534555,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Modifications complete after 0s [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789281924.895445,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Modifying... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281926.9769828,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Modifications complete after 2s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789281927.014164,
+   "line": ""
+  },
+  {
+   "t": 1789281927.01417,
+   "line": "Apply complete! Resources: 1 added, 5 changed, 1 destroyed."
+  },
+  {
+   "t": 1789281928.5038419,
+   "line": "[hub] running-config saved to startup-config"
+  },
+  {
+   "t": 1789281930.018706,
+   "line": "[spoke1] running-config saved to startup-config"
+  },
+  {
+   "t": 1789281931.5083876,
+   "line": "[spoke2] running-config saved to startup-config"
+  },
+  {
+   "t": 1789281931.5695248,
+   "line": "$ ./lab.sh nautobot golden"
+  },
+  {
+   "t": 1789281953.6137404,
+   "line": "==> Backup Configurations: SUCCESS"
+  },
+  {
+   "t": 1789281953.613745,
+   "line": "==> Generate Intended Configurations: SUCCESS"
+  },
+  {
+   "t": 1789281953.6137466,
+   "line": "==> Perform Configuration Compliance: SUCCESS"
+  },
+  {
+   "t": 1789281953.6137486,
+   "line": "   compliance hub / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137505,
+   "line": "   compliance hub / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137528,
+   "line": "   compliance hub / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613755,
+   "line": "   compliance hub / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137567,
+   "line": "   compliance hub / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137588,
+   "line": "   compliance hub / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137607,
+   "line": "   compliance hub / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613764,
+   "line": "   compliance hub / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613766,
+   "line": "   compliance hub / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613768,
+   "line": "   compliance hub / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137702,
+   "line": "   compliance hub / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137726,
+   "line": "   compliance hub / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137743,
+   "line": "   compliance hub / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137764,
+   "line": "   compliance hub / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137776,
+   "line": "   compliance hub / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137786,
+   "line": "   compliance hub / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137838,
+   "line": "   compliance hub / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137865,
+   "line": "   compliance spoke1 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137874,
+   "line": "   compliance spoke1 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137946,
+   "line": "   compliance spoke1 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137958,
+   "line": "   compliance spoke1 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613797,
+   "line": "   compliance spoke1 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137981,
+   "line": "   compliance spoke1 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6137996,
+   "line": "   compliance spoke1 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138012,
+   "line": "   compliance spoke1 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613802,
+   "line": "   compliance spoke1 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138036,
+   "line": "   compliance spoke1 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138048,
+   "line": "   compliance spoke1 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138058,
+   "line": "   compliance spoke1 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138082,
+   "line": "   compliance spoke1 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138096,
+   "line": "   compliance spoke1 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138105,
+   "line": "   compliance spoke1 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613812,
+   "line": "   compliance spoke1 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138167,
+   "line": "   compliance spoke1 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613818,
+   "line": "   compliance spoke2 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138191,
+   "line": "   compliance spoke2 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1789281953.61382,
+   "line": "   compliance spoke2 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138217,
+   "line": "   compliance spoke2 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138227,
+   "line": "   compliance spoke2 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613824,
+   "line": "   compliance spoke2 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613825,
+   "line": "   compliance spoke2 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138265,
+   "line": "   compliance spoke2 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138272,
+   "line": "   compliance spoke2 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.613829,
+   "line": "   compliance spoke2 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138313,
+   "line": "   compliance spoke2 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138325,
+   "line": "   compliance spoke2 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138372,
+   "line": "   compliance spoke2 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138384,
+   "line": "   compliance spoke2 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138396,
+   "line": "   compliance spoke2 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138406,
+   "line": "   compliance spoke2 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1789281953.6138422,
+   "line": "   compliance spoke2 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1789281953.648324,
+   "line": "$ ./lab.sh test"
+  },
+  {
+   "t": 1789281953.6854942,
+   "line": "==> results: /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53"
+  },
+  {
+   "t": 1789281953.685511,
+   "line": "==> capturing router configurations (pre-run)"
+  },
+  {
+   "t": 1789281960.1793973,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/hub.running-config.txt (8638 bytes)"
+  },
+  {
+   "t": 1789281960.1794024,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/hub.startup-config.txt (4838 bytes)"
+  },
+  {
+   "t": 1789281960.1794045,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/spoke1.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789281960.1794074,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/spoke1.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789281960.1794095,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/spoke2.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789281960.1794107,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/pre-run/spoke2.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789281960.2693114,
+   "line": "==> running Robot Framework suites"
+  },
+  {
+   "t": 1789281960.4822314,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281960.4827087,
+   "line": "c8000v ipsec vti lab                                                          "
+  },
+  {
+   "t": 1789281960.482712,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281960.6710963,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane of the C..."
+  },
+  {
+   "t": 1789281960.6711094,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281971.5457034,
+   "line": "Routers are reachable over the OOB network with SSH and RESTCONF      | PASS |"
+  },
+  {
+   "t": 1789281971.5457065,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281974.5904102,
+   "line": "Management interface lives in Mgmt-vrf with a default route to the... | PASS |"
+  },
+  {
+   "t": 1789281974.5904236,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281976.087858,
+   "line": "License boot level provides the security feature set                  | PASS |"
+  },
+  {
+   "t": 1789281976.0878708,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281984.045181,
+   "line": "AAA, SSH and VTY hardening from the NAC baseline                      | PASS |"
+  },
+  {
+   "t": 1789281984.0451953,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281984.0810785,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane... | PASS |"
+  },
+  {
+   "t": 1789281984.0810819,
+   "line": "4 tests, 4 passed, 0 failed"
+  },
+  {
+   "t": 1789281984.0810847,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281984.0812979,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: a dedicated point-to-poin..."
+  },
+  {
+   "t": 1789281984.0813246,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281989.0943394,
+   "line": "WAN point-to-point interfaces are up with the modelled addresses      | PASS |"
+  },
+  {
+   "t": 1789281989.0943525,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281995.6228967,
+   "line": "Each spoke reaches the hub across its own link and nothing else       | PASS |"
+  },
+  {
+   "t": 1789281995.6229005,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281997.5929549,
+   "line": "CDP shows the hub on each spoke's WAN port and both spokes on the hub | PASS |"
+  },
+  {
+   "t": 1789281997.5929675,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281999.1124732,
+   "line": "Loopbacks carry the router-id and the site LAN                        | PASS |"
+  },
+  {
+   "t": 1789281999.1124773,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789281999.144929,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: a dedicated poin... | PASS |"
+  },
+  {
+   "t": 1789281999.144957,
+   "line": "4 tests, 4 passed, 0 failed"
+  },
+  {
+   "t": 1789281999.1449645,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789281999.147421,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tunnel mode..."
+  },
+  {
+   "t": 1789281999.1474295,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282003.870416,
+   "line": "Each tunnel is a static VTI sourced from the WAN link and protecte... | PASS |"
+  },
+  {
+   "t": 1789282003.8704278,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282006.8864622,
+   "line": "Tunnels are up/up at both ends and the tunnel subnet is reachable     | PASS |"
+  },
+  {
+   "t": 1789282006.886474,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282009.8540254,
+   "line": "IKEv2 SAs are READY with the modelled proposal and PSK authentication | PASS |"
+  },
+  {
+   "t": 1789282009.8540392,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282011.3856823,
+   "line": "Traffic through the tunnels is encrypted with the modelled transfo... | FAIL |"
+  },
+  {
+   "t": 1789282011.3856943,
+   "line": "spoke1: ESP encaps counter did not advance (245 -> 245)"
+  },
+  {
+   "t": 1789282011.3857052,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282011.896974,
+   "line": "The hub holds exactly one IKEv2 session per spoke                     | PASS |"
+  },
+  {
+   "t": 1789282011.896978,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282011.9295068,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tu... | FAIL |"
+  },
+  {
+   "t": 1789282011.9295378,
+   "line": "5 tests, 4 passed, 1 failed"
+  },
+  {
+   "t": 1789282011.9295435,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282011.9321408,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per site, hub..."
+  },
+  {
+   "t": 1789282011.9324293,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282014.459597,
+   "line": "Hub has an Established eBGP session with each spoke over its tunnel   | PASS |"
+  },
+  {
+   "t": 1789282014.4596105,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282017.4429543,
+   "line": "Every spoke peers with the hub only and receives four prefixes        | PASS |"
+  },
+  {
+   "t": 1789282017.442969,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282019.4282563,
+   "line": "Spokes see each other's LAN and loopback via the hub with the AS p... | PASS |"
+  },
+  {
+   "t": 1789282019.4282691,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282019.9191236,
+   "line": "Hub learns each spoke's LAN directly from that spoke                  | PASS |"
+  },
+  {
+   "t": 1789282019.9191272,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282023.4486609,
+   "line": "Site LANs reach each other through the encrypted tunnels              | PASS |"
+  },
+  {
+   "t": 1789282023.448674,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282023.4809673,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per ... | PASS |"
+  },
+  {
+   "t": 1789282023.4809966,
+   "line": "5 tests, 5 passed, 0 failed"
+  },
+  {
+   "t": 1789282023.4810042,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282023.4924364,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance: the rou..."
+  },
+  {
+   "t": 1789282023.4924488,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282027.6026306,
+   "line": "Terraform plan reports no drift from the NAC data model               | PASS |"
+  },
+  {
+   "t": 1789282027.6026342,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282027.603083,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance... | PASS |"
+  },
+  {
+   "t": 1789282027.6031153,
+   "line": "1 test, 1 passed, 0 failed"
+  },
+  {
+   "t": 1789282027.6031225,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282027.6057103,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in the shared..."
+  },
+  {
+   "t": 1789282027.6057127,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282033.1919053,
+   "line": "Routers exist in Nautobot with role, serial, platform and manageme... | PASS |"
+  },
+  {
+   "t": 1789282033.191909,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282033.5074313,
+   "line": "WAN links are modelled as cables between the hub and spoke ports w... | PASS |"
+  },
+  {
+   "t": 1789282033.5074422,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282034.6559248,
+   "line": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunne... | FAIL |"
+  },
+  {
+   "t": 1789282034.6559284,
+   "line": "['10.255.1.3/32', '192.168.13.0/24'] != ['10.255.1.3/32', '192.168.23.0/24']"
+  },
+  {
+   "t": 1789282034.655939,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282040.8116312,
+   "line": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase... | PASS |"
+  },
+  {
+   "t": 1789282040.8116424,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282042.4122372,
+   "line": "BGP model: one AS per site, eBGP peerings over the tunnel addresse... | PASS |"
+  },
+  {
+   "t": 1789282042.412249,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282042.8577473,
+   "line": "NAC device model rendered from Nautobot matches the committed file    | PASS |"
+  },
+  {
+   "t": 1789282042.8577578,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282043.4547205,
+   "line": "Golden Config: router backups are in Gitea and every compliance ro... | PASS |"
+  },
+  {
+   "t": 1789282043.4547248,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789282043.4875295,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in t... | FAIL |"
+  },
+  {
+   "t": 1789282043.4875638,
+   "line": "7 tests, 6 passed, 1 failed"
+  },
+  {
+   "t": 1789282043.487571,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282043.4880345,
+   "line": "c8000v ipsec vti lab                                                  | FAIL |"
+  },
+  {
+   "t": 1789282043.4880931,
+   "line": "26 tests, 24 passed, 2 failed"
+  },
+  {
+   "t": 1789282043.488096,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789282043.4889288,
+   "line": "Output:  /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/output.xml"
+  },
+  {
+   "t": 1789282043.563946,
+   "line": "Log:     /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/log.html"
+  },
+  {
+   "t": 1789282043.5688057,
+   "line": "Report:  /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/report.html"
+  },
+  {
+   "t": 1789282043.7033195,
+   "line": "==> capturing router configurations (post-run backup)"
+  },
+  {
+   "t": 1789282050.167785,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/hub.running-config.txt (8638 bytes)"
+  },
+  {
+   "t": 1789282050.1677887,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/hub.startup-config.txt (4838 bytes)"
+  },
+  {
+   "t": 1789282050.1677907,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/spoke1.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789282050.1677935,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/spoke1.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789282050.1677954,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/spoke2.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789282050.1677969,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/configs/post-run/spoke2.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789282050.26004,
+   "line": "    no configuration changes during the run"
+  },
+  {
+   "t": 1789282050.266308,
+   "line": "==> report: /home/dcantor/cat8000v-ipsec/results/2026-09-13_02-45-53/report.html  (rc=2)"
+  },
+  {
+   "t": 1789282050.2771704,
+   "line": "!! 2 test(s) failed"
+  }
+ ]
+}

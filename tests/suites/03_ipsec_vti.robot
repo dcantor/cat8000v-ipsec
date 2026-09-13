@@ -44,12 +44,14 @@ IKEv2 SAs are READY with the modelled proposal and PSK authentication
         ${ssa}=    Show    ${s}    show crypto ikev2 sa
         Should Match Regexp    ${ssa}    (?m)^\\d+\\s+${t}[spoke_wan]/500\\s+${t}[hub_wan]/500\\s+none/none\\s+READY
     END
-    Should Contain    ${sa}    Encr: AES-CBC, keysize: 256, PRF: SHA256, Hash: SHA256, DH Grp:14, Auth sign: PSK, Auth verify: PSK
+    Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: PSK, Auth verify: PSK
     FOR    ${r}    IN    @{ROUTER_NAMES}
         ${prof}=    Show    ${r}    show crypto ikev2 profile
         Should Contain    ${prof}    IKEv2 profile: ${IKEV2_PROFILE}
         Should Contain    ${prof}    Local authentication method: pre-share
-        Should Contain    ${prof}    DPD: interval 30, retry-interval 5, on-demand
+        IF    ${DPD}[enabled]
+            Should Contain    ${prof}    DPD: interval ${DPD}[interval], retry-interval ${DPD}[retries], on-demand
+        END
     END
 
 Traffic through the tunnels is encrypted with the modelled transform set
@@ -58,10 +60,10 @@ Traffic through the tunnels is encrypted with the modelled transform set
         ${before}=    Ipsec Encaps    ${s}    Tunnel${t}[id]
         ${p}=    Show    ${s}    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 10
         Should Match Regexp    ${p}    Success rate is (100|90|80) percent
-        ${after}=    Ipsec Encaps    ${s}    Tunnel${t}[id]
-        Should Be True    ${after} >= ${before} + 8    msg=${s}: ESP encaps counter did not advance (${before} -> ${after})
+        # IOS-XE refreshes the SA counters from the data plane (QFP) only every few seconds
+        Wait Until Keyword Succeeds    45s    5s    Encaps Advanced    ${s}    Tunnel${t}[id]    ${before}
         ${sa}=    Show    ${s}    show crypto ipsec sa interface Tunnel${t}[id]
-        Should Contain    ${sa}    transform: esp-256-aes esp-sha256-hmac
+        Should Contain    ${sa}    transform: ${ESP_TRANSFORM}
         Should Contain    ${sa}    in use settings ={Tunnel, }
     END
 
@@ -71,8 +73,13 @@ The hub holds exactly one IKEv2 session per spoke
     Should Be Equal As Integers    ${n}    2    msg=${sess}
 
 *** Keywords ***
+Encaps Advanced
+    [Arguments]    ${r}    ${iface}    ${before}
+    ${after}=    Ipsec Encaps    ${r}    ${iface}
+    Should Be True    ${after} >= ${before} + 8    msg=${r}: ESP encaps counter did not advance (${before} -> ${after})
+
 Ipsec Encaps
     [Arguments]    ${r}    ${iface}
     ${out}=    Show    ${r}    show crypto ipsec sa interface ${iface} | include pkts encaps
     ${m}=    Get Regexp Matches    ${out}    \#pkts encaps: (\\d+)    1
-    RETURN    ${{ int($m[0]) }}
+    RETURN    ${{ sum(int(x) for x in $m) }}    # several SAs are listed around a rekey; count all of them

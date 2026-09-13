@@ -282,6 +282,17 @@ cmd_nautobot() {
   esac
 }
 
+cmd_intent() {     # lab-intent.json: init (from lab.conf) | validate | show
+  python3 "$LAB_DIR/nautobot/intent.py" "$@"
+}
+
+cmd_webapp() {     # VPN provisioning portal (FastAPI/uvicorn) on http://0.0.0.0:8090
+  [[ -x "$LAB_DIR/webapp/.venv/bin/uvicorn" ]] || "$LAB_DIR/webapp/setup.sh"
+  [[ -f "$LAB_DIR/lab-intent.json" ]] || python3 "$LAB_DIR/nautobot/intent.py" init
+  export PATH="$HOME/.local/bin:$PATH"
+  cd "$LAB_DIR/webapp" && exec .venv/bin/uvicorn app:app --host "${WEBAPP_HOST:-0.0.0.0}" --port "${WEBAPP_PORT:-8090}" "$@"
+}
+
 cmd_test() {       # Robot Framework suite; results in results/<date>_<time>/
   [[ -x "$LAB_DIR/tests/.venv/bin/robot" ]] || "$LAB_DIR/tests/setup.sh"
   exec "$LAB_DIR/tests/run.sh" "$@"
@@ -300,6 +311,8 @@ usage: $(basename "$0") <command> [node...]
   log <node> [n]     follow a node's console log
   nac <tf args..>    run terraform in nac/ (init | plan | apply)
   test [robot args]  run the Robot Framework tests
+  intent <cmd>       init|validate|show  lab-intent.json (the document the web app edits)
+  webapp             start the VPN provisioning portal on http://<host>:8090
   nautobot <cmd>     onboard|seed|render|golden|token  (shared Nautobot at $NAUTOBOT_URL)
   rebuild [node..]   re-generate domain XML / day-0 ISO (keeps disks)
   clean [node..]     stop, undefine and delete overlay disks
@@ -309,6 +322,6 @@ U
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|rebuild|clean) "cmd_$cmd" "$@" ;;
+  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|intent|webapp|rebuild|clean) "cmd_$cmd" "$@" ;;
   *) usage; exit 1 ;;
 esac

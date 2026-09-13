@@ -6,8 +6,9 @@ Usage: NAUTOBOT_TOKEN=... GITEA_PASSWORD=... golden_config.py [--no-run]"""
 import argparse, base64, os, sys, time
 from pathlib import Path
 import pynautobot, requests
+sys.path.insert(0, str(Path(__file__).resolve().parent)); import intent as intent_mod   # noqa: E402
 
-SITE, SLUG, TPL = "c8000v-ipsec-lab", "c8000v-ipsec", "c8000v-ipsec.j2"
+SITE, SLUG, TPL = intent_mod.load()["site"]["name"], "c8000v-ipsec", "c8000v-ipsec.j2"
 p = argparse.ArgumentParser()
 p.add_argument("--url", default=os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080"))
 p.add_argument("--token", default=os.environ.get("NAUTOBOT_TOKEN"))

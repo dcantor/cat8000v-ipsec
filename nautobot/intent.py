@@ -1,0 +1,140 @@
+"""The lab's *intent* — everything the web app / seed / tests need to know about the VPN service — as one JSON
+document (lab-intent.json in the lab root).  The document is generated from lab.conf the first time
+(`./lab.sh intent init`) and afterwards edited by the web app; lab.conf stays the truth for what libvirt built
+(VM names, console ports, management addresses, physical wiring of the p2p links)."""
+import ipaddress, json, re, subprocess
+from pathlib import Path
+
+LAB = Path(__file__).resolve().parents[1]
+INTENT_FILE = LAB / "lab-intent.json"
+IOS_NAMES = {"ikev2_proposal": "VPN-PROP", "ikev2_policy": "VPN-POL", "ikev2_keyring": "VPN-KEYRING", "keyring_peer": "ANY",
+             "ikev2_profile": "VPN-IKEV2", "transform_set": "VPN-TS", "ipsec_profile": "VPN-IPSEC"}
+
+
+def lab_conf(*names):
+    out = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; declare -p {' '.join(names)}"], capture_output=True, text=True, check=True).stdout
+    return {n: dict(re.findall(r'\[(\w+)\]="([^"]*)"', re.search(rf"declare -[aA] {n}=\((.*?)\)\n", out, re.S).group(1))) for n in names}
+
+
+def wiring():
+    """Physical p2p links from lab.conf: [{a, a_port, b, b_port}] — the web app cannot change these."""
+    C = lab_conf("LINKS")
+    out = []
+    for l in C["LINKS"].values():
+        a_end, b_end, _ = l.split(); (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
+        out.append({"a": an, "a_port": int(ap), "b": bn, "b_port": int(bp)})
+    return out
+
+
+def nodes():
+    """VM facts from lab.conf keyed by management IP: name, node index (MAC/loopback numbering), role."""
+    C = lab_conf("ROLE", "MGMT_IP", "NODE_IDX")
+    return {C["MGMT_IP"][n]: {"node": n, "idx": int(C["NODE_IDX"][n]), "role": C["ROLE"][n]} for n in C["ROLE"]}
+
+
+def from_lab_conf():
+    C = lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "LINKS", "TUNNELS", "NODE_IDX")
+    devices = [{"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": C["ROLE"][n], "asn": int(C["BGP_AS"][n]),
+                "router_id": f"10.255.1.{C['NODE_IDX'][n]}", "lan": C["LAN"][n], "comments": ""} for n in sorted(C["ROLE"])]
+    links = []
+    for l in C["LINKS"].values():
+        a_end, b_end, pfx = l.split(); (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
+        links.append({"a": an, "a_port": int(ap), "b": bn, "b_port": int(bp), "prefix": pfx})
+    tunnels = [{"id": int(t.split()[0]), "spoke": t.split()[1], "prefix": t.split()[2]} for t in C["TUNNELS"].values()]
+    return {
+        "site": {"name": "c8000v-ipsec-lab", "description": "C8000v IPsec VTI lab (libvirt)", "site_code": "LAB-IPSEC", "contact": "noc@lab.local"},
+        "vpn": {"name": "IPSEC_VPN", "description": "Hub-and-spoke IPsec VTIs with eBGP (one AS per site)", "change_ticket": "", "owner": "network team"},
+        "profile": {"name": "VPN-IPSEC", "ike": {"encryption": "AES-256-CBC", "integrity": "SHA256", "dh_group": "14", "lifetime": 86400},
+                    "ipsec": {"encryption": "AES-256-CBC", "integrity": "SHA256", "lifetime": 3600},
+                    "dpd": {"enabled": True, "interval": 30, "retries": 5}, "ios": dict(IOS_NAMES)},
+        "psk": "cisco123",
+        "devices": devices, "links": links, "tunnels": tunnels,
+        "oob": {"vrf": "Mgmt-vrf", "gateway": "10.2.0.1", "acl": "MGMT-ACCESS", "prefix": "10.2.0.0/24"},
+        "domain_name": "lab.local",
+    }
+
+
+def load(path=None):
+    p = Path(path) if path else INTENT_FILE
+    return json.loads(p.read_text()) if p.exists() else from_lab_conf()
+
+
+def save(intent, path=None):
+    (Path(path) if path else INTENT_FILE).write_text(json.dumps(intent, indent=2) + "\n")
+
+
+def validate(intent):
+    """Return a list of problems (empty = valid).  Checks shape, addressing and that the links match the wiring."""
+    errs = []
+    devs = intent.get("devices") or []
+    names = [d.get("name", "") for d in devs]
+    if len(set(names)) != len(names): errs.append("device hostnames must be unique")
+    for d in devs:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{0,62}", d.get("name", "")): errs.append(f"invalid hostname {d.get('name')!r}")
+        for f in ("mgmt_ip", "router_id"):
+            try: ipaddress.IPv4Address(d.get(f, ""))
+            except ValueError: errs.append(f"{d.get('name')}: {f} {d.get(f)!r} is not an IPv4 address")
+        try:
+            n = ipaddress.IPv4Network(d.get("lan", ""), strict=True)
+            if n.prefixlen != 24: errs.append(f"{d.get('name')}: LAN {d.get('lan')} must be a /24 (classful BGP network statement)")
+        except ValueError: errs.append(f"{d.get('name')}: LAN {d.get('lan')!r} is not a network")
+        if not (1 <= int(d.get("asn") or 0) <= 4294967295): errs.append(f"{d.get('name')}: ASN out of range")
+    hubs = [d["name"] for d in devs if d.get("role") == "hub"]
+    if len(hubs) != 1: errs.append("exactly one hub is required")
+    if len(set(d["router_id"] for d in devs)) != len(devs): errs.append("router-ids must be unique")
+    if len(set(d["lan"] for d in devs)) != len(devs): errs.append("LAN prefixes must be unique")
+    known = nodes(); by_ip = {d["mgmt_ip"]: d for d in devs}
+    for ip, n in known.items():
+        if ip not in by_ip: errs.append(f"VM {n['node']} ({ip}) is missing from the devices")
+        elif by_ip[ip].get("role") != n["role"]: errs.append(f"{by_ip[ip]['name']} ({ip}) must be a {n['role']} (wiring)")
+    for ip in by_ip:
+        if ip not in known: errs.append(f"no VM has management address {ip}")
+    # links must be the physical wiring, expressed in the (possibly renamed) hostnames
+    rename = {n["node"]: by_ip[ip]["name"] for ip, n in known.items() if ip in by_ip}
+    want = sorted((rename.get(w["a"], w["a"]), w["a_port"], rename.get(w["b"], w["b"]), w["b_port"]) for w in wiring())
+    have = sorted((l.get("a"), int(l.get("a_port") or 0), l.get("b"), int(l.get("b_port") or 0)) for l in intent.get("links") or [])
+    if want != have: errs.append(f"links must match the physical wiring: {want}")
+    used = set()
+    for l in intent.get("links") or []:
+        try:
+            n = ipaddress.IPv4Network(l.get("prefix", ""), strict=True)
+            if n.prefixlen != 30: errs.append(f"link {l.get('a')}-{l.get('b')}: prefix must be a /30")
+            if n in used: errs.append(f"prefix {n} used twice")
+            used.add(n)
+        except ValueError: errs.append(f"link {l.get('a')}-{l.get('b')}: bad prefix {l.get('prefix')!r}")
+    spokes = {d["name"] for d in devs if d.get("role") == "spoke"}
+    ids = [t.get("id") for t in intent.get("tunnels") or []]
+    if len(set(ids)) != len(ids): errs.append("tunnel ids must be unique")
+    if {t.get("spoke") for t in intent.get("tunnels") or []} != spokes: errs.append(f"exactly one tunnel per spoke is required ({sorted(spokes)})")
+    for t in intent.get("tunnels") or []:
+        if not (1 <= int(t.get("id") or 0) <= 2147483647): errs.append(f"tunnel to {t.get('spoke')}: bad id")
+        try:
+            n = ipaddress.IPv4Network(t.get("prefix", ""), strict=True)
+            if n.prefixlen != 30: errs.append(f"tunnel to {t.get('spoke')}: prefix must be a /30")
+            if n in used: errs.append(f"prefix {n} used twice")
+            used.add(n)
+        except ValueError: errs.append(f"tunnel to {t.get('spoke')}: bad prefix {t.get('prefix')!r}")
+    pr = intent.get("profile") or {}
+    ENC = {"AES-128-CBC", "AES-192-CBC", "AES-256-CBC", "AES-128-GCM", "AES-256-GCM"}; INT = {"SHA1", "SHA256", "SHA384", "SHA512", "MD5"}
+    if (pr.get("ike") or {}).get("encryption") not in ENC: errs.append("IKE encryption not supported")
+    if (pr.get("ike") or {}).get("integrity") not in INT: errs.append("IKE integrity not supported")
+    if str((pr.get("ike") or {}).get("dh_group")) not in {"14", "19", "20", "21", "24"}: errs.append("IKE DH group not supported")
+    if (pr.get("ipsec") or {}).get("encryption") not in ENC: errs.append("IPsec encryption not supported")
+    if (pr.get("ipsec") or {}).get("integrity") not in INT: errs.append("IPsec integrity not supported")
+    dpd = pr.get("dpd") or {}
+    if dpd.get("enabled") and not (10 <= int(dpd.get("interval") or 0) <= 3600 and 2 <= int(dpd.get("retries") or 0) <= 60): errs.append("DPD interval 10-3600 s, retries 2-60")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", intent.get("psk") or ""): errs.append("pre-shared key: 8-64 characters, letters/digits/_.-")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", (intent.get("vpn") or {}).get("name", "")): errs.append("VPN name: letters/digits/_-")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", pr.get("name", "")): errs.append("profile name: letters/digits/_-")
+    return errs
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "init":
+        if INTENT_FILE.exists() and "--force" not in sys.argv: sys.exit(f"{INTENT_FILE} exists (use --force)")
+        save(from_lab_conf()); print(f"wrote {INTENT_FILE}")
+    elif len(sys.argv) > 1 and sys.argv[1] == "validate":
+        e = validate(load(sys.argv[2] if len(sys.argv) > 2 else None)); print("\n".join(e) or "valid"); sys.exit(1 if e else 0)
+    else:
+        print(json.dumps(load(), indent=2))

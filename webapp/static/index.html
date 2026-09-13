@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPN Provisioning Portal</title>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe4ea; --accent:#0b62d6; --ok:#1a8f4a; --bad:#c62828; --warn:#b26a00; --run:#0b62d6; }
+  * { box-sizing:border-box }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg) }
+  header { background:#12203a; color:#fff; padding:14px 24px; display:flex; align-items:center; gap:16px }
+  header h1 { font-size:18px; margin:0; font-weight:600 } header .sub { color:#9fb3d1; font-size:13px }
+  header a { color:#9fd0ff }
+  main { display:grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap:20px; padding:20px 24px; max-width:1700px }
+  main > section { min-width:0 }
+  @media (max-width:1100px){ main { grid-template-columns:1fr } }
+  .card { overflow-x:auto }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin-bottom:16px }
+  .card h2 { font-size:15px; margin:0 0 10px; display:flex; align-items:center; justify-content:space-between }
+  .card h2 small { font-weight:normal; color:var(--muted) }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:2px }
+  input, select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px; font:inherit; background:#fff }
+  input[readonly] { background:#f1f3f6; color:#4b5563 }
+  .grid { display:grid; gap:10px } .g2 { grid-template-columns:1fr 1fr } .g3 { grid-template-columns:1fr 1fr 1fr } .g4 { grid-template-columns:repeat(4,1fr) }
+  table { width:100%; border-collapse:collapse; font-size:13px } th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:500; font-size:12px } td input, td select { padding:4px 6px }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; background:#e9edf3; color:#374151 }
+  .pill.hub { background:#fde2ec; color:#9d174d } .pill.spoke { background:#e0ecff; color:#1e40af }
+  .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--line); background:#fff; font:inherit; cursor:pointer }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600 }
+  button:disabled { opacity:.5; cursor:not-allowed }
+  .problems { color:var(--bad); white-space:pre-line; font-size:13px }
+  .steps { list-style:none; padding:0; margin:0 } .steps li { display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); align-items:flex-start }
+  .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:#cbd5e1 }
+  .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:#e5e7eb }
+  @keyframes pulse { 50% { opacity:.3 } }
+  .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
+  pre.log { background:#0f172a; color:#d1e3ff; padding:10px; border-radius:6px; max-height:360px; overflow:auto; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
+  .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed { color:var(--bad) } .status.running, .status.queued { color:var(--run) }
+  .test-pass { color:var(--ok); font-weight:600 } .test-fail { color:var(--bad); font-weight:600 }
+  .msg { color:var(--bad); font-size:12px; white-space:pre-wrap }
+  .bar { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin:6px 0 } .bar > div { height:100%; background:var(--ok) }
+  .bar > div.fail { background:var(--bad) }
+  .runs a { cursor:pointer; color:var(--accent) }
+  .hint { color:var(--muted); font-size:12px }
+  details summary { cursor:pointer; color:var(--muted) }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
+  <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span></div>
+</header>
+<main>
+<section>
+  <form id="f" onsubmit="return false">
+    <div class="card">
+      <h2>Site <small>location in Nautobot; metadata stored as custom fields</small></h2>
+      <div class="grid g4">
+        <div><label>Site (location)</label><input id="site.name" readonly></div>
+        <div><label>Site code</label><input id="site.site_code" placeholder="e.g. LAB-IPSEC"></div>
+        <div><label>Contact</label><input id="site.contact" placeholder="noc@example.com"></div>
+        <div><label>Description</label><input id="site.description"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small></h2>
+      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>Comments</th></tr></thead><tbody></tbody></table>
+      <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
+    </div>
+
+    <div class="card">
+      <h2>VPN service <small>Nautobot core VPN app: VPN → tunnels → hub/spoke endpoints</small></h2>
+      <div class="grid g4">
+        <div><label>VPN name</label><input id="vpn.name"></div>
+        <div><label>Change ticket</label><input id="vpn.change_ticket" placeholder="CHG0012345"></div>
+        <div><label>Owner</label><input id="vpn.owner"></div>
+        <div><label>Description</label><input id="vpn.description"></div>
+      </div>
+      <h3 style="font-size:13px;margin:14px 0 6px">Tunnels (one static IPsec VTI per spoke)</h3>
+      <table id="tunnels"><thead><tr><th>Spoke</th><th>Hub port</th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody></tbody></table>
+      <div class="hint">Hub address = first host of each /30, spoke = second. Ports are the libvirt links between the VMs and cannot be changed here.</div>
+    </div>
+
+    <div class="card">
+      <h2>Crypto profile <small>Phase 1 / Phase 2 policies in Nautobot; Cisco object names in the profile</small></h2>
+      <div class="grid g4">
+        <div><label>Profile name</label><input id="profile.name"></div>
+        <div><label>IKEv2 encryption</label><select id="profile.ike.encryption"><option>AES-256-CBC</option><option>AES-192-CBC</option><option>AES-128-CBC</option><option>AES-256-GCM</option><option>AES-128-GCM</option></select></div>
+        <div><label>IKEv2 integrity / PRF</label><select id="profile.ike.integrity"><option>SHA256</option><option>SHA384</option><option>SHA512</option><option>SHA1</option></select></div>
+        <div><label>DH group</label><select id="profile.ike.dh_group"><option>14</option><option>19</option><option>20</option><option>21</option><option>24</option></select></div>
+        <div><label>IKE SA lifetime (s)</label><input id="profile.ike.lifetime" type="number" min="120" max="86400"></div>
+        <div><label>ESP encryption</label><select id="profile.ipsec.encryption"><option>AES-256-CBC</option><option>AES-192-CBC</option><option>AES-128-CBC</option><option>AES-256-GCM</option><option>AES-128-GCM</option></select></div>
+        <div><label>ESP integrity</label><select id="profile.ipsec.integrity"><option>SHA256</option><option>SHA384</option><option>SHA512</option><option>SHA1</option><option>MD5</option></select></div>
+        <div><label>IPsec SA lifetime (s)</label><input id="profile.ipsec.lifetime" type="number" min="120" max="86400"></div>
+        <div><label>Dead peer detection</label><select id="profile.dpd.enabled"><option value="true">enabled (on-demand)</option><option value="false">disabled</option></select></div>
+        <div><label>DPD interval (s)</label><input id="profile.dpd.interval" type="number" min="10" max="3600"></div>
+        <div><label>DPD retries</label><input id="profile.dpd.retries" type="number" min="2" max="60"></div>
+        <div><label>Pre-shared key <span class="hint">(stays in NAC data, never in Nautobot)</span></label><input id="psk" type="password" autocomplete="off"></div>
+      </div>
+      <details style="margin-top:8px"><summary>Cisco object names</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label>IKEv2 proposal</label><input id="profile.ios.ikev2_proposal"></div>
+          <div><label>IKEv2 policy</label><input id="profile.ios.ikev2_policy"></div>
+          <div><label>IKEv2 keyring</label><input id="profile.ios.ikev2_keyring"></div>
+          <div><label>IKEv2 profile</label><input id="profile.ios.ikev2_profile"></div>
+          <div><label>Transform set</label><input id="profile.ios.transform_set"></div>
+          <div><label>IPsec profile</label><input id="profile.ios.ipsec_profile"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button class="primary" id="deploy">Deploy configuration</button>
+        <button id="plan">Dry run (plan only)</button>
+        <button id="testonly">Run tests only</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="opt.golden" checked style="width:auto"> Golden Config</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="opt.test" checked style="width:auto"> Run tests after deploy</label>
+        <button id="reload" style="margin-left:auto">Reload saved intent</button>
+      </div>
+      <div id="problems" class="problems" style="margin-top:8px"></div>
+    </div>
+  </form>
+</section>
+
+<section>
+  <div class="card" id="runcard">
+    <h2>Deployment status <small id="run-id"></small></h2>
+    <div id="run-head" class="hint">No run yet. Fill in the form and press <b>Deploy configuration</b>.</div>
+    <ul class="steps" id="steps"></ul>
+    <details open style="margin-top:10px"><summary>Log</summary><pre class="log" id="log"></pre></details>
+  </div>
+  <div class="card" id="testcard" hidden>
+    <h2>Test report <small id="test-links"></small></h2>
+    <div id="test-summary"></div>
+    <div id="test-suites"></div>
+  </div>
+  <div class="card">
+    <h2>Recent runs</h2>
+    <table class="runs"><thead><tr><th>Started</th><th>Mode</th><th>Status</th><th>VPN</th><th>Ticket</th><th>Tests</th></tr></thead><tbody id="runs"></tbody></table>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let base = null, wiring = [], nodes = {}, current = null, pollTimer = null, logCount = 0;
+
+const get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+const set = (o, p, v) => { const ks = p.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = (t[k] = t[k] || {}); t[ks.at(-1)] = v; };
+const fmtT = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : '';
+const dur = (a, b) => (a && b) ? Math.round(b - a) + 's' : '';
+
+async function load() {
+  const r = await (await fetch('/api/intent')).json();
+  base = r.intent; wiring = r.wiring; nodes = r.nodes;
+  $('nb-link').href = r.nautobot_url;
+  fill(base);
+  fetch('/api/inventory').then(x => x.json()).then(inv => {
+    $('inv-note').textContent = inv.ok ? `${inv.devices.length} routers onboarded` : 'Nautobot unreachable: ' + inv.error;
+    if (inv.vpn_url) $('nb-link').href = inv.vpn_url;
+  });
+}
+
+function fill(I) {
+  document.querySelectorAll('#f input[id], #f select[id]').forEach(el => {
+    if (el.id.startsWith('opt.')) return;
+    const v = get(I, el.id); if (v === undefined) return;
+    el.value = typeof v === 'boolean' ? String(v) : v;
+  });
+  const hub = I.devices.find(d => d.role === 'hub');
+  const tb = $('devices').querySelector('tbody'); tb.innerHTML = '';
+  I.devices.forEach((d, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input data-dev="${i}" data-k="name" value="${d.name}"></td><td><input readonly value="${d.mgmt_ip}"></td>
+      <td><span class="pill ${d.role}">${d.role}</span></td><td><input data-dev="${i}" data-k="asn" type="number" value="${d.asn}"></td>
+      <td><input data-dev="${i}" data-k="router_id" value="${d.router_id}"></td><td><input data-dev="${i}" data-k="lan" value="${d.lan}"></td>
+      <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>`;
+    tb.appendChild(tr);
+  });
+  const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
+  I.tunnels.forEach((t, i) => {
+    const l = I.links.find(l => (l.a === hub.name && l.b === t.spoke) || (l.b === hub.name && l.a === t.spoke)) || {};
+    const hp = l.a === hub.name ? l.a_port : l.b_port, sp = l.a === hub.name ? l.b_port : l.a_port;
+    const li = I.links.indexOf(l);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><span class="pill spoke" data-spoke="${t.spoke}">${t.spoke}</span></td><td><input readonly value="GigabitEthernet${hp}"></td><td><input readonly value="GigabitEthernet${sp}"></td>
+      <td><input data-link="${li}" data-k="prefix" value="${l.prefix || ''}"></td><td><input data-tun="${i}" data-k="id" type="number" value="${t.id}"></td>
+      <td><input data-tun="${i}" data-k="prefix" value="${t.prefix}"></td>`;
+    tt.appendChild(tr);
+  });
+  // keep spoke labels in sync with hostname edits
+  tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
+    const d = I.devices[inp.dataset.dev];
+    tt.querySelectorAll(`[data-spoke="${d.name}"]`).forEach(p => { p.textContent = inp.value; p.dataset.spoke = inp.value; });
+    d.name = inp.value;
+  }));
+}
+
+function collect() {
+  const I = JSON.parse(JSON.stringify(base));
+  document.querySelectorAll('#f input[id], #f select[id]').forEach(el => {
+    if (el.id.startsWith('opt.')) return;
+    let v = el.value;
+    if (el.type === 'number') v = Number(v);
+    if (el.id === 'profile.dpd.enabled') v = (v === 'true');
+    set(I, el.id, v);
+  });
+  const names = {};
+  document.querySelectorAll('#devices input[data-dev]').forEach(el => {
+    const d = I.devices[el.dataset.dev]; const old = d.name;
+    d[el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim();
+    if (el.dataset.k === 'name') names[base.devices[el.dataset.dev].name] = d.name;
+  });
+  // hostnames may have been renamed: rewrite links/tunnels to the new names
+  I.links.forEach(l => { l.a = names[l.a] || l.a; l.b = names[l.b] || l.b; });
+  I.tunnels.forEach(t => { t.spoke = names[t.spoke] || t.spoke; });
+  document.querySelectorAll('#tunnels input[data-link]').forEach(el => { I.links[el.dataset.link][el.dataset.k] = el.value.trim(); });
+  document.querySelectorAll('#tunnels input[data-tun]').forEach(el => { I.tunnels[el.dataset.tun][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
+  return I;
+}
+
+async function start(mode) {
+  const intent = collect();
+  $('problems').textContent = '';
+  const v = await (await fetch('/api/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intent }) })).json();
+  if (v.problems.length && mode !== 'test') { $('problems').textContent = 'Please fix:\n• ' + v.problems.join('\n• '); return; }
+  const options = { golden: $('opt.golden').checked, test: $('opt.test').checked };
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode, intent, options }) });
+  if (!r.ok) { const e = await r.json(); $('problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json();
+  base = intent; watch(run.id);
+}
+
+function watch(id) {
+  current = id; logCount = 0; $('log').textContent = ''; $('testcard').hidden = true;
+  document.querySelectorAll('.actions button').forEach(b => b.disabled = true);
+  clearInterval(pollTimer); poll(); pollTimer = setInterval(poll, 2000);
+}
+
+async function poll() {
+  if (!current) return;
+  const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
+  render(r);
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); }
+}
+
+function render(r) {
+  $('run-id').textContent = r.id;
+  $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode} · started ${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '');
+  $('steps').innerHTML = r.steps.map(s => `<li><span class="dot ${s.status}"></span><div class="t">${s.title}<div class="s">${esc(s.summary || '')}</div></div><span class="d">${s.status}${s.started ? ' · ' + dur(s.started, s.finished || Date.now() / 1000) : ''}</span></li>`).join('');
+  if (r.log && r.log.length) {
+    const el = $('log'); const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    el.textContent += r.log.map(l => l.line).join('\n') + '\n'; logCount = (r.log_offset || 0) + r.log.length;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+  if (r.tests) {
+    $('testcard').hidden = false;
+    const t = r.tests, pct = t.total ? Math.round(100 * t.passed / t.total) : 0;
+    $('test-summary').innerHTML = `<div><span class="${t.failed ? 'test-fail' : 'test-pass'}">${t.failed ? 'FAIL' : 'PASS'}</span> — ${t.passed}/${t.total} tests passed</div><div class="bar"><div class="${t.failed ? 'fail' : ''}" style="width:${pct}%"></div></div>`;
+    $('test-links').innerHTML = r.results_dir ? `<a href="/results/${r.results_dir}/report.html" target="_blank">report.html</a> · <a href="/results/${r.results_dir}/log.html" target="_blank">log.html</a> · <a href="/results/${r.results_dir}/configs/" target="_blank">config backups</a>` : '';
+    $('test-suites').innerHTML = t.suites.map(s => `<h3 style="font-size:13px;margin:12px 0 4px">${esc(s.name)} <span class="${s.failed ? 'test-fail' : 'test-pass'}">${s.passed}/${s.tests.length}</span></h3>
+      <table>${s.tests.map(x => `<tr><td style="width:60px" class="${x.status === 'PASS' ? 'test-pass' : 'test-fail'}">${x.status}</td><td>${esc(x.name)}${x.status !== 'PASS' ? `<div class="msg">${esc(x.message)}</div>` : ''}</td><td style="width:60px;color:var(--muted)">${x.elapsed ? Number(x.elapsed).toFixed(1) + 's' : ''}</td></tr>`).join('')}</table>`).join('');
+  }
+}
+
+async function loadRuns() {
+  const rs = await (await fetch('/api/runs')).json();
+  const live = rs.find(r => r.status === 'running' || r.status === 'queued');
+  if (live && !current) watch(live.id);
+  $('runs').innerHTML = rs.map(r => `<tr><td><a onclick="watch('${r.id}')">${new Date(r.started * 1000).toLocaleString()}</a></td><td>${r.mode}</td><td class="status ${r.status}">${r.status}</td><td>${esc(r.vpn || '')}</td><td>${esc(r.change_ticket || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">none yet</td></tr>';
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+$('deploy').onclick = () => { if (confirm('Deploy the configuration to the routers via Nautobot → NAC → Terraform?')) start('deploy'); };
+$('plan').onclick = () => start('plan');
+$('testonly').onclick = () => start('test');
+$('reload').onclick = load;
+load(); loadRuns();
+</script>
+</body>
+</html>

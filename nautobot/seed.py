@@ -1,38 +1,39 @@
 #!/usr/bin/env python3
 """Seed the shared Nautobot with the C8000v IPsec VTI + eBGP lab intent (idempotent).
 
-From ../lab.conf: roles hub/spoke, point-to-point WAN links (cables between GiN interfaces with
-/30 addressing), the VPN in Nautobot's core vpn app (Phase 1/2 policies, profile VPN-IPSEC, VPN
-IPSEC_VPN, one VPNTunnel per spoke with hub/spoke endpoints: source GiN + address, TunnelN, protected
-prefixes), loopbacks (router-id, site LAN), config context "c8000v-ipsec" (OOB, domain), one AS per
-site and eBGP peerings over the tunnels (nautobot-bgp-models), bgp:advertise tags, saved GraphQL query
-nac-c8000v-ipsec-model.
+Intent comes from lab-intent.json (nautobot/intent.py; generated from lab.conf, edited by the web app):
+site metadata (description, site_code, contact), devices matched by management IP (hostname, role, AS,
+router-id loopback, site LAN, comments), point-to-point WAN links (cables between GiN interfaces with /30
+addressing), the VPN in Nautobot's core vpn app (Phase 1/2 policies, profile, VPN with change/owner
+metadata, one VPNTunnel per spoke with hub/spoke endpoints: source GiN + address, TunnelN, protected
+prefixes), config context (OOB, domain), one AS per site and eBGP peerings over the tunnels
+(nautobot-bgp-models), bgp:advertise tags, saved GraphQL query nac-c8000v-ipsec-model.
+Usage: NAUTOBOT_TOKEN=... seed.py [--intent file.json]
 """
-import argparse, ipaddress, os, re, subprocess, sys
+import argparse, ipaddress, os, subprocess, sys
 from pathlib import Path
 import pynautobot, requests
+sys.path.insert(0, str(Path(__file__).resolve().parent)); import intent as intent_mod   # noqa: E402
 
 LAB = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser()
 p.add_argument("--url", default=os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080"))
 p.add_argument("--token", default=os.environ.get("NAUTOBOT_TOKEN"))
+p.add_argument("--intent", default=None)
 a = p.parse_args()
+I = intent_mod.load(a.intent)
+problems = intent_mod.validate(I)
+if problems: sys.exit("invalid intent:\n  " + "\n  ".join(problems))
 nb = pynautobot.api(a.url, token=a.token)
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
-SITE = "c8000v-ipsec-lab"
-
-def lab_conf(*names):
-    out = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; declare -p {' '.join(names)}"], capture_output=True, text=True, check=True).stdout
-    return {n: dict(re.findall(r'\[(\w+)\]="([^"]*)"', re.search(rf"declare -[aA] {n}=\((.*?)\)\n", out, re.S).group(1))) for n in names}
-C = lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "LINKS", "TUNNELS", "NODE_IDX")
-ROUTERS = sorted(C["ROLE"]); HUB = next(r for r in ROUTERS if C["ROLE"][r] == "hub")
-RID = {r: f"10.255.1.{C['NODE_IDX'][r]}" for r in ROUTERS}
-LAN_IP = {r: str(ipaddress.IPv4Network(C["LAN"][r])[1]) for r in ROUTERS}
-LINKS = [l.split() for l in C["LINKS"].values()]       # [a:port, b:port, prefix]
-TUNNELS = [t.split() for t in C["TUNNELS"].values()]   # [id, spoke, prefix]
+SITE = I["site"]["name"]
+DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(DEV); HUB = next(n for n, d in DEV.items() if d["role"] == "hub")
+NODES = intent_mod.nodes()                                # mgmt ip -> {node, idx, role} (VM facts)
+LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items()}
+LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
 WIRED = {}                                              # (router, port) -> "peer GiN"
-for a_end, b_end, _ in LINKS:
-    (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":"); WIRED[(an, int(ap))] = f"{bn} Gi{bp}"; WIRED[(bn, int(bp))] = f"{an} Gi{ap}"
+for l in LINKS:
+    WIRED[(l["a"], l["a_port"])] = f"{l['b']} Gi{l['b_port']}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} Gi{l['a_port']}"
 OUI = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; echo $MAC_OUI"], capture_output=True, text=True).stdout.strip() or "52:54:00:c7"
 
 created = []
@@ -42,10 +43,23 @@ def get_or_create(ep, lookup, **d):
     o = ep.get(**lookup)
     if o is None: o = ep.create(**lookup, **d); created.append(f"{ep.name}:{list(lookup.values())[0]}")
     return o
+def current(v):
+    """Comparable form of a pynautobot attribute: related object -> id, choice -> value, else the value itself."""
+    if hasattr(v, "id"): return str(v.id)
+    if hasattr(v, "value") and hasattr(v, "label"): return v.value
+    if hasattr(v, "serialize"): return {k: current(getattr(v, k)) for k in v.serialize()}   # JSON fields come back as (nested) Records
+    return v
 def ensure(obj, **fields):
-    ch = {k: v for k, v in fields.items() if str(getattr(getattr(obj, k, None), "id", getattr(obj, k, None))) != str(v)}
-    if ch: obj.update(ch)
+    ch = {}
+    for k, v in fields.items():
+        c = current(getattr(obj, k, None))
+        same = c == v if isinstance(v, (dict, list)) else (str(c).lower() == str(v).lower() if k == "mac_address" else str(c) == str(v))
+        if not same: ch[k] = v
+    if ch: obj.update(ch); created.append(f"updated {getattr(obj, 'name', obj)}: {', '.join(ch)}")
     return obj
+def ensure_cf(obj, **fields):
+    cur = obj.custom_fields or {}
+    if any(cur.get(k) != v for k, v in fields.items()): obj.update({"custom_fields": {**cur, **fields}}); created.append(f"custom fields on {getattr(obj, 'name', obj)}")
 
 active = nb.extras.statuses.get(name="Active"); connected = nb.extras.statuses.get(name="Connected")
 site = nb.dcim.locations.get(name=SITE) or sys.exit("run onboard.py first")
@@ -57,36 +71,44 @@ prole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=[
          for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"))}
 tag_adv = get_or_create(nb.extras.tags, {"name": "bgp:advertise"}, color="ff5722", content_types=["ipam.prefix"])
 
+# site / device metadata as custom fields (site_code + contact on locations, contact on devices)
+cf = {c.key: c for c in nb.extras.custom_fields.all()}
+for key, label, ctypes in (("site_code", "Site code", ["dcim.location"]), ("contact", "Contact", ["dcim.location", "dcim.device"])):
+    if key not in cf: cf[key] = nb.extras.custom_fields.create(key=key, label=label, type="text", content_types=ctypes, grouping="Metadata"); created.append(f"custom-field:{key}")
+ensure(site, description=I["site"]["description"]); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
+
 # VPN model: Nautobot's core "vpn" app (3.2+). Phase 1 / Phase 2 policies -> profile -> VPN -> tunnels with
 # hub/spoke endpoints (source interface + address, tunnel interface, protected prefixes). Cisco object names live
 # in the profile's extra_options; the PSK stays out of Nautobot (NAC group variable vpn_psk).
-IOS = {"ikev2_proposal": "VPN-PROP", "ikev2_policy": "VPN-POL", "ikev2_keyring": "VPN-KEYRING", "keyring_peer": "ANY",
-       "ikev2_profile": "VPN-IKEV2", "transform_set": "VPN-TS", "ipsec_profile": "VPN-IPSEC"}
 need = [ct for ct in ("vpn.vpn", "vpn.vpntunnel") if ct not in active.content_types]
 if need: active.update({"content_types": list(active.content_types) + need})
 vrole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["vpn.vpntunnelendpoint"]) for n, c in (("hub", "e91e63"), ("spoke", "f48fb1"))}
-p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": "VPN-IKEV2"}, description="IKEv2 SA: AES-256-CBC / SHA256 / DH group 14, PSK")
-ensure(p1, ike_version="IKEv2", encryption_algorithm=["AES-256-CBC"], integrity_algorithm=["SHA256"], dh_group=["14"], lifetime_seconds=86400, authentication_method="PSK")
-p2 = get_or_create(nb.vpn.vpn_phase_2_policies, {"name": "VPN-TS"}, description="IPsec SA: ESP AES-256-CBC / SHA256-HMAC, tunnel mode")
-ensure(p2, encryption_algorithm=["AES-256-CBC"], integrity_algorithm=["SHA256"], lifetime=3600)
-prof = get_or_create(nb.vpn.vpn_profiles, {"name": "VPN-IPSEC"}, description="Static IPsec VTI, IKEv2 PSK, DPD on-demand")
-ensure(prof, keepalive_enabled=True, keepalive_interval=30, keepalive_retries=5, nat_traversal=False, extra_options={"ios": IOS})
+ike, ipsec, dpd, ios = PROF["ike"], PROF["ipsec"], PROF["dpd"], PROF["ios"]
+p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": ios["ikev2_profile"]}, description="IKEv2 SA (from lab-intent.json)")
+ensure(p1, ike_version="IKEv2", encryption_algorithm=[ike["encryption"]], integrity_algorithm=[ike["integrity"]], dh_group=[str(ike["dh_group"])],
+       lifetime_seconds=int(ike["lifetime"]), authentication_method="PSK", description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, PSK")
+p2 = get_or_create(nb.vpn.vpn_phase_2_policies, {"name": ios["transform_set"]}, description="IPsec SA (from lab-intent.json)")
+ensure(p2, encryption_algorithm=[ipsec["encryption"]], integrity_algorithm=[ipsec["integrity"]], lifetime=int(ipsec["lifetime"]),
+       description=f"IPsec SA: ESP {ipsec['encryption']} / {ipsec['integrity']}-HMAC, tunnel mode")
+prof = get_or_create(nb.vpn.vpn_profiles, {"name": PROF["name"]}, description="Static IPsec VTI, IKEv2 PSK")
+ensure(prof, keepalive_enabled=bool(dpd["enabled"]), keepalive_interval=int(dpd["interval"]), keepalive_retries=int(dpd["retries"]), nat_traversal=False,
+       extra_options={"ios": ios}, description="Static IPsec VTI, IKEv2 PSK" + (", DPD on-demand" if dpd["enabled"] else ""))
 # Nautobot 3.2.4 bug: POST to the profile<->policy assignment endpoints 500s ("unexpected keyword _custom_field_data")
 # and the profile serializer silently ignores vpn_phase1/2_policies on write, so these two rows go through the ORM
 # (nautobot-server nbshell inside the container on the NMS).
 have = gql('{ vpn_profiles(name: "%s") { vpn_phase1_policies { name } vpn_phase2_policies { name } } }' % prof.name)["vpn_profiles"][0]
 for key, pol in (("vpn_phase1_policies", p1), ("vpn_phase2_policies", p2)):
-    if pol.name not in [x["name"] for x in have[key]]:
+    if [x["name"] for x in have[key]] != [pol.name]:
+        model = "VPNPhase1Policy" if key.endswith("1_policies") else "VPNPhase2Policy"
         subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "lab@10.0.0.10",
                         "cd /opt/nautobot && sg docker -c 'docker compose exec -T nautobot nautobot-server nbshell --quiet'"],
-                       input=f"from nautobot.vpn.models import VPNProfile\nVPNProfile.objects.get(name={prof.name!r}).{key}.add({'VPNPhase1Policy' if key.endswith('1_policies') else 'VPNPhase2Policy'}.objects.get(name={pol.name!r}))\n",
+                       input=f"from nautobot.vpn.models import VPNProfile, {model}\np = VPNProfile.objects.get(name={prof.name!r})\np.{key}.set([{model}.objects.get(name={pol.name!r})])\n",
                        text=True, check=True, capture_output=True); created.append(f"{prof.name} <- {pol.name} (via nbshell)")
-vpn = get_or_create(nb.vpn.vpns, {"name": "IPSEC_VPN"}, service_type="ipsec", status=active.id, vpn_profile=prof.id,
-                    description="Hub-and-spoke IPsec VTIs with eBGP (one AS per site)")
-ensure(vpn, service_type="ipsec", status=active.id, vpn_profile=prof.id, extra_attributes={"routing": "eBGP over the tunnel /30s", "nac_device_group": "IPSEC_VPN"})
+vpn = nb.vpn.vpns.get(vpn_profile=prof.id) or get_or_create(nb.vpn.vpns, {"name": I["vpn"]["name"]}, service_type="ipsec", status=active.id, vpn_profile=prof.id)
+ensure(vpn, name=I["vpn"]["name"], description=I["vpn"]["description"], service_type="ipsec", status=active.id, vpn_profile=prof.id,
+       extra_attributes={"routing": "eBGP over the tunnel /30s", "nac_device_group": "IPSEC_VPN", "change_ticket": I["vpn"].get("change_ticket", ""), "owner": I["vpn"].get("owner", "")})
 
 # clean-up of the interface-based tunnel model this lab used before the core VPN app (custom fields, relationships)
-rel = {x.key: x for x in nb.extras.relationships.all()}
 def drop_legacy_tunnel_model(t):
     if any((t.custom_fields or {}).get(k) for k in ("tunnel_mode", "tunnel_key", "tunnel_ipsec_profile")):
         t.update({"custom_fields": {"tunnel_mode": None, "tunnel_key": None, "tunnel_ipsec_profile": None}}); created.append(f"cleared tunnel custom fields on {t.device.name}/{t.name}")
@@ -94,8 +116,7 @@ def drop_legacy_tunnel_model(t):
     for x in ep.filter(destination_id=t.id) + ep.filter(source_id=t.id):
         if str(getattr(x.relationship, "key", "")) in ("tunnel_source", "tunnel_peer"): x.delete(); created.append(f"removed relationship {x.relationship.key} on {t.device.name}/{t.name}")
 
-CTX = {"oob": {"vrf": "Mgmt-vrf", "gateway": "10.2.0.1", "acl": "MGMT-ACCESS", "prefix": "10.2.0.0/24"},
-       "domain_name": "lab.local"}
+CTX = {"oob": I["oob"], "domain_name": I["domain_name"]}
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})
@@ -110,9 +131,14 @@ def ensure_iface(dev, name, itype, desc="", mgmt_only=False, vrf=None, enabled=T
     itf = nb.dcim.interfaces.get(device=dev.id, name=name)
     if itf is None: itf = nb.dcim.interfaces.create(device=dev.id, name=name, type=itype, status=active.id); created.append(f"interface:{dev.name}/{name}")
     ensure(itf, type=itype, description=desc, mgmt_only=mgmt_only, enabled=enabled, status=active.id, vrf=vrf, **({"mac_address": mac} if mac else {})); return itf
-def ensure_ip(itf, cidr, primary_of=None):
+def ensure_ip(itf, cidr, primary_of=None, exclusive=True):
+    """Address cidr on itf; other addresses of the same kind (same interface, exclusive) are unassigned so re-addressing works."""
     ip = nb.ipam.ip_addresses.get(address=cidr, namespace=ns.id) or nb.ipam.ip_addresses.get(address=cidr.split("/")[0], namespace=ns.id)
     if ip is None: ip = nb.ipam.ip_addresses.create(address=cidr, namespace=ns.id, status=active.id); created.append(f"ip:{cidr}")
+    if str(ip.address) != cidr: ip.update({"address": cidr})
+    if exclusive:
+        for x in nb.ipam.ip_address_to_interface.filter(interface=itf.id):
+            if str(getattr(x.ip_address, "id", x.ip_address)) != ip.id: x.delete(); created.append(f"unassigned old address from {itf.device.name}/{itf.name}")
     if not nb.ipam.ip_address_to_interface.get(ip_address=ip.id, interface=itf.id): nb.ipam.ip_address_to_interface.create(ip_address=ip.id, interface=itf.id)
     if primary_of is not None: ensure(primary_of, primary_ip4=ip.id)
     return ip
@@ -121,88 +147,109 @@ def ensure_cable(x, y):
     nb.dcim.cables.create(termination_a_type="dcim.interface", termination_a_id=x.id, termination_b_type="dcim.interface", termination_b_id=y.id, status=connected.id)
     created.append(f"cable:{x.device.name}:{x.name}-{y.device.name}:{y.name}")
 
-ensure_prefix("10.2.0.0/24", prole["oob-management"], "cat8000v-ipsec OOB management (host = .1, NMS = .10)")
-ensure_prefix("10.255.1.0/24", prole["loopback"], "router-id loopbacks", ptype="container")
-devs, gi, tun = {}, {}, {}
+ensure_prefix(I["oob"]["prefix"], prole["oob-management"], "cat8000v-ipsec OOB management (host = .1, NMS = .10)")
+devs, gi = {}, {}
+# devices are matched by management address (set by onboarding), so the hostname is free to change
+by_mgmt = {x["primary_ip4"]["address"].split("/")[0]: x["id"] for x in requests.get(f"{a.url}/api/dcim/devices/", params={"location": SITE, "depth": 1, "limit": 100}, headers=H, timeout=30).json()["results"] if x.get("primary_ip4")}
 for r in ROUTERS:
-    dev = nb.dcim.devices.get(name=r) or sys.exit(f"{r} not onboarded")
-    ensure(dev, role=roles[C["ROLE"][r]].id, secrets_group=sg.id, platform=plat.id, status=active.id)
+    d = DEV[r]
+    dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
+    ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""))
+    ensure_cf(dev, contact=I["site"]["contact"])
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
-    idx = int(C["NODE_IDX"][r])
+    idx = NODES[d["mgmt_ip"]]["idx"]
     g1 = ensure_iface(dev, "GigabitEthernet1", "1000base-t", "OOB management (Mgmt-vrf)", mgmt_only=True, vrf=mgmt_vrf.id, mac=f"{OUI}:0{idx}:01")
-    ensure_ip(g1, f"{C['MGMT_IP'][r]}/24", primary_of=dev)
-    for port in (2, 3):  # wired ports get description/enabled from the LINKS loop below; set them here too so one update suffices
+    ensure_ip(g1, f"{d['mgmt_ip']}/24", primary_of=dev)
+    for port in (2, 3):  # wired ports get description/enabled from the links; set here so one update suffices
         wired = WIRED.get((r, port))
         gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:0{idx}:0{port}")
-    lo0 = ensure_iface(dev, "Loopback0", "virtual", "Router ID"); tag(ensure_prefix(f"{RID[r]}/32", prole["loopback"], f"{r} router-id")); ensure_ip(lo0, f"{RID[r]}/32")
-    lo10 = ensure_iface(dev, "Loopback10", "virtual", "site LAN"); tag(ensure_prefix(C["LAN"][r], prole["site-lan"], f"{r} site LAN")); ensure_ip(lo10, f"{LAN_IP[r]}/24")
+    lo0 = ensure_iface(dev, "Loopback0", "virtual", "Router ID"); tag(ensure_prefix(f"{d['router_id']}/32", prole["loopback"], f"{r} router-id")); ensure_ip(lo0, f"{d['router_id']}/32")
+    lo10 = ensure_iface(dev, "Loopback10", "virtual", "site LAN"); tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(lo10, f"{LAN_IP[r]}/24")
     devs[r] = dev
 # WAN point-to-point links: addresses, cables
-for a_end, b_end, pfx in LINKS:
-    (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":"); hosts = list(ipaddress.IPv4Network(pfx).hosts())
+for l in LINKS:
+    an, ap, bn, bp, pfx = l["a"], l["a_port"], l["b"], l["b_port"], l["prefix"]; hosts = list(ipaddress.IPv4Network(pfx).hosts())
     ensure_prefix(pfx, prole["wan-p2p"], f"WAN link {an} Gi{ap} - {bn} Gi{bp}")
-    ia, ib = gi[(an, int(ap))], gi[(bn, int(bp))]
+    ia, ib = gi[(an, ap)], gi[(bn, bp)]
     ensure_ip(ia, f"{hosts[0]}/30"); ensure_ip(ib, f"{hosts[1]}/30"); ensure_cable(ia, ib)
 # VTI tunnels: hub TunnelN <-> spoke TunnelN over the link between them, as core VPN tunnels with two endpoints
 def wan_iface(r, other):
-    for a_end, b_end, _ in LINKS:
-        (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
-        if {an, bn} == {r, other}: return gi[(r, int(ap if an == r else bp))]
+    for l in LINKS:
+        if {l["a"], l["b"]} == {r, other}: return gi[(r, l["a_port"] if l["a"] == r else l["b_port"])]
 def ensure_endpoint(r, t, other):
     src = wan_iface(r, other); src_ip = nb.ipam.ip_addresses.get(interfaces=src.id)
-    protect = [nb.ipam.prefixes.get(prefix=C["LAN"][r], namespace=ns.id).id, nb.ipam.prefixes.get(prefix=f"{RID[r]}/32", namespace=ns.id).id]
+    protect = [nb.ipam.prefixes.get(prefix=DEV[r]["lan"], namespace=ns.id).id, nb.ipam.prefixes.get(prefix=f"{DEV[r]['router_id']}/32", namespace=ns.id).id]
     ep = nb.vpn.vpn_tunnel_endpoints.get(tunnel_interface=t.id)
     if ep is None:
         ep = nb.vpn.vpn_tunnel_endpoints.create(source_interface=src.id, source_ipaddress=src_ip.id, tunnel_interface=t.id, vpn_profile=prof.id,
-                                                role=vrole[C["ROLE"][r]].id, protected_prefixes=protect); created.append(f"vpn-endpoint:{r}/{t.name} via {src.name}")
+                                                role=vrole[DEV[r]["role"]].id, protected_prefixes=protect); created.append(f"vpn-endpoint:{r}/{t.name} via {src.name}")
     else:
-        ensure(ep, source_interface=src.id, source_ipaddress=src_ip.id, vpn_profile=prof.id, role=vrole[C["ROLE"][r]].id)
+        ensure(ep, source_interface=src.id, source_ipaddress=src_ip.id, vpn_profile=prof.id, role=vrole[DEV[r]["role"]].id)
         have = gql('{ vpn_tunnel_endpoints(id: "%s") { protected_prefixes { id } } }' % ep.id)["vpn_tunnel_endpoints"][0]["protected_prefixes"]
-        if sorted(x["id"] for x in have) != sorted(protect): ep.update({"protected_prefixes": protect})   # (M2M not in the REST read serializer)
+        if sorted(x["id"] for x in have) != sorted(protect):   # M2M fields are absent from REST reads, so pynautobot's update() never sends them: PATCH directly
+            requests.patch(f"{a.url}/api/vpn/vpn-tunnel-endpoints/{ep.id}/", json={"protected_prefixes": protect}, headers=H, timeout=30).raise_for_status()
+            created.append(f"protected prefixes on {r}/{t.name}")
     return ep
 tun_ip = {}
-for tid, spoke, pfx in TUNNELS:
-    hosts = list(ipaddress.IPv4Network(pfx).hosts()); ensure_prefix(pfx, prole["vpn-tunnel"], f"IPsec VTI Tunnel{tid} hub - {spoke}")
+wanted_tunnels = set()
+for t in TUNNELS:
+    tid, spoke, pfx = int(t["id"]), t["spoke"], t["prefix"]
+    hosts = list(ipaddress.IPv4Network(pfx).hosts()); ensure_prefix(pfx, prole["vpn-tunnel"], f"IPsec VTI Tunnel{tid} {HUB} - {spoke}")
     ends = {}
     for r, ip in ((HUB, hosts[0]), (spoke, hosts[1])):
         other = spoke if r == HUB else HUB
-        t = ensure_iface(devs[r], f"Tunnel{tid}", "tunnel", f"IPsec VTI to {other}")   # type "tunnel": required by the VPN endpoint model
-        tun_ip[(r, tid)] = ensure_ip(t, f"{ip}/30"); drop_legacy_tunnel_model(t); ends[r] = ensure_endpoint(r, t, other)
-    tun = get_or_create(nb.vpn.vpn_tunnels, {"name": f"{HUB}-{spoke}"}, tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id,
-                        encapsulation="IPsec-Tunnel", endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {HUB} <-> {spoke} ({pfx})")
-    ensure(tun, tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id)
-if "tunnel_peer" in rel and not [x for x in nb.extras.relationship_associations.all() if str(getattr(x.relationship, "key", "")) == "tunnel_peer"]:
-    rel["tunnel_peer"].delete(); created.append("removed unused relationship tunnel_peer")
+        # one tunnel interface per far end; if the id changed, the old TunnelN (and its endpoint) goes away
+        for old in nb.dcim.interfaces.filter(device=devs[r].id, type="tunnel"):
+            if old.name != f"Tunnel{tid}" and old.description == f"IPsec VTI to {other}": old.delete(); created.append(f"removed {r}/{old.name}")
+        ti = ensure_iface(devs[r], f"Tunnel{tid}", "tunnel", f"IPsec VTI to {other}")   # type "tunnel": required by the VPN endpoint model
+        tun_ip[(r, tid)] = ensure_ip(ti, f"{ip}/30"); drop_legacy_tunnel_model(ti); ends[r] = ensure_endpoint(r, ti, other)
+    tun = nb.vpn.vpn_tunnels.get(vpn=vpn.id, tunnel_id=str(tid)) or get_or_create(nb.vpn.vpn_tunnels, {"name": f"{HUB}-{spoke}"}, tunnel_id=str(tid), vpn=vpn.id,
+                                                                                    vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id)
+    ensure(tun, name=f"{HUB}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel",
+           endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {HUB} <-> {spoke} ({pfx})")
+    wanted_tunnels.add(tun.id)
+for old in nb.vpn.vpn_tunnels.filter(vpn=vpn.id):
+    if old.id not in wanted_tunnels: old.delete(); created.append(f"removed stale VPN tunnel {old.name}")
 
 # eBGP: one AS per site, hub <-> spoke peering over each tunnel
 bgp = nb.plugins.bgp
 need = [ct for ct in ("nautobot_bgp_models.autonomoussystem", "nautobot_bgp_models.bgproutinginstance", "nautobot_bgp_models.peering") if ct not in active.content_types]
 if need: active.update({"content_types": list(active.content_types) + need})
-asn = {r: get_or_create(bgp.autonomous_systems, {"asn": int(C["BGP_AS"][r])}, status=active.id, description=f"{r} site AS (eBGP over IPsec VTI)") for r in ROUTERS}
+asn = {r: get_or_create(bgp.autonomous_systems, {"asn": int(DEV[r]["asn"])}, status=active.id, description=f"{r} site AS (eBGP over IPsec VTI)") for r in ROUTERS}
 ri = {}
 for r in ROUTERS:
+    rid_ip = nb.ipam.ip_addresses.get(address=f"{DEV[r]['router_id']}/32", namespace=ns.id)
     inst = bgp.routing_instances.get(device=devs[r].id)
     if inst is None:
-        inst = bgp.routing_instances.create(device=devs[r].id, autonomous_system=asn[r].id, router_id=nb.ipam.ip_addresses.get(address=f"{RID[r]}/32", namespace=ns.id).id,
-                                            status=active.id, extra_attributes={"log_neighbor_changes": True}, description="site eBGP"); created.append(f"bgp-ri:{r}")
+        inst = bgp.routing_instances.create(device=devs[r].id, autonomous_system=asn[r].id, router_id=rid_ip.id, status=active.id,
+                                            extra_attributes={"log_neighbor_changes": True}, description="site eBGP"); created.append(f"bgp-ri:{r}")
+    else: ensure(inst, autonomous_system=asn[r].id, router_id=rid_ip.id)
     ri[r] = inst
     if bgp.address_families.get(routing_instance=inst.id, afi_safi="ipv4_unicast", vrf__isnull=True) is None:
         bgp.address_families.create(routing_instance=inst.id, afi_safi="ipv4_unicast"); created.append(f"bgp-af:{r}")
-for tid, spoke, _ in TUNNELS:
-    existing = [e for e in bgp.peer_endpoints.filter(routing_instance=ri[spoke].id) if getattr(e.source_ip, "id", None) == tun_ip[(spoke, tid)].id]
-    if existing: eps = {spoke: existing[0], HUB: existing[0].peer}
+for t in TUNNELS:
+    tid, spoke = int(t["id"]), t["spoke"]
+    # the spoke has exactly one peering (to the hub); re-point it if the tunnel address changed
+    existing = list(bgp.peer_endpoints.filter(routing_instance=ri[spoke].id))
+    if existing:
+        eps = {spoke: existing[0], HUB: existing[0].peer}
+        ensure(eps[spoke], source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {HUB} (Tunnel{tid})")
+        ensure(eps[HUB], source_ip=tun_ip[(HUB, tid)].id, autonomous_system=asn[HUB].id, description=f"eBGP {spoke} (Tunnel{tid})")
     else:
         peering = bgp.peerings.create(status=active.id); created.append(f"bgp-peering:{HUB}<->{spoke} (Tunnel{tid})")
         eps = {HUB: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[HUB].id, source_ip=tun_ip[(HUB, tid)].id, autonomous_system=asn[HUB].id, description=f"eBGP {spoke} (Tunnel{tid})", enabled=True),
-               spoke: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[spoke].id, source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP hub (Tunnel{tid})", enabled=True)}
+               spoke: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[spoke].id, source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {HUB} (Tunnel{tid})", enabled=True)}
     for r, ep in eps.items():
         if bgp.peer_endpoint_address_families.get(peer_endpoint=ep.id, afi_safi="ipv4_unicast") is None:
             bgp.peer_endpoint_address_families.create(peer_endpoint=ep.id, afi_safi="ipv4_unicast"); created.append(f"bgp-endpoint-af:{r}/Tunnel{tid}")
+# unused autonomous systems (after an AS change) are removed
+for x in bgp.autonomous_systems.all():
+    if "IPsec VTI" in (x.description or "") and x.asn not in {int(DEV[r]["asn"]) for r in ROUTERS}: x.delete(); created.append(f"removed AS {x.asn}")
 
-QUERY = (Path(__file__).resolve().parent / "nac-c8000v-ipsec-model.graphql").read_text()
+QUERY = (Path(__file__).resolve().parent / "nac-c8000v-ipsec-model.graphql").read_text().replace("__LOCATION__", SITE).replace("__DEVICES__", ", ".join(f'"{r}"' for r in ROUTERS))
 gq = nb.extras.graphql_queries.get(name="nac-c8000v-ipsec-model")
 if gq is None: nb.extras.graphql_queries.create(name="nac-c8000v-ipsec-model", query=QUERY); created.append("graphql-query:nac-c8000v-ipsec-model")
 elif gq.query.strip() != QUERY.strip():
     nb.http_session.patch(f"{a.url}/api/extras/graphql-queries/{gq.id}/", json={"query": QUERY}, headers=H).raise_for_status(); created.append("graphql-query updated")
-print(f"seed complete: {len(created)} objects created" + (":\n  " + "\n  ".join(created) if created else " (nothing new)"))
+print(f"seed complete: {len(created)} changes" + (":\n  " + "\n  ".join(created) if created else " (nothing new)"))

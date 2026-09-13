@@ -1,5 +1,5 @@
 {
-  devices(location: "c8000v-ipsec-lab") {
+  devices(location: "__LOCATION__") {
     name
     role { name }
     primary_ip4 { address }
@@ -19,12 +19,12 @@
           vpn_phase1_policies { name ike_version encryption_algorithm integrity_algorithm dh_group lifetime_seconds authentication_method }
           vpn_phase2_policies { name encryption_algorithm integrity_algorithm pfs_group lifetime }
         }
-        endpoint_a_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name } endpoint_z { device { name } source_ipaddress { address } tunnel_interface { name } } }
-        endpoint_z_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name } endpoint_a { device { name } source_ipaddress { address } tunnel_interface { name } } }
+        endpoint_a_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name extra_attributes } endpoint_z { device { name } source_ipaddress { address } tunnel_interface { name } } }
+        endpoint_z_vpn_tunnels { name tunnel_id encapsulation status { name } vpn { name extra_attributes } endpoint_a { device { name } source_ipaddress { address } tunnel_interface { name } } }
       }
     }
   }
-  bgp_routing_instances(device: ["hub", "spoke1", "spoke2"]) {
+  bgp_routing_instances(device: [__DEVICES__]) {
     device { name }
     autonomous_system { asn }
     router_id { address }
