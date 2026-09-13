@@ -206,7 +206,7 @@ cmd_status() {
   done
   echo; echo "WAN links (point-to-point) and IPsec VTI tunnels:"
   local l a b pfx t; for l in "${LINKS[@]}"; do read -r a b pfx <<<"$l"; echo "  ${a%%:*} Gi${a##*:} $(wan_ip "${a%%:*}" "${a##*:}")  <->  ${b%%:*} Gi${b##*:} $(wan_ip "${b%%:*}" "${b##*:}")   ($pfx)"; done
-  for t in "${TUNNELS[@]}"; do read -r id sp pfx <<<"$t"; echo "  Tunnel$id: hub <-> $sp  $pfx  (ipsec ipv4, IKEv2 PSK, eBGP)"; done
+  for t in "${TUNNELS[@]}"; do read -r id hb sp pfx <<<"$t"; echo "  Tunnel$id: $hb <-> $sp  $pfx  (ipsec ipv4, IKEv2 PSK, eBGP)"; done
 }
 
 cmd_console() {

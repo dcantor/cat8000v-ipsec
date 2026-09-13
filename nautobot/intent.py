@@ -45,7 +45,10 @@ def from_lab_conf():
     for l in C["LINKS"].values():
         a_end, b_end, pfx = l.split(); (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
         links.append({"a": an, "a_port": int(ap), "b": bn, "b_port": int(bp), "prefix": pfx})
-    tunnels = [{"id": int(t.split()[0]), "spoke": t.split()[1], "prefix": t.split()[2]} for t in C["TUNNELS"].values()]
+    tunnels = []
+    for t in C["TUNNELS"].values():   # "id hub spoke prefix" (older 3-field form: the single hub is implied)
+        f = t.split(); hub = f[1] if len(f) == 4 else next(n for n in C["ROLE"] if C["ROLE"][n] == "hub")
+        tunnels.append({"id": int(f[0]), "hub": hub, "spoke": f[-2], "prefix": f[-1]})
     return {
         "site": {"name": "c8000v-ipsec-lab", "description": "C8000v IPsec VTI lab (libvirt)", "site_code": "LAB-IPSEC", "contact": "noc@lab.local"},
         "vpn": {"name": "IPSEC_VPN", "description": "Hub-and-spoke IPsec VTIs with eBGP (one AS per site)", "change_ticket": "", "owner": "network team"},
@@ -62,7 +65,11 @@ def from_lab_conf():
 
 def load(path=None):
     p = Path(path) if path else INTENT_FILE
-    return json.loads(p.read_text()) if p.exists() else from_lab_conf()
+    I = json.loads(p.read_text()) if p.exists() else from_lab_conf()
+    hubs = [d["name"] for d in I.get("devices", []) if d.get("role") == "hub"]
+    for t in I.get("tunnels", []):   # documents written before multi-hub support carry no hub on the tunnel
+        t.setdefault("hub", hubs[0] if hubs else None)
+    return I
 
 
 def save(intent, path=None):
@@ -86,7 +93,7 @@ def validate(intent):
         except ValueError: errs.append(f"{d.get('name')}: LAN {d.get('lan')!r} is not a network")
         if not (1 <= int(d.get("asn") or 0) <= 4294967295): errs.append(f"{d.get('name')}: ASN out of range")
     hubs = [d["name"] for d in devs if d.get("role") == "hub"]
-    if len(hubs) != 1: errs.append("exactly one hub is required")
+    if not hubs: errs.append("at least one hub is required")
     if len(set(d["router_id"] for d in devs)) != len(devs): errs.append("router-ids must be unique")
     if len(set(d["lan"] for d in devs)) != len(devs): errs.append("LAN prefixes must be unique")
     known = nodes(); by_ip = {d["mgmt_ip"]: d for d in devs}
@@ -109,19 +116,29 @@ def validate(intent):
             used.add(n)
         except ValueError: errs.append(f"link {l.get('a')}-{l.get('b')}: bad prefix {l.get('prefix')!r}")
     spokes = {d["name"] for d in devs if d.get("role") == "spoke"}
-    ids = [t.get("id") for t in intent.get("tunnels") or []]
+    tunnels = intent.get("tunnels") or []
+    ids = [t.get("id") for t in tunnels]
     if len(set(ids)) != len(ids): errs.append("tunnel ids must be unique")
-    if {t.get("spoke") for t in intent.get("tunnels") or []} != spokes: errs.append(f"exactly one tunnel per spoke is required ({sorted(spokes)})")
+    pairs = [(t.get("hub"), t.get("spoke")) for t in tunnels]
+    if len(set(pairs)) != len(pairs): errs.append("at most one tunnel per hub/spoke pair")
+    for t in tunnels:
+        if t.get("hub") not in hubs: errs.append(f"tunnel {t.get('id')}: {t.get('hub')!r} is not a hub")
+        if t.get("spoke") not in spokes: errs.append(f"tunnel {t.get('id')}: {t.get('spoke')!r} is not a spoke")
+        if not any({l.get("a"), l.get("b")} == {t.get("hub"), t.get("spoke")} for l in intent.get("links") or []): errs.append(f"tunnel {t.get('id')}: no link between {t.get('hub')} and {t.get('spoke')}")
+    for sp in spokes:
+        if not any(t.get("spoke") == sp for t in tunnels): errs.append(f"spoke {sp} has no tunnel")
     cap = int((intent.get("capacity") or {}).get("tunnels_per_headend") or 50)
-    if len(intent.get("tunnels") or []) > cap: errs.append(f"headend capacity exceeded: {len(intent['tunnels'])} tunnels > {cap} per headend")
-    for t in intent.get("tunnels") or []:
+    for h in hubs:
+        n = sum(1 for t in tunnels if t.get("hub") == h)
+        if n > cap: errs.append(f"headend capacity exceeded on {h}: {n} tunnels > {cap}")
+    for t in tunnels:
         if not (1 <= int(t.get("id") or 0) <= 2147483647): errs.append(f"tunnel to {t.get('spoke')}: bad id")
         try:
             n = ipaddress.IPv4Network(t.get("prefix", ""), strict=True)
-            if n.prefixlen != 30: errs.append(f"tunnel to {t.get('spoke')}: prefix must be a /30")
+            if n.prefixlen != 30: errs.append(f"tunnel {t.get('id')}: prefix must be a /30")
             if n in used: errs.append(f"prefix {n} used twice")
             used.add(n)
-        except ValueError: errs.append(f"tunnel to {t.get('spoke')}: bad prefix {t.get('prefix')!r}")
+        except ValueError: errs.append(f"tunnel {t.get('id')}: bad prefix {t.get('prefix')!r}")
     pr = intent.get("profile") or {}
     ENC = {"AES-128-CBC", "AES-192-CBC", "AES-256-CBC", "AES-128-GCM", "AES-256-GCM"}; INT = {"SHA1", "SHA256", "SHA384", "SHA512", "MD5"}
     if (pr.get("ike") or {}).get("encryption") not in ENC: errs.append("IKE encryption not supported")

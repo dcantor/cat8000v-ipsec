@@ -22,16 +22,15 @@ Routers exist in Nautobot with role, serial, platform and management IP matching
     END
 
 WAN links are modelled as cables between the hub and spoke ports with /30 addresses
-    FOR    ${s}    IN    @{SPOKES}
-        ${t}=    Set Variable    ${TUNNELS}[${s}]
-        ${d}=    Nautobot Graphql    { interfaces(device:["${s}"], name:"${t}[spoke_if]") { enabled description ip_addresses { address parent { prefix role { name } } } connected_interface { name device { name } ip_addresses { address } } } }
+    FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${d}=    Nautobot Graphql    { interfaces(device:["${t}[spoke]"], name:"${t}[spoke_if]") { enabled description ip_addresses { address parent { prefix role { name } } } connected_interface { name device { name } ip_addresses { address } } } }
         ${i}=    Set Variable    ${d}[interfaces][0]
         Should Be True    ${i}[enabled]
-        Should Be Equal    ${i}[description]    WAN to ${HUB} ${{ $t['hub_if'].replace('GigabitEthernet', 'Gi') }}
+        Should Be Equal    ${i}[description]    WAN to ${t}[hub] ${{ $t['hub_if'].replace('GigabitEthernet', 'Gi') }}
         Should Be Equal    ${i}[ip_addresses][0][address]    ${t}[spoke_wan]/30
         Should Be Equal    ${i}[ip_addresses][0][parent][prefix]    ${t}[wan_prefix]
         Should Be Equal    ${i}[ip_addresses][0][parent][role][name]    wan-p2p
-        Should Be Equal    ${i}[connected_interface][device][name]    ${HUB}
+        Should Be Equal    ${i}[connected_interface][device][name]    ${t}[hub]
         Should Be Equal    ${i}[connected_interface][name]    ${t}[hub_if]
         Should Be Equal    ${i}[connected_interface][ip_addresses][0][address]    ${t}[hub_wan]/30
     END
@@ -40,25 +39,25 @@ WAN links are modelled as cables between the hub and spoke ports with /30 addres
         Should Not Be True    ${i}[enabled]    msg=${i}[device][name]/${i}[name] is unwired but enabled
     END
 
-The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, hub/spoke endpoints
+The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spoke pair, hub/spoke endpoints
     ${d}=    Nautobot Graphql    { vpns(name:"${VPN_NAME}") { name service_type status { name } vpn_profile { name } vpn_tunnels { name tunnel_id encapsulation status { name } vpn_profile { name } endpoint_a { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } endpoint_z { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } } } }
     Length Should Be    ${d}[vpns]    1
     ${vpn}=    Set Variable    ${d}[vpns][0]
     Should Be Equal    ${vpn}[service_type]    IPSEC
     Should Be Equal    ${vpn}[status][name]    Active
     Should Be Equal    ${vpn}[vpn_profile][name]    ${IPSEC_PROFILE}
-    Length Should Be    ${vpn}[vpn_tunnels]    ${{ len($SPOKES) }}
+    Length Should Be    ${vpn}[vpn_tunnels]    ${{ len($TUNNEL_LIST) }}
     FOR    ${t}    IN    @{vpn}[vpn_tunnels]
         ${s}=    Set Variable    ${t}[endpoint_z][device][name]
-        ${x}=    Set Variable    ${TUNNELS}[${s}]
-        Should Be Equal    ${t}[name]    ${HUB}-${s}
+        ${h}=    Set Variable    ${t}[endpoint_a][device][name]
+        ${x}=    Evaluate    [x for x in $TUNNEL_LIST if x['hub'] == $h and x['spoke'] == $s][0]
+        Should Be Equal    ${t}[name]    ${h}-${s}
         Should Be Equal    ${t}[tunnel_id]    ${x}[id]
         Should Be Equal    ${t}[encapsulation]    IPSEC_TUNNEL
         Should Be Equal    ${t}[status][name]    Active
         Should Be Equal    ${t}[vpn_profile][name]    ${VPN_PROFILE}
         # endpoint A = hub: source GiN with the WAN address, tunnel interface TunnelN, protects its LAN + loopback
         ${a}=    Set Variable    ${t}[endpoint_a]
-        Should Be Equal    ${a}[device][name]    ${HUB}
         Should Be Equal    ${a}[role][name]    hub
         Should Be Equal    ${a}[source_interface][name]    ${x}[hub_if]
         Should Be Equal    ${a}[source_ipaddress][address]    ${x}[hub_wan]/30
@@ -66,7 +65,7 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, h
         Should Be Equal    ${a}[tunnel_interface][type]    TUNNEL
         Should Be Equal    ${a}[tunnel_interface][ip_addresses][0][address]    ${x}[hub_ip]/30
         ${pfx}=    Evaluate    sorted(p['prefix'] for p in $a['protected_prefixes'])
-        Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$HUB]['router_id'] + '/32', $ROUTERS[$HUB]['lan']]) }}
+        Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$h]['router_id'] + '/32', $ROUTERS[$h]['lan']]) }}
         # endpoint Z = the spoke
         ${z}=    Set Variable    ${t}[endpoint_z]
         Should Be Equal    ${z}[role][name]    spoke
@@ -77,7 +76,7 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, h
         ${pfx}=    Evaluate    sorted(p['prefix'] for p in $z['protected_prefixes'])
         Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$s]['router_id'] + '/32', $ROUTERS[$s]['lan']]) }}
         # each router's tunnel destination is exactly the other endpoint's source address in the model
-        ${cfg}=    Show    ${HUB}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode
+        ${cfg}=    Show    ${h}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode
         Should Contain    ${cfg}    tunnel source ${a}[source_interface][name]
         Should Contain    ${cfg}    tunnel destination ${{ $z['source_ipaddress']['address'].split('/')[0] }}
         Should Contain    ${cfg}    tunnel mode ipsec ipv4
@@ -138,7 +137,7 @@ BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the
         ${r}=    Set Variable    ${ri}[device][name]
         Should Be Equal As Integers    ${ri}[autonomous_system][asn]    ${ROUTERS}[${r}][asn]
         Should Be Equal    ${ri}[router_id][address]    ${ROUTERS}[${r}][router_id]/32
-        ${expected}=    Set Variable If    '${r}' == '${HUB}'    ${{ len($SPOKES) }}    1
+        ${expected}=    Evaluate    len($HUB_TUNNELS.get($r, [])) or len($SPOKE_TUNNELS.get($r, []))
         Length Should Be    ${ri}[endpoints]    ${expected}
         ${sum}=    Show    ${r}    show bgp ipv4 unicast summary | begin Neighbor
         FOR    ${ep}    IN    @{ri}[endpoints]

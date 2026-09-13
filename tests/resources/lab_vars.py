@@ -10,23 +10,28 @@ USERNAME = os.environ.get("IOSXE_USERNAME", "admin")
 PASSWORD = os.environ.get("IOSXE_PASSWORD", "admin")
 
 _I = intent_mod.load()
-HUB = next(d["name"] for d in _I["devices"] if d["role"] == "hub")
+HUBS = sorted(d["name"] for d in _I["devices"] if d["role"] == "hub")
+HUB = HUBS[0]
 SPOKES = sorted(d["name"] for d in _I["devices"] if d["role"] == "spoke")
 ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
                        "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1])} for d in _I["devices"]}
 ROUTER_NAMES = list(ROUTERS)
 ROUTER_GQL = ", ".join(f'"{n}"' for n in ROUTER_NAMES)   # for GraphQL device:[...] filters
 
-# One point-to-point WAN link and one IPsec VTI per spoke (TunnelN exists on the hub and on that spoke).
-TUNNELS = {}
+# One point-to-point WAN link and one IPsec VTI per (hub, spoke) pair: TunnelN exists on both ends.
+TUNNEL_LIST = []
 for _t in _I["tunnels"]:
-    _l = next(l for l in _I["links"] if {l["a"], l["b"]} == {HUB, _t["spoke"]})
-    _hub_port, _spoke_port = (_l["a_port"], _l["b_port"]) if _l["a"] == HUB else (_l["b_port"], _l["a_port"])
+    _l = next(l for l in _I["links"] if {l["a"], l["b"]} == {_t["hub"], _t["spoke"]})
+    _hub_port, _spoke_port = (_l["a_port"], _l["b_port"]) if _l["a"] == _t["hub"] else (_l["b_port"], _l["a_port"])
     _wan = list(ipaddress.IPv4Network(_l["prefix"]).hosts()); _tun = list(ipaddress.IPv4Network(_t["prefix"]).hosts())
-    _hub_wan, _spoke_wan = (_wan[0], _wan[1]) if _l["a"] == HUB else (_wan[1], _wan[0])
-    TUNNELS[_t["spoke"]] = {"id": str(_t["id"]), "hub_if": f"GigabitEthernet{_hub_port}", "hub_wan": str(_hub_wan),
-                            "spoke_if": f"GigabitEthernet{_spoke_port}", "spoke_wan": str(_spoke_wan), "wan_prefix": _l["prefix"],
-                            "hub_ip": str(_tun[0]), "spoke_ip": str(_tun[1]), "prefix": _t["prefix"]}
+    _hub_wan, _spoke_wan = (_wan[0], _wan[1]) if _l["a"] == _t["hub"] else (_wan[1], _wan[0])
+    TUNNEL_LIST.append({"id": str(_t["id"]), "hub": _t["hub"], "spoke": _t["spoke"], "hub_if": f"GigabitEthernet{_hub_port}", "hub_wan": str(_hub_wan),
+                        "spoke_if": f"GigabitEthernet{_spoke_port}", "spoke_wan": str(_spoke_wan), "wan_prefix": _l["prefix"],
+                        "hub_ip": str(_tun[0]), "spoke_ip": str(_tun[1]), "prefix": _t["prefix"]})
+TUNNEL_LIST.sort(key=lambda t: int(t["id"]))
+TUNNELS = {t["spoke"]: t for t in TUNNEL_LIST if t["hub"] == HUB}   # first hub's tunnels keyed by spoke (legacy helpers)
+HUB_TUNNELS = {h: [t for t in TUNNEL_LIST if t["hub"] == h] for h in HUBS}
+SPOKE_TUNNELS = {s: [t for t in TUNNEL_LIST if t["spoke"] == s] for s in SPOKES}
 
 OOB_GATEWAY = _I["oob"]["gateway"]
 DOMAIN_NAME = _I["domain_name"]

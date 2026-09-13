@@ -27,7 +27,7 @@ if problems: sys.exit("invalid intent:\n  " + "\n  ".join(problems))
 nb = pynautobot.api(a.url, token=a.token)
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 SITE = I["site"]["name"]
-DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(DEV); HUB = next(n for n, d in DEV.items() if d["role"] == "hub")
+DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(DEV); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
 NODES = intent_mod.nodes()                                # mgmt ip -> {node, idx, role} (VM facts)
 LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items()}
 LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
@@ -165,7 +165,7 @@ for r in ROUTERS:
     d = DEV[r]
     dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
     ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""))
-    ensure_cf(dev, contact=I["site"]["contact"], **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))
+    ensure_cf(dev, contact=I["site"]["contact"], **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))   # every hub is a headend
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
     idx = NODES[d["mgmt_ip"]]["idx"]
@@ -204,20 +204,19 @@ def ensure_endpoint(r, t, other):
 tun_ip = {}
 wanted_tunnels = set()
 for t in TUNNELS:
-    tid, spoke, pfx = int(t["id"]), t["spoke"], t["prefix"]
-    hosts = list(ipaddress.IPv4Network(pfx).hosts()); ensure_prefix(pfx, prole["vpn-tunnel"], f"IPsec VTI Tunnel{tid} {HUB} - {spoke}")
+    tid, hub, spoke, pfx = int(t["id"]), t["hub"], t["spoke"], t["prefix"]
+    hosts = list(ipaddress.IPv4Network(pfx).hosts()); ensure_prefix(pfx, prole["vpn-tunnel"], f"IPsec VTI Tunnel{tid} {hub} - {spoke}")
     ends = {}
-    for r, ip in ((HUB, hosts[0]), (spoke, hosts[1])):
-        other = spoke if r == HUB else HUB
+    for r, ip, other in ((hub, hosts[0], spoke), (spoke, hosts[1], hub)):
         # one tunnel interface per far end; if the id changed, the old TunnelN (and its endpoint) goes away
         for old in nb.dcim.interfaces.filter(device=devs[r].id, type="tunnel"):
             if old.name != f"Tunnel{tid}" and old.description == f"IPsec VTI to {other}": old.delete(); created.append(f"removed {r}/{old.name}")
         ti = ensure_iface(devs[r], f"Tunnel{tid}", "tunnel", f"IPsec VTI to {other}")   # type "tunnel": required by the VPN endpoint model
         tun_ip[(r, tid)] = ensure_ip(ti, f"{ip}/30"); drop_legacy_tunnel_model(ti); ends[r] = ensure_endpoint(r, ti, other)
-    tun = nb.vpn.vpn_tunnels.get(vpn=vpn.id, tunnel_id=str(tid)) or get_or_create(nb.vpn.vpn_tunnels, {"name": f"{HUB}-{spoke}"}, tunnel_id=str(tid), vpn=vpn.id,
-                                                                                    vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id)
-    ensure(tun, name=f"{HUB}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel",
-           endpoint_a=ends[HUB].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {HUB} <-> {spoke} ({pfx})")
+    tun = nb.vpn.vpn_tunnels.get(vpn=vpn.id, tunnel_id=str(tid)) or get_or_create(nb.vpn.vpn_tunnels, {"name": f"{hub}-{spoke}"}, tunnel_id=str(tid), vpn=vpn.id,
+                                                                                    vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id)
+    ensure(tun, name=f"{hub}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel",
+           endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {hub} <-> {spoke} ({pfx})")
     wanted_tunnels.add(tun.id)
 for old in nb.vpn.vpn_tunnels.filter(vpn=vpn.id):
     if old.id not in wanted_tunnels: old.delete(); created.append(f"removed stale VPN tunnel {old.name}")
@@ -239,17 +238,17 @@ for r in ROUTERS:
     if bgp.address_families.get(routing_instance=inst.id, afi_safi="ipv4_unicast", vrf__isnull=True) is None:
         bgp.address_families.create(routing_instance=inst.id, afi_safi="ipv4_unicast"); created.append(f"bgp-af:{r}")
 for t in TUNNELS:
-    tid, spoke = int(t["id"]), t["spoke"]
-    # the spoke has exactly one peering (to the hub); re-point it if the tunnel address changed
-    existing = list(bgp.peer_endpoints.filter(routing_instance=ri[spoke].id))
+    tid, hub, spoke = int(t["id"]), t["hub"], t["spoke"]
+    # the spoke's peering towards this hub (matched by description, then re-pointed if the tunnel address changed)
+    existing = [e for e in bgp.peer_endpoints.filter(routing_instance=ri[spoke].id) if str(e.description or "").startswith(f"eBGP {hub} (")]
     if existing:
-        eps = {spoke: existing[0], HUB: existing[0].peer}
-        ensure(eps[spoke], source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {HUB} (Tunnel{tid})")
-        ensure(eps[HUB], source_ip=tun_ip[(HUB, tid)].id, autonomous_system=asn[HUB].id, description=f"eBGP {spoke} (Tunnel{tid})")
+        eps = {spoke: existing[0], hub: existing[0].peer}
+        ensure(eps[spoke], source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {hub} (Tunnel{tid})")
+        ensure(eps[hub], source_ip=tun_ip[(hub, tid)].id, autonomous_system=asn[hub].id, description=f"eBGP {spoke} (Tunnel{tid})")
     else:
-        peering = bgp.peerings.create(status=active.id); created.append(f"bgp-peering:{HUB}<->{spoke} (Tunnel{tid})")
-        eps = {HUB: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[HUB].id, source_ip=tun_ip[(HUB, tid)].id, autonomous_system=asn[HUB].id, description=f"eBGP {spoke} (Tunnel{tid})", enabled=True),
-               spoke: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[spoke].id, source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {HUB} (Tunnel{tid})", enabled=True)}
+        peering = bgp.peerings.create(status=active.id); created.append(f"bgp-peering:{hub}<->{spoke} (Tunnel{tid})")
+        eps = {hub: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[hub].id, source_ip=tun_ip[(hub, tid)].id, autonomous_system=asn[hub].id, description=f"eBGP {spoke} (Tunnel{tid})", enabled=True),
+               spoke: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[spoke].id, source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {hub} (Tunnel{tid})", enabled=True)}
     for r, ep in eps.items():
         if bgp.peer_endpoint_address_families.get(peer_endpoint=ep.id, afi_safi="ipv4_unicast") is None:
             bgp.peer_endpoint_address_families.create(peer_endpoint=ep.id, afi_safi="ipv4_unicast"); created.append(f"bgp-endpoint-af:{r}/Tunnel{tid}")

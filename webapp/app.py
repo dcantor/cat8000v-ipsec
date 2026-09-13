@@ -32,6 +32,9 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
                "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
                "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
+               "hub_validate": "Validate hub allocation", "hub_labconf": "Register the hub in lab.conf + day-0 config (links to every spoke)",
+               "hub_vm": "Create and boot the hub VM", "hub_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)", "hub_onboard": "Onboard the hub into Nautobot",
+               "hub_intent": "Add the hub, its links and tunnels to the intent",
                "rm_validate": "Validate removal", "rm_down": "Power off the spoke VM", "rm_nautobot": "Remove the spoke from Nautobot (tunnel, endpoints, BGP, device, addresses)",
                "rm_intent": "Remove from lab.conf and the intent", "rm_state": "Forget the spoke in the Terraform state", "rm_vm": "Delete the VM",
                "render": "Render NAC data from Nautobot", "plan": "Terraform plan", "apply": "Terraform apply + save config",
@@ -61,6 +64,11 @@ class Run:
         if self.mode == "test": return ["validate", "test"]
         if self.mode == "spoke":
             steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "plan", "apply"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", True): steps.append("test")
+            return steps
+        if self.mode == "hub":
+            steps = ["hub_validate", "hub_labconf", "hub_vm", "hub_bootstrap", "hub_onboard", "hub_intent", "nautobot", "render", "plan", "apply"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
             return steps
@@ -122,12 +130,14 @@ class Run:
         problems = spokes.validate(self.spoke)
         if problems: raise RuntimeError("invalid spoke: " + "; ".join(problems))
         hc = spokes.hub_changes(self.spoke)
-        s["summary"] = f"{self.spoke['name']} ({self.spoke['mgmt_ip']}) on {hc['hub']} {hc['interface']}, {hc['tunnel']} {self.spoke['tunnel_prefix']}, AS {self.spoke['asn']}"
-        self.say(s["summary"]); self.say("hub will get: " + ", ".join(f"{k}={v}" for k, v in hc.items() if k != "spoke"))
+        s["summary"] = f"{self.spoke['name']} ({self.spoke['mgmt_ip']}), AS {self.spoke['asn']}: " + "; ".join(f"{l['hub']} {l['interface']} / {l['tunnel']}" for l in hc["links"])
+        self.say(s["summary"])
+        for l in hc["links"]: self.say(f"{l['hub']} will get: {l['interface']} {l['wan_ip']}, {l['tunnel']} {l['tunnel_ip']} -> {l['tunnel_destination']}, neighbor {l['bgp_neighbor']}")
 
     def do_spoke_labconf(self, s):
+        for l in self.spoke.get("links", []): l["spoke"] = self.spoke["name"]
         spokes.add_to_lab_conf(self.spoke); d = spokes.write_day0(self.spoke)
-        s["summary"] = f"lab.conf updated (link {self.spoke['hub']}:{self.spoke['hub_port']} <-> {self.spoke['name']}:{self.spoke['spoke_port']}), {d.relative_to(LAB)}/iosxe_config.txt written"
+        s["summary"] = "lab.conf updated (" + ", ".join(f"{l['hub']}:{l['hub_port']} <-> {self.spoke['name']}:{l['spoke_port']}" for l in self.spoke.get("links", [])) + f"), {d.relative_to(LAB)}/iosxe_config.txt written"
         self.say(s["summary"])
 
     def do_spoke_vm(self, s):
@@ -151,15 +161,57 @@ class Run:
         self.intent = spokes.add_to_intent(self.spoke)
         (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
         hc = spokes.hub_changes(self.spoke)
-        s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels; hub gets {hc['interface']} {hc['wan_ip']}, {hc['tunnel']} {hc['tunnel_ip']}, neighbor {hc['bgp_neighbor']}"
+        s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels; " + "; ".join(f"{l['hub']} gets {l['interface']} {l['wan_ip']}, {l['tunnel']}, neighbor {l['bgp_neighbor']}" for l in hc["links"])
         self.say(s["summary"])
+
+    # ---- hub provisioning steps ------------------------------------------------
+    def do_hub_validate(self, s):
+        problems = spokes.validate({**self.spoke, "role": "hub"})
+        if problems: raise RuntimeError("invalid hub: " + "; ".join(problems))
+        self.spoke["links"] = spokes.hub_links(self.spoke["name"], self.spoke.get("connect_spokes") or [])
+        s["summary"] = f"{self.spoke['name']} ({self.spoke['mgmt_ip']}), AS {self.spoke['asn']}; links: " + ", ".join(f"Gi{l['hub_port']}->{l['spoke']} Gi{l['spoke_port']} Tunnel{l['tunnel_id']}" for l in self.spoke["links"])
+        self.say(s["summary"])
+
+    def do_hub_labconf(self, s):
+        spokes.add_to_lab_conf({**self.spoke, "role": "hub"}); d = spokes.write_day0(self.spoke)
+        s["summary"] = f"lab.conf updated ({len(self.spoke['links'])} links), {d.relative_to(LAB)}/iosxe_config.txt written"
+        # the existing spokes get a new WAN link: their libvirt definition changes, but the link is anchored on the
+        # (new) hub side so only the spoke's second NIC target changes - it needs a re-define + reboot of each spoke
+        for l in self.spoke["links"]:
+            self.say(f"re-defining {l['spoke']} for its new port Gi{l['spoke_port']} (reboot)")
+            for cmd in (["./lab.sh", "down", l["spoke"]], ["./lab.sh", "rebuild", l["spoke"]], ["./lab.sh", "up", l["spoke"]]):
+                if self.sh(cmd): raise RuntimeError(f"{' '.join(cmd)} failed")
+
+    def do_hub_vm(self, s):
+        rc = self.sh(["./lab.sh", "up", self.spoke["name"]])
+        if rc: raise RuntimeError(f"lab.sh up failed (rc={rc})")
+        s["summary"] = f"VM {self.spoke['name']} defined and started (console 127.0.0.1:{self.spoke['console_port']})"
+
+    def do_hub_bootstrap(self, s):
+        self.say("this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF")
+        rc = self.sh(["./lab.sh", "bootstrap", self.spoke["name"]], timeout=2400)
+        if rc: raise RuntimeError(f"bootstrap failed (rc={rc})")
+        if not any("RESTCONF up" in l["line"] for l in self.log): raise RuntimeError("RESTCONF did not come up on the new hub")
+        rc = self.sh(["./lab.sh", "wait", *[l["spoke"] for l in self.spoke["links"]]])   # the rebooted spokes
+        if rc: raise RuntimeError("a rebooted spoke did not come back")
+        s["summary"] = f"{self.spoke['name']} reachable, RESTCONF up; rebooted spokes back"
+
+    def do_hub_onboard(self, s):
+        rc = self.sh(["./lab.sh", "nautobot", "onboard", self.spoke["mgmt_ip"]])
+        if rc: raise RuntimeError(f"onboarding failed (rc={rc})")
+        s["summary"] = f"{self.spoke['name']} discovered by Nautobot"
+
+    def do_hub_intent(self, s):
+        self.intent = spokes.add_to_intent({**self.spoke, "role": "hub"})
+        (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
+        s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels"
 
     # ---- spoke removal steps --------------------------------------------------
     def do_rm_validate(self, s):
         problems, det = spokes.removal_plan(self.spoke["name"])
         if problems: raise RuntimeError("cannot remove: " + "; ".join(problems))
         self.removal = det
-        s["summary"] = f"{det['name']} ({det['mgmt_ip']}): frees {det['hub']} {det['hub_interface']}, {det['tunnel']} {det['tunnel_prefix']}, WAN {det['wan_prefix']}, AS {det['asn']}; {det['tunnels_after']}/{det['capacity']} tunnels after"
+        s["summary"] = f"{det['name']} ({det['mgmt_ip']}), AS {det['asn']}: frees " + "; ".join(f"{l['hub']} {l['hub_interface']} / {l['tunnel']} {l['tunnel_prefix']} / WAN {l['wan_prefix']}" for l in det["links"])
         self.say(s["summary"])
 
     def do_rm_down(self, s):
@@ -169,7 +221,7 @@ class Run:
 
     def do_rm_nautobot(self, s):
         det = self.removal
-        pfx = [p for p in (det.get("wan_prefix"), det.get("tunnel_prefix"), det.get("lan"), f"{det['router_id']}/32") if p]
+        pfx = [p for l in det["links"] for p in (l.get("wan_prefix"), l.get("tunnel_prefix")) if p] + [det["lan"], f"{det['router_id']}/32"]
         done = spokes.remove_from_nautobot(self.spoke["name"], NAUTOBOT_URL, nautobot_token(), pfx)
         for d in done: self.say("  removed " + d)
         s["summary"] = f"{len(done)} objects removed"
@@ -326,8 +378,13 @@ def validate(body: dict):
 
 
 @app.get("/api/spokes/suggest")
-def spoke_suggest():
-    return spokes.suggest()
+def spoke_suggest(hubs: str = ""):
+    return spokes.suggest([h for h in hubs.split(",") if h] or None)
+
+
+@app.get("/api/hubs/suggest")
+def hub_suggest():
+    return spokes.suggest_hub()
 
 
 @app.post("/api/spokes/validate")
@@ -346,10 +403,14 @@ def spoke_removal(name: str):
 @app.post("/api/runs")
 def start_run(body: dict):
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "remove"): raise HTTPException(400, "mode must be deploy, plan, test, spoke or remove")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub or remove")
     spoke = None
     if mode == "remove":
         spoke = body.get("spoke") or {}; problems, _ = spokes.removal_plan(spoke.get("name", ""))
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    elif mode == "hub":
+        spoke = body.get("hub") or {}; problems = spokes.validate({**spoke, "role": "hub"})
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()
     elif mode == "spoke":

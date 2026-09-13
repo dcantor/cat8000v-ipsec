@@ -1,0 +1,131 @@
+{
+  "site": {
+    "name": "c8000v-ipsec-lab",
+    "description": "C8000v IPsec VTI lab (libvirt)",
+    "site_code": "LAB-IPSEC",
+    "contact": "noc@lab.local"
+  },
+  "vpn": {
+    "name": "IPSEC_VPN",
+    "description": "Hub-and-spoke IPsec VTIs with eBGP (one AS per site)",
+    "change_ticket": "CHG0042002",
+    "owner": "network team"
+  },
+  "profile": {
+    "name": "VPN-IPSEC",
+    "ike": {
+      "encryption": "AES-256-CBC",
+      "integrity": "SHA256",
+      "dh_group": "14",
+      "lifetime": 86400
+    },
+    "ipsec": {
+      "encryption": "AES-256-CBC",
+      "integrity": "SHA256",
+      "lifetime": 3600
+    },
+    "dpd": {
+      "enabled": true,
+      "interval": 20,
+      "retries": 3
+    },
+    "ios": {
+      "ikev2_proposal": "VPN-PROP",
+      "ikev2_policy": "VPN-POL",
+      "ikev2_keyring": "VPN-KEYRING",
+      "keyring_peer": "ANY",
+      "ikev2_profile": "VPN-IKEV2",
+      "transform_set": "VPN-TS",
+      "ipsec_profile": "VPN-IPSEC"
+    }
+  },
+  "psk": "cisco123",
+  "devices": [
+    {
+      "name": "hub",
+      "mgmt_ip": "10.2.0.11",
+      "role": "hub",
+      "asn": 65200,
+      "router_id": "10.255.1.1",
+      "lan": "192.168.11.0/24",
+      "comments": ""
+    },
+    {
+      "name": "spoke1",
+      "mgmt_ip": "10.2.0.12",
+      "role": "spoke",
+      "asn": 65201,
+      "router_id": "10.255.1.2",
+      "lan": "192.168.12.0/24",
+      "comments": ""
+    },
+    {
+      "name": "spoke2",
+      "mgmt_ip": "10.2.0.13",
+      "role": "spoke",
+      "asn": 65202,
+      "router_id": "10.255.1.3",
+      "lan": "192.168.23.0/24",
+      "comments": "branch 2 - LAN renumbered via portal"
+    },
+    {
+      "name": "spoke3",
+      "mgmt_ip": "10.2.0.14",
+      "role": "spoke",
+      "asn": 65203,
+      "router_id": "10.255.1.4",
+      "lan": "192.168.13.0/24",
+      "comments": "This is B2B customer #3.  Connection to their California data center."
+    }
+  ],
+  "links": [
+    {
+      "a": "hub",
+      "a_port": 2,
+      "b": "spoke1",
+      "b_port": 2,
+      "prefix": "100.65.1.0/30"
+    },
+    {
+      "a": "hub",
+      "a_port": 3,
+      "b": "spoke2",
+      "b_port": 2,
+      "prefix": "100.65.2.0/30"
+    },
+    {
+      "a": "hub",
+      "a_port": 4,
+      "b": "spoke3",
+      "b_port": 2,
+      "prefix": "100.65.3.0/30"
+    }
+  ],
+  "tunnels": [
+    {
+      "id": 1,
+      "spoke": "spoke1",
+      "prefix": "172.17.1.0/30"
+    },
+    {
+      "id": 2,
+      "spoke": "spoke2",
+      "prefix": "172.17.2.0/30"
+    },
+    {
+      "id": 3,
+      "spoke": "spoke3",
+      "prefix": "172.17.3.0/30"
+    }
+  ],
+  "oob": {
+    "vrf": "Mgmt-vrf",
+    "gateway": "10.2.0.1",
+    "acl": "MGMT-ACCESS",
+    "prefix": "10.2.0.0/24"
+  },
+  "domain_name": "lab.local",
+  "capacity": {
+    "tunnels_per_headend": 50
+  }
+}

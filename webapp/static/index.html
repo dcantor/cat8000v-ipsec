@@ -98,7 +98,7 @@
         <div><label>Description</label><input id="vpn.description"></div>
       </div>
       <h3 style="font-size:13px;margin:14px 0 6px">Tunnels (one static IPsec VTI per spoke)</h3>
-      <table id="tunnels"><thead><tr><th>Spoke</th><th>Hub port</th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody></tbody></table>
+      <table id="tunnels"><thead><tr><th>Hub</th><th>Spoke</th><th>Hub port</th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody></tbody></table>
       <div class="hint">Hub address = first host of each /30, spoke = second. Ports are the libvirt links between the VMs and cannot be changed here.</div>
     </div>
 
@@ -196,22 +196,18 @@
         <div><label>Contact</label><input id="sp.contact" readonly></div>
         <div><label>Change ticket</label><input id="sp.change_ticket"></div>
         <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
+        <div style="grid-column:1/-1"><label>Connect to headend(s)</label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
       </div>
       <div class="hint" style="margin-top:8px">The spoke is a new Catalyst 8000v VM on this host (<span id="sp.ram"></span> MiB RAM). Its management address goes into the day-0 config; everything else is pushed by Network-as-Code after Nautobot has been updated.</div>
     </div>
     <div id="wiz-2" hidden>
       <div class="grid g3">
-        <div><label>Hub</label><input id="sp.hub" readonly></div>
-        <div><label>Hub port (free: <span id="sp.hubfree"></span>) <span class="suggest">suggested</span></label><input id="sp.hub_port" type="number" min="2"></div>
-        <div><label>Spoke WAN port</label><input id="sp.spoke_port" readonly value="2"></div>
-        <div><label>WAN point-to-point /30 <span class="suggest">suggested</span></label><input id="sp.wan_prefix"></div>
-        <div><label>Tunnel number <span class="suggest">suggested</span></label><input id="sp.tunnel_id" type="number" min="1"></div>
-        <div><label>Tunnel /30 <span class="suggest">suggested</span></label><input id="sp.tunnel_prefix"></div>
         <div><label>Router-id (Loopback0) <span class="suggest">suggested</span></label><input id="sp.router_id"></div>
         <div><label>Site LAN /24 (Loopback10) <span class="suggest">suggested</span></label><input id="sp.lan"></div>
         <div><label>AS number <span class="suggest">suggested</span></label><input id="sp.asn" type="number"></div>
       </div>
-      <div class="hint" style="margin-top:8px">Hub takes the first address of each /30, the spoke the second. Headend capacity: <span id="sp.cap"></span>.</div>
+      <table style="margin-top:12px"><thead><tr><th>Headend</th><th>Hub port <span class="suggest">suggested</span></th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody id="sp.links"></tbody></table>
+      <div class="hint" style="margin-top:8px">Hub takes the first address of each /30, the spoke the second. The same TunnelN number is used at both ends. <span id="sp.cap"></span></div>
     </div>
     <div id="wiz-3" hidden>
       <div class="review" id="wiz-review"></div>
@@ -262,7 +258,6 @@ function fill(I) {
     const v = get(I, el.id); if (v === undefined) return;
     el.value = typeof v === 'boolean' ? String(v) : v;
   });
-  const hub = I.devices.find(d => d.role === 'hub');
   const tb = $('devices').querySelector('tbody'); tb.innerHTML = '';
   I.devices.forEach((d, i) => {
     const tr = document.createElement('tr');
@@ -275,11 +270,11 @@ function fill(I) {
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
   I.tunnels.forEach((t, i) => {
-    const l = I.links.find(l => (l.a === hub.name && l.b === t.spoke) || (l.b === hub.name && l.a === t.spoke)) || {};
-    const hp = l.a === hub.name ? l.a_port : l.b_port, sp = l.a === hub.name ? l.b_port : l.a_port;
+    const l = I.links.find(l => (l.a === t.hub && l.b === t.spoke) || (l.b === t.hub && l.a === t.spoke)) || {};
+    const hp = l.a === t.hub ? l.a_port : l.b_port, sp = l.a === t.hub ? l.b_port : l.a_port;
     const li = I.links.indexOf(l);
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><span class="pill spoke" data-spoke="${t.spoke}">${t.spoke}</span></td><td><input readonly value="GigabitEthernet${hp}"></td><td><input readonly value="GigabitEthernet${sp}"></td>
+    tr.innerHTML = `<td><span class="pill hub" data-hub="${t.hub}">${t.hub}</span></td><td><span class="pill spoke" data-spoke="${t.spoke}">${t.spoke}</span></td><td><input readonly value="GigabitEthernet${hp}"></td><td><input readonly value="GigabitEthernet${sp}"></td>
       <td><input data-link="${li}" data-k="prefix" value="${l.prefix || ''}"></td><td><input data-tun="${i}" data-k="id" type="number" value="${t.id}"></td>
       <td><input data-tun="${i}" data-k="prefix" value="${t.prefix}"></td>`;
     tt.appendChild(tr);
@@ -289,6 +284,7 @@ function fill(I) {
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
     const d = I.devices[inp.dataset.dev];
     tt.querySelectorAll(`[data-spoke="${d.name}"]`).forEach(p => { p.textContent = inp.value; p.dataset.spoke = inp.value; });
+    tt.querySelectorAll(`[data-hub="${d.name}"]`).forEach(p => { p.textContent = inp.value; p.dataset.hub = inp.value; });
     d.name = inp.value;
   }));
 }
@@ -310,7 +306,7 @@ function collect() {
   });
   // hostnames may have been renamed: rewrite links/tunnels to the new names
   I.links.forEach(l => { l.a = names[l.a] || l.a; l.b = names[l.b] || l.b; });
-  I.tunnels.forEach(t => { t.spoke = names[t.spoke] || t.spoke; });
+  I.tunnels.forEach(t => { t.spoke = names[t.spoke] || t.spoke; t.hub = names[t.hub] || t.hub; });
   document.querySelectorAll('#tunnels input[data-link]').forEach(el => { I.links[el.dataset.link][el.dataset.k] = el.value.trim(); });
   document.querySelectorAll('#tunnels input[data-tun]').forEach(el => { I.tunnels[el.dataset.tun][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
   return I;
@@ -338,7 +334,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'remove') load(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove') load(); }
 }
 
 function render(r) {
@@ -374,19 +370,31 @@ $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
 // ---- add-spoke wizard -------------------------------------------------------
 let wizStep = 1, wizSpec = null;
-const SP_FIELDS = ['name', 'mgmt_ip', 'change_ticket', 'comments', 'hub', 'hub_port', 'spoke_port', 'wan_prefix', 'tunnel_id', 'tunnel_prefix', 'router_id', 'lan', 'asn'];
+const SP_FIELDS = ['name', 'mgmt_ip', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+const LINK_FIELDS = ['hub_port', 'spoke_port', 'wan_prefix', 'tunnel_id', 'tunnel_prefix'];
 async function openWizard() {
   const r = await fetch('/api/spokes/suggest'); if (!r.ok) { alert('cannot suggest a spoke: ' + (await r.text())); return; }
   wizSpec = await r.json();
   SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = wizSpec[k] ?? ''; });
   $('sp.site').value = base.site.name; $('sp.site_code').value = wizSpec.site_code; $('sp.contact').value = wizSpec.contact; $('sp.ram').textContent = wizSpec.ram_mib;
-  $('sp.hubfree').textContent = wizSpec.context.hub_ports_free.map(p => 'Gi' + p).join(', ') || 'none';
-  $('sp.cap').textContent = `${wizSpec.context.tunnels} of ${wizSpec.context.capacity} tunnels in use on ${wizSpec.context.hub}`;
+  $('sp.hubs').innerHTML = wizSpec.context.hubs.map(h => `<label style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:13px"><input type="checkbox" class="sp-hub" value="${esc(h.name)}" checked style="width:auto"> ${esc(h.name)} <span class="hint">(${h.tunnels}/${h.capacity} tunnels, free ports ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'})</span></label>`).join('');
   wizStep = 1; showWiz(); $('wiz').hidden = false;
+}
+function selectedHubs() { return [...document.querySelectorAll('.sp-hub:checked')].map(c => c.value); }
+async function refreshLinks() {
+  // re-suggest link allocations for the chosen hubs (keeps identity fields the user typed)
+  const r = await (await fetch('/api/spokes/suggest?hubs=' + encodeURIComponent(selectedHubs().join(',')))).json();
+  wizSpec.links = r.links;
+  $('sp.links').innerHTML = r.links.map((l, i) => `<tr><td><span class="pill hub">${esc(l.hub)}</span><div class="hint">free: ${l.hub_ports_free.map(p => 'Gi' + p).join(', ')}</div></td>
+    <td><input data-l="${i}" data-k="hub_port" type="number" value="${l.hub_port}"></td><td><input data-l="${i}" data-k="spoke_port" type="number" value="${l.spoke_port}"></td>
+    <td><input data-l="${i}" data-k="wan_prefix" value="${l.wan_prefix}"></td><td><input data-l="${i}" data-k="tunnel_id" type="number" value="${l.tunnel_id}"></td><td><input data-l="${i}" data-k="tunnel_prefix" value="${l.tunnel_prefix}"></td></tr>`).join('');
+  $('sp.cap').textContent = r.links.map(l => `${l.hub}: ${l.hub_tunnels + 1} of ${wizSpec.context.capacity} tunnels after`).join(' · ');
 }
 function wizCollect() {
   const spec = { ...wizSpec };
   SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) spec[k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
+  spec.links = (wizSpec.links || []).map(l => ({ ...l, spoke: spec.name }));
+  document.querySelectorAll('#sp\\.links input[data-l]').forEach(el => { spec.links[el.dataset.l][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
   return spec;
 }
 function showWiz() {
@@ -394,28 +402,31 @@ function showWiz() {
   $('wiz-back').hidden = wizStep === 1; $('wiz-next').textContent = wizStep === 3 ? 'Provision spoke' : 'Next'; $('wiz-problems').textContent = '';
 }
 async function wizNext() {
-  const spec = wizCollect();
-  const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
   if (wizStep === 1) {
-    const mine = v.problems.filter(p => /hostname|management IP|memory|intent/.test(p));
+    if (!selectedHubs().length) { $('wiz-problems').textContent = '• select at least one headend'; return; }
+    await refreshLinks();
+    const spec = wizCollect();
+    const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
+    const mine = v.problems.filter(p => /hostname|management IP|memory|intent|exists/.test(p));
     if (mine.length) { $('wiz-problems').textContent = '• ' + mine.join('\n• '); return; }
     wizStep = 2; showWiz(); return;
   }
+  const spec = wizCollect();
+  const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
   if (v.problems.length) { $('wiz-problems').textContent = '• ' + v.problems.join('\n• '); return; }
   if (wizStep === 2) {
-    const h = v.hub_changes, sp = h.spoke;
+    const h = v.hub_changes;
     $('wiz-review').innerHTML = `<div class="box"><h4>Spoke ${esc(spec.name)} (new VM, ${esc(spec.mgmt_ip)})</h4><dl>
-        <dt>WAN</dt><dd>${esc(sp.interface)} ${esc(sp.wan_ip)}</dd><dt>Tunnel</dt><dd>${esc(sp.tunnel)} ${esc(sp.tunnel_ip)} → dest ${esc(sp.tunnel_destination)}</dd>
-        <dt>Loopbacks</dt><dd>${esc(sp.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)} · neighbor ${esc(sp.bgp_neighbor)}</dd>
+        ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}</dd>`).join('')}
+        <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
         <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)})</dd>
         <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
-      <div class="box"><h4>Hub ${esc(h.hub)} (coordinated configuration)</h4><dl>
-        <dt>WAN</dt><dd>${esc(h.interface)} ${esc(h.wan_ip)} (no shutdown, cdp)</dd><dt>Tunnel</dt><dd>${esc(h.tunnel)} ${esc(h.tunnel_ip)} → dest ${esc(h.tunnel_destination)}, ipsec profile</dd>
-        <dt>eBGP</dt><dd>neighbor ${esc(h.bgp_neighbor)}</dd><dt>Nautobot</dt><dd>cable ${esc(h.interface)} ↔ ${esc(sp.interface)}, VPN tunnel ${esc(h.hub)}-${esc(spec.name)}, endpoints, peering</dd>
-        <dt>Capacity</dt><dd>${wizSpec.context.tunnels + 1} / ${wizSpec.context.capacity} tunnels after provisioning</dd></dl></div>`;
+      ${h.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)} (coordinated configuration)</h4><dl>
+        <dt>WAN</dt><dd>${esc(l.interface)} ${esc(l.wan_ip)} (no shutdown, cdp)</dd><dt>Tunnel</dt><dd>${esc(l.tunnel)} ${esc(l.tunnel_ip)} → dest ${esc(l.tunnel_destination)}, ipsec profile</dd>
+        <dt>eBGP</dt><dd>neighbor ${esc(l.bgp_neighbor)}</dd><dt>Nautobot</dt><dd>cable ${esc(l.interface)} ↔ ${esc(l.spoke.interface)}, VPN tunnel ${esc(l.hub)}-${esc(spec.name)}, endpoints, peering</dd>
+        <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after provisioning</dd></dl></div>`).join('')}`;
     wizStep = 3; showWiz(); return;
   }
-  // step 3: go
   const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'spoke', spoke: spec, options: { golden: $('opt.golden').checked, test: $('opt.test').checked } }) });
   if (!r.ok) { const e = await r.json(); $('wiz-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
   const run = await r.json(); $('wiz').hidden = true; watch(run.id);
@@ -431,12 +442,12 @@ async function openRemove(name) {
   if (r.problems.length) { $('rm-body').innerHTML = ''; $('rm-problems').textContent = '• ' + r.problems.join('\n• '); $('rm-go').disabled = true; return; }
   const d = r.details; $('rm-go').disabled = false;
   $('rm-body').innerHTML = `<div class="review"><div class="box"><h4>Spoke ${esc(d.name)} (${esc(d.mgmt_ip)})</h4><dl>
-      <dt>VM</dt><dd>powered off, then undefined</dd><dt>Nautobot</dt><dd>device, interfaces, addresses, prefixes, VPN endpoint, BGP instance, AS ${esc(d.asn)}</dd>
-      <dt>Released</dt><dd>LAN ${esc(d.lan)}, router-id ${esc(d.router_id)}, WAN ${esc(d.wan_prefix || '-')}, tunnel ${esc(d.tunnel_prefix || '-')}</dd></dl></div>
-    <div class="box"><h4>Hub ${esc(d.hub)} (coordinated clean-up)</h4><dl>
-      <dt>Tunnel</dt><dd>${esc(d.tunnel || '-')} removed (Terraform destroy)</dd><dt>WAN</dt><dd>${esc(d.hub_interface || '-')} address removed, port shut down and freed</dd>
-      <dt>eBGP</dt><dd>neighbour for AS ${esc(d.asn)} removed</dd><dt>Nautobot</dt><dd>VPN tunnel ${esc(d.hub)}-${esc(d.name)}, hub endpoint, cable, peering</dd>
-      <dt>Capacity</dt><dd>${d.tunnels_after} / ${d.capacity} tunnels after removal</dd></dl></div></div>
+      <dt>VM</dt><dd>powered off, then undefined</dd><dt>Nautobot</dt><dd>device, interfaces, addresses, prefixes, VPN endpoints, BGP instance, AS ${esc(d.asn)}</dd>
+      <dt>Released</dt><dd>LAN ${esc(d.lan)}, router-id ${esc(d.router_id)}${d.links.map(l => `, WAN ${esc(l.wan_prefix || '-')}, tunnel ${esc(l.tunnel_prefix || '-')}`).join('')}</dd></dl></div>
+    ${d.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)} (coordinated clean-up)</h4><dl>
+      <dt>Tunnel</dt><dd>${esc(l.tunnel || '-')} removed (Terraform destroy)</dd><dt>WAN</dt><dd>${esc(l.hub_interface || '-')} address removed, port shut down and freed</dd>
+      <dt>eBGP</dt><dd>neighbour for AS ${esc(d.asn)} removed</dd><dt>Nautobot</dt><dd>VPN tunnel ${esc(l.hub)}-${esc(d.name)}, hub endpoint, cable, peering</dd>
+      <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after removal</dd></dl></div>`).join('')}</div>
     <div class="hint" style="margin-top:10px">Order: power off → Nautobot clean-up → intent/lab.conf → seed/render → forget the spoke in Terraform state → plan/apply on the hub → Golden Config → tests → delete the VM.</div>`;
 }
 $('rm-cancel').onclick = () => { $('rm').hidden = true; };

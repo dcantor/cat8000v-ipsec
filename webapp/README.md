@@ -99,6 +99,18 @@ has to point at the hub's existing port.
 `lab.conf` stays the truth for VM facts (names, management IPs, console ports, wiring); the AS/LAN columns
 there only seed the intent — after the portal has edited the intent, `lab-intent.json` wins.
 
+### Multiple headends
+
+Any number of hub-role routers can exist; every tunnel is a (hub, spoke) pair with its own link, /30s and
+TunnelN number (the same number at both ends). Step 1 of the wizard has **Connect to headend(s)**
+checkboxes (one, several or all hubs); step 2 then shows one addressing row per selected hub and the
+review one "coordinated configuration" box per hub. Spokes have `SPOKE_PORTS` (2) WAN ports, one per hub.
+
+A new hub is provisioned with `POST /api/runs {"mode":"hub","hub":<GET /api/hubs/suggest>}`: VM → bootstrap →
+onboarding → one link + tunnel to every existing spoke (each spoke is re-defined and rebooted once for its new
+WAN port) → the normal pipeline. Routing between spokes then has one path per hub (eBGP picks the hub with the
+lowest router-id, the other is the backup); every hub is a headend with its own 50-tunnel capacity.
+
 ## Remove spoke (Routers table → *Remove…*)
 
 Decommissions a spoke and cleans up the hub. The dialog shows the plan (what is released on the spoke,

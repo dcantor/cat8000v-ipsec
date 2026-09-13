@@ -1,23 +1,22 @@
 *** Settings ***
-Documentation     Point-to-point IPsec VTIs (tunnel mode ipsec ipv4) between the hub and each spoke, IKEv2 with
+Documentation     Point-to-point IPsec VTIs (tunnel mode ipsec ipv4) between each hub and each of its spokes, IKEv2 with
 ...               pre-shared keys, traffic actually encrypted, no encryption of the OOB management plane.
 Resource          ../resources/common.resource
 Suite Teardown    Suite Teardown Close Connections
 
 *** Test Cases ***
 Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec profile
-    FOR    ${s}    IN    @{SPOKES}
-        ${t}=    Set Variable    ${TUNNELS}[${s}]
-        ${cfg}=    Show    ${HUB}    show run interface Tunnel${t}[id]
-        Should Contain    ${cfg}    description IPsec VTI to ${s}
+    FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${cfg}=    Show    ${t}[hub]    show run interface Tunnel${t}[id]
+        Should Contain    ${cfg}    description IPsec VTI to ${t}[spoke]
         Should Contain    ${cfg}    ip address ${t}[hub_ip] 255.255.255.252
         Should Contain    ${cfg}    tunnel source ${t}[hub_if]
         Should Contain    ${cfg}    tunnel destination ${t}[spoke_wan]
         Should Contain    ${cfg}    tunnel mode ipsec ipv4
         Should Contain    ${cfg}    tunnel protection ipsec profile ${IPSEC_PROFILE}
         Should Not Contain    ${cfg}    nhrp
-        ${cfg}=    Show    ${s}    show run interface Tunnel${t}[id]
-        Should Contain    ${cfg}    description IPsec VTI to ${HUB}
+        ${cfg}=    Show    ${t}[spoke]    show run interface Tunnel${t}[id]
+        Should Contain    ${cfg}    description IPsec VTI to ${t}[hub]
         Should Contain    ${cfg}    ip address ${t}[spoke_ip] 255.255.255.252
         Should Contain    ${cfg}    tunnel source ${t}[spoke_if]
         Should Contain    ${cfg}    tunnel destination ${t}[hub_wan]
@@ -26,25 +25,23 @@ Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec
     END
 
 Tunnels are up/up at both ends and the tunnel subnet is reachable
-    FOR    ${s}    IN    @{SPOKES}
-        ${t}=    Set Variable    ${TUNNELS}[${s}]
-        ${brief}=    Show    ${HUB}    show ip interface brief | include Tunnel${t}[id]
+    FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${brief}=    Show    ${t}[hub]    show ip interface brief | include Tunnel${t}[id]${SPACE}
         Should Match Regexp    ${brief}    Tunnel${t}[id]\\s+${t}[hub_ip]\\s+YES\\s+\\S+\\s+up\\s+up
-        ${brief}=    Show    ${s}    show ip interface brief | include Tunnel${t}[id]
+        ${brief}=    Show    ${t}[spoke]    show ip interface brief | include Tunnel${t}[id]${SPACE}
         Should Match Regexp    ${brief}    Tunnel${t}[id]\\s+${t}[spoke_ip]\\s+YES\\s+\\S+\\s+up\\s+up
-        ${p}=    Show    ${s}    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 5
+        ${p}=    Show    ${t}[spoke]    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 5
         Should Match Regexp    ${p}    Success rate is (100|80) percent
     END
 
 IKEv2 SAs are READY with the modelled proposal and PSK authentication
-    ${sa}=    Show    ${HUB}    show crypto ikev2 sa
-    FOR    ${s}    IN    @{SPOKES}
-        ${t}=    Set Variable    ${TUNNELS}[${s}]
+    FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${sa}=    Show    ${t}[hub]    show crypto ikev2 sa
         Should Match Regexp    ${sa}    (?m)^\\d+\\s+${t}[hub_wan]/500\\s+${t}[spoke_wan]/500\\s+none/none\\s+READY
-        ${ssa}=    Show    ${s}    show crypto ikev2 sa
+        Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: PSK, Auth verify: PSK
+        ${ssa}=    Show    ${t}[spoke]    show crypto ikev2 sa
         Should Match Regexp    ${ssa}    (?m)^\\d+\\s+${t}[spoke_wan]/500\\s+${t}[hub_wan]/500\\s+none/none\\s+READY
     END
-    Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: PSK, Auth verify: PSK
     FOR    ${r}    IN    @{ROUTER_NAMES}
         ${prof}=    Show    ${r}    show crypto ikev2 profile
         Should Contain    ${prof}    IKEv2 profile: ${IKEV2_PROFILE}
@@ -55,22 +52,23 @@ IKEv2 SAs are READY with the modelled proposal and PSK authentication
     END
 
 Traffic through the tunnels is encrypted with the modelled transform set
-    FOR    ${s}    IN    @{SPOKES}
-        ${t}=    Set Variable    ${TUNNELS}[${s}]
-        ${before}=    Ipsec Encaps    ${s}    Tunnel${t}[id]
-        ${p}=    Show    ${s}    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 10
+    FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${before}=    Ipsec Encaps    ${t}[spoke]    Tunnel${t}[id]
+        ${p}=    Show    ${t}[spoke]    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 10
         Should Match Regexp    ${p}    Success rate is (100|90|80) percent
         # IOS-XE refreshes the SA counters from the data plane (QFP) only every few seconds
-        Wait Until Keyword Succeeds    45s    5s    Encaps Advanced    ${s}    Tunnel${t}[id]    ${before}
-        ${sa}=    Show    ${s}    show crypto ipsec sa interface Tunnel${t}[id]
+        Wait Until Keyword Succeeds    45s    5s    Encaps Advanced    ${t}[spoke]    Tunnel${t}[id]    ${before}
+        ${sa}=    Show    ${t}[spoke]    show crypto ipsec sa interface Tunnel${t}[id]
         Should Contain    ${sa}    transform: ${ESP_TRANSFORM}
         Should Contain    ${sa}    in use settings ={Tunnel, }
     END
 
-The hub holds exactly one IKEv2 session per spoke
-    ${sess}=    Show    ${HUB}    show crypto ikev2 session | include ^Session-id
-    ${n}=    Get Line Count    ${sess}
-    Should Be Equal As Integers    ${n}    ${{ len($SPOKES) }}    msg=${sess}
+Each hub holds exactly one IKEv2 session per spoke tunnel
+    FOR    ${h}    IN    @{HUBS}
+        ${sess}=    Show    ${h}    show crypto ikev2 session | include ^Session-id
+        ${n}=    Get Line Count    ${sess}
+        Should Be Equal As Integers    ${n}    ${{ len($HUB_TUNNELS[$h]) }}    msg=${h}: ${sess}
+    END
 
 *** Keywords ***
 Encaps Advanced

@@ -13,10 +13,11 @@ def facts():
     """Current allocations from lab.conf + the intent."""
     C = intent_mod.lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "NODE_IDX", "CONSOLE_PORT")
     sc = intent_mod.scalars("OOB_GATEWAY", "HUB_PORTS", "SPOKE_PORTS", "C8000V_RAM_MIB")
-    I = intent_mod.load(); hub = next(d for d in I["devices"] if d["role"] == "hub")
+    I = intent_mod.load(); hubs = [d for d in I["devices"] if d["role"] == "hub"]
     wiring = intent_mod.wiring()
-    return {"C": C, "sc": sc, "I": I, "hub": hub, "wiring": wiring,
-            "hub_ports_used": {w["a_port"] for w in wiring if w["a"] == hub["name"]} | {w["b_port"] for w in wiring if w["b"] == hub["name"]},
+    def ports_used(n): return {w["a_port"] for w in wiring if w["a"] == n} | {w["b_port"] for w in wiring if w["b"] == n}
+    return {"C": C, "sc": sc, "I": I, "hubs": hubs, "hub": hubs[0], "wiring": wiring, "ports_used": ports_used,
+            "hub_ports": range(2, 2 + int(sc["HUB_PORTS"] or 2)), "spoke_ports": range(2, 2 + int(sc["SPOKE_PORTS"] or 2)),
             "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)}
 
 
@@ -26,35 +27,61 @@ def _next_free(cands, used):
     return None
 
 
-def suggest():
-    """Auto-allocated values for the next spoke (all editable in the wizard)."""
-    f = facts(); C, I, hub = f["C"], f["I"], f["hub"]
+def _used_prefixes(I):
+    return {ipaddress.IPv4Network(l["prefix"]) for l in I["links"]} | {ipaddress.IPv4Network(t["prefix"]) for t in I["tunnels"]}
+
+
+def suggest_links(I, f, spoke_name, hubs, spoke_ports_taken=()):
+    """One link + tunnel allocation per hub: hub port, spoke port, WAN /30, tunnel id, tunnel /30."""
+    used_pfx = _used_prefixes(I); tids = {int(t["id"]) for t in I["tunnels"]}; sports = set(spoke_ports_taken); out = []
+    for h in hubs:
+        hub_port = _next_free(f["hub_ports"], f["ports_used"](h)); spoke_port = _next_free(f["spoke_ports"], sports); sports.add(spoke_port)
+        tid = _next_free(range(1, 10000), tids); tids.add(tid)
+        wan = _next_free((ipaddress.IPv4Network(f"100.65.{k}.0/30") for k in range(1, 255)), used_pfx); used_pfx.add(wan)
+        tun = _next_free((ipaddress.IPv4Network(f"172.17.{k}.0/30") for k in range(1, 255)), used_pfx); used_pfx.add(tun)
+        out.append({"hub": h, "hub_port": hub_port, "spoke_port": spoke_port, "tunnel_id": tid, "wan_prefix": str(wan), "tunnel_prefix": str(tun),
+                    "hub_wan_ip": str(list(wan.hosts())[0]), "spoke_wan_ip": str(list(wan.hosts())[1]), "hub_tunnel_ip": str(list(tun.hosts())[0]), "spoke_tunnel_ip": str(list(tun.hosts())[1]),
+                    "hub_ports_free": sorted(set(f["hub_ports"]) - f["ports_used"](h)), "hub_tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h)})
+    return out
+
+
+def suggest_identity(I, C, role):
     idx = max(int(v) for v in C["NODE_IDX"].values()) + 1
     n = 1
-    while f"spoke{n}" in C["ROLE"] or f"spoke{n}" in {d["name"] for d in I["devices"]}: n += 1
+    while f"{role}{n}" in C["ROLE"] or f"{role}{n}" in {d["name"] for d in I["devices"]} or (role == "hub" and n == 1 and "hub" in C["ROLE"]): n += 1
     oob = ipaddress.IPv4Network(I["oob"]["prefix"]); used_ips = set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}
     mgmt_ip = _next_free((str(h) for h in list(oob.hosts())[10:]), used_ips)
-    hub_ports = range(2, 2 + int(f["sc"]["HUB_PORTS"] or 2)); hub_port = _next_free(hub_ports, f["hub_ports_used"])
-    tids = {int(t["id"]) for t in I["tunnels"]}; tid = _next_free(range(1, 10000), tids)
-    used_pfx = {ipaddress.IPv4Network(l["prefix"]) for l in I["links"]} | {ipaddress.IPv4Network(t["prefix"]) for t in I["tunnels"]}
-    wan = _next_free((ipaddress.IPv4Network(f"100.65.{k}.0/30") for k in range(1, 255)), used_pfx)
-    tun = _next_free((ipaddress.IPv4Network(f"172.17.{k}.0/30") for k in range(1, 255)), used_pfx | {wan})
     rids = {d["router_id"] for d in I["devices"]}; rid = _next_free((f"10.255.1.{k}" for k in range(1, 255)), rids)
     lans = {ipaddress.IPv4Network(d["lan"]) for d in I["devices"]}; lan = _next_free((ipaddress.IPv4Network(f"192.168.{k}.0/24") for k in range(11, 255)), lans)
-    asns = {int(d["asn"]) for d in I["devices"]}; asn = _next_free(range(int(hub["asn"]) + 1, int(hub["asn"]) + 1000), asns)
-    console = max(int(v) for v in C["CONSOLE_PORT"].values()) + 1
-    return {"name": f"spoke{n}", "mgmt_ip": mgmt_ip, "node_idx": idx, "console_port": console, "hub": hub["name"], "hub_port": hub_port, "spoke_port": 2,
-            "tunnel_id": tid, "wan_prefix": str(wan), "tunnel_prefix": str(tun), "router_id": rid, "lan": str(lan), "asn": asn, "comments": "",
-            "site_code": I["site"].get("site_code", ""), "contact": I["site"].get("contact", ""), "change_ticket": I["vpn"].get("change_ticket", ""),
-            "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
-            "context": {"hub": hub["name"], "hub_ports_free": sorted(set(hub_ports) - f["hub_ports_used"]), "tunnels": len(I["tunnels"]), "capacity": f["capacity"],
-                        "hub_wan_ip": str(list(wan.hosts())[0]) if wan else None, "spoke_wan_ip": str(list(wan.hosts())[1]) if wan else None,
-                        "hub_tunnel_ip": str(list(tun.hosts())[0]) if tun else None, "spoke_tunnel_ip": str(list(tun.hosts())[1]) if tun else None}}
+    asns = {int(d["asn"]) for d in I["devices"]}; base = min(int(d["asn"]) for d in I["devices"]); asn = _next_free(range(base + 1, base + 1000), asns)
+    return {"name": f"{role}{n}", "mgmt_ip": mgmt_ip, "node_idx": idx, "console_port": max(int(v) for v in C["CONSOLE_PORT"].values()) + 1,
+            "router_id": rid, "lan": str(lan), "asn": asn}
+
+
+def suggest(hubs=None):
+    """Auto-allocated values for the next spoke (all editable in the wizard); `hubs` = names to connect to (default: all)."""
+    f = facts(); C, I = f["C"], f["I"]
+    hub_names = [h["name"] for h in f["hubs"]]; chosen = [h for h in (hubs or hub_names) if h in hub_names]
+    ident = suggest_identity(I, C, "spoke")
+    return {**ident, "role": "spoke", "comments": "", "site_code": I["site"].get("site_code", ""), "contact": I["site"].get("contact", ""),
+            "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+            "links": suggest_links(I, f, ident["name"], chosen),
+            "context": {"hubs": [{"name": h["name"], "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"],
+                                  "ports_free": sorted(set(f["hub_ports"]) - f["ports_used"](h["name"]))} for h in f["hubs"]],
+                        "capacity": f["capacity"], "spoke_ports": list(f["spoke_ports"])}}
+
+
+def suggest_hub():
+    """A new headend: identity only; it gets a link + tunnel to every existing spoke (allocated in add_hub_links)."""
+    f = facts(); C, I = f["C"], f["I"]; ident = suggest_identity(I, C, "hub")
+    spokes = [d["name"] for d in I["devices"] if d["role"] == "spoke"]
+    return {**ident, "role": "hub", "comments": "", "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+            "connect_spokes": spokes, "context": {"spokes": spokes, "capacity": f["capacity"]}}
 
 
 def validate(spec):
-    """Problems with a spoke spec against the current lab (empty list = OK)."""
-    f = facts(); C, I, hub = f["C"], f["I"], f["hub"]; errs = []
+    """Problems with a spoke spec (with per-hub `links`) against the current lab (empty list = OK)."""
+    f = facts(); C, I = f["C"], f["I"]; errs = []
     name = spec.get("name", "")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{0,30}", name): errs.append("hostname: letters/digits/hyphen, must start with a letter")
     if name in C["ROLE"] or name in {d["name"] for d in I["devices"]}: errs.append(f"{name} already exists")
@@ -63,21 +90,6 @@ def validate(spec):
         if ip not in ipaddress.IPv4Network(I["oob"]["prefix"]): errs.append(f"management IP must be in {I['oob']['prefix']}")
         if str(ip) in set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}: errs.append(f"management IP {ip} is in use")
     except ValueError: errs.append("management IP is not an IPv4 address")
-    hub_ports = range(2, 2 + int(f["sc"]["HUB_PORTS"] or 2))
-    if int(spec.get("hub_port") or 0) not in hub_ports: errs.append(f"hub port must be Gi2..Gi{hub_ports[-1]}")
-    elif int(spec["hub_port"]) in f["hub_ports_used"]: errs.append(f"hub Gi{spec['hub_port']} is already wired")
-    if len(I["tunnels"]) + 1 > f["capacity"]: errs.append(f"headend capacity exceeded: {len(I['tunnels']) + 1} tunnels > {f['capacity']}")
-    if int(spec.get("tunnel_id") or 0) in {int(t["id"]) for t in I["tunnels"]} or not (1 <= int(spec.get("tunnel_id") or 0) <= 2147483647): errs.append("tunnel id in use or out of range")
-    used_pfx = {ipaddress.IPv4Network(l["prefix"]) for l in I["links"]} | {ipaddress.IPv4Network(t["prefix"]) for t in I["tunnels"]}
-    for k, label in (("wan_prefix", "WAN /30"), ("tunnel_prefix", "tunnel /30")):
-        try:
-            n = ipaddress.IPv4Network(spec.get(k, ""), strict=True)
-            if n.prefixlen != 30: errs.append(f"{label} must be a /30")
-            if n in used_pfx: errs.append(f"{label} {n} is in use")
-        except ValueError: errs.append(f"{label} is not a valid network")
-    try:
-        if spec.get("wan_prefix") and spec.get("tunnel_prefix") and ipaddress.IPv4Network(spec["wan_prefix"]) == ipaddress.IPv4Network(spec["tunnel_prefix"]): errs.append("WAN and tunnel prefixes must differ")
-    except ValueError: pass
     try:
         if ipaddress.IPv4Address(spec.get("router_id", "")) in {ipaddress.IPv4Address(d["router_id"]) for d in I["devices"]}: errs.append("router-id in use")
     except ValueError: errs.append("router-id is not an IPv4 address")
@@ -92,6 +104,36 @@ def validate(spec):
     if not intent_mod.INTENT_FILE.exists(): errs.append("lab-intent.json missing (run ./lab.sh intent init)")
     avail = int(re.search(r"MemAvailable:\s+(\d+)", Path("/proc/meminfo").read_text())[1]) // 1024
     if avail < int(spec.get("ram_mib") or RAM_MIB) + 1024: errs.append(f"not enough free memory for a {spec.get('ram_mib', RAM_MIB)} MiB VM ({avail} MiB available)")
+    if spec.get("role", "spoke") == "spoke":
+        errs += validate_links(spec.get("links") or [], I, f, spec.get("name", ""))
+    return errs
+
+
+def validate_links(links, I, f, name):
+    errs = []; hub_names = {h["name"] for h in f["hubs"]}
+    if not links: errs.append("connect to at least one hub")
+    if len({l.get("hub") for l in links}) != len(links): errs.append("one link per hub")
+    used_pfx = _used_prefixes(I); tids = {int(t["id"]) for t in I["tunnels"]}; sports = set()
+    for l in links:
+        h = l.get("hub")
+        if h not in hub_names: errs.append(f"{h!r} is not a hub"); continue
+        if int(l.get("hub_port") or 0) not in f["hub_ports"]: errs.append(f"{h}: hub port must be Gi{f['hub_ports'][0]}..Gi{f['hub_ports'][-1]}")
+        elif int(l["hub_port"]) in f["ports_used"](h): errs.append(f"{h} Gi{l['hub_port']} is already wired")
+        sp = int(l.get("spoke_port") or 0)
+        if sp not in f["spoke_ports"]: errs.append(f"{h}: spoke port must be Gi{f['spoke_ports'][0]}..Gi{f['spoke_ports'][-1]}")
+        elif sp in sports: errs.append(f"spoke port Gi{sp} used for two hubs")
+        sports.add(sp)
+        if sum(1 for t in I["tunnels"] if t["hub"] == h) + 1 > f["capacity"]: errs.append(f"headend capacity exceeded on {h}")
+        tid = int(l.get("tunnel_id") or 0)
+        if tid in tids or not (1 <= tid <= 2147483647): errs.append(f"{h}: tunnel id {tid} in use or out of range")
+        tids.add(tid)
+        for k, label in (("wan_prefix", "WAN /30"), ("tunnel_prefix", "tunnel /30")):
+            try:
+                n = ipaddress.IPv4Network(l.get(k, ""), strict=True)
+                if n.prefixlen != 30: errs.append(f"{h}: {label} must be a /30")
+                if n in used_pfx: errs.append(f"{h}: {label} {n} is in use")
+                used_pfx.add(n)
+            except ValueError: errs.append(f"{h}: {label} is not a valid network")
     return errs
 
 
@@ -110,16 +152,18 @@ def _replace_array(text, name, entries, multiline=False):
 
 
 def add_to_lab_conf(spec):
-    p = LAB / "lab.conf"; s = p.read_text(); n = spec["name"]
+    p = LAB / "lab.conf"; s = p.read_text(); n = spec["name"]; role = spec.get("role", "spoke")
     shutil.copy(p, LAB / "lab.conf.bak")
-    s = _replace_array(s, "ROLE", [f"[{n}]=spoke"])
+    s = _replace_array(s, "ROLE", [f"[{n}]={role}"])
     s = _replace_array(s, "MGMT_IP", [f"[{n}]={spec['mgmt_ip']}"])
     s = _replace_array(s, "BGP_AS", [f"[{n}]={spec['asn']}"])
     s = _replace_array(s, "LAN", [f"[{n}]={spec['lan']}"])
     s = _replace_array(s, "CONSOLE_PORT", [f"[{n}]={spec['console_port']}"])
     s = _replace_array(s, "NODE_IDX", [f"[{n}]={spec['node_idx']}"])
-    s = _replace_array(s, "LINKS", [f"{spec['hub']}:{spec['hub_port']} {n}:{spec['spoke_port']} {spec['wan_prefix']}"], multiline=True)
-    s = _replace_array(s, "TUNNELS", [f"{spec['tunnel_id']} {n} {spec['tunnel_prefix']}"], multiline=True)
+    links = spec.get("links") or []   # the hub is always the first (anchoring) end of a link
+    if links:
+        s = _replace_array(s, "LINKS", [f"{l['hub']}:{l['hub_port']} {l['spoke']}:{l['spoke_port']} {l['wan_prefix']}" for l in links], multiline=True)
+        s = _replace_array(s, "TUNNELS", [f"{l['tunnel_id']} {l['hub']} {l['spoke']} {l['tunnel_prefix']}" for l in links], multiline=True)
     s = _replace_array(s, "ROUTERS", [n]); s = _replace_array(s, "ALL_NODES", [n])
     p.write_text(s)
     subprocess.run(["bash", "-n", str(p)], check=True)
@@ -137,11 +181,12 @@ def write_day0(spec):
 
 def add_to_intent(spec):
     I = intent_mod.load()
-    I["devices"].append({"name": spec["name"], "mgmt_ip": spec["mgmt_ip"], "role": "spoke", "asn": int(spec["asn"]), "router_id": spec["router_id"],
+    I["devices"].append({"name": spec["name"], "mgmt_ip": spec["mgmt_ip"], "role": spec.get("role", "spoke"), "asn": int(spec["asn"]), "router_id": spec["router_id"],
                          "lan": spec["lan"], "comments": spec.get("comments", "")})
     I["devices"].sort(key=lambda d: (d["role"] != "hub", d["name"]))
-    I["links"].append({"a": spec["hub"], "a_port": int(spec["hub_port"]), "b": spec["name"], "b_port": int(spec["spoke_port"]), "prefix": spec["wan_prefix"]})
-    I["tunnels"].append({"id": int(spec["tunnel_id"]), "spoke": spec["name"], "prefix": spec["tunnel_prefix"]})
+    for l in spec.get("links") or []:
+        I["links"].append({"a": l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
+        I["tunnels"].append({"id": int(l["tunnel_id"]), "hub": l["hub"], "spoke": l["spoke"], "prefix": l["tunnel_prefix"]})
     if spec.get("change_ticket"): I["vpn"]["change_ticket"] = spec["change_ticket"]
     problems = intent_mod.validate(I)
     if problems: raise RuntimeError("intent invalid after adding the spoke: " + "; ".join(problems))
@@ -149,14 +194,30 @@ def add_to_intent(spec):
 
 
 def hub_changes(spec):
-    """What the pipeline will configure on the hub for this spoke (for the review step)."""
-    wan = list(ipaddress.IPv4Network(spec["wan_prefix"]).hosts()); tun = list(ipaddress.IPv4Network(spec["tunnel_prefix"]).hosts())
-    hub_asn = next(d["asn"] for d in intent_mod.load()["devices"] if d["name"] == spec["hub"])
-    return {"hub": spec["hub"], "interface": f"GigabitEthernet{spec['hub_port']}", "wan_ip": f"{wan[0]}/30", "tunnel": f"Tunnel{spec['tunnel_id']}", "tunnel_ip": f"{tun[0]}/30",
-            "tunnel_destination": str(wan[1]), "bgp_neighbor": f"{tun[1]} remote-as {spec['asn']}",
-            "spoke": {"interface": f"GigabitEthernet{spec['spoke_port']}", "wan_ip": f"{wan[1]}/30", "tunnel": f"Tunnel{spec['tunnel_id']}", "tunnel_ip": f"{tun[1]}/30",
-                      "tunnel_destination": str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {hub_asn}",
-                      "loopbacks": f"Loopback0 {spec['router_id']}/32, Loopback10 {str(list(ipaddress.IPv4Network(spec['lan']).hosts())[0])}/24"}}
+    """What the pipeline will configure on each hub and on the spoke (for the review step)."""
+    I = intent_mod.load(); asn_of = {d["name"]: d["asn"] for d in I["devices"]}; out = []
+    for l in spec.get("links") or []:
+        wan = list(ipaddress.IPv4Network(l["wan_prefix"]).hosts()); tun = list(ipaddress.IPv4Network(l["tunnel_prefix"]).hosts())
+        out.append({"hub": l["hub"], "interface": f"GigabitEthernet{l['hub_port']}", "wan_ip": f"{wan[0]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[0]}/30",
+                    "tunnel_destination": str(wan[1]), "bgp_neighbor": f"{tun[1]} remote-as {spec['asn']}",
+                    "spoke": {"interface": f"GigabitEthernet{l['spoke_port']}", "wan_ip": f"{wan[1]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[1]}/30",
+                              "tunnel_destination": str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {asn_of.get(l['hub'], '?')}"},
+                    "tunnels_after": sum(1 for t in I["tunnels"] if t["hub"] == l["hub"]) + 1, "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)})
+    return {"links": out, "loopbacks": f"Loopback0 {spec['router_id']}/32, Loopback10 {str(list(ipaddress.IPv4Network(spec['lan']).hosts())[0])}/24"}
+
+
+def hub_links(hub_name, spokes):
+    """Links + tunnels from a new hub to the given existing spokes (each spoke's next free port)."""
+    f = facts(); I = f["I"]; out = []
+    for sp in spokes:
+        used = f["ports_used"](sp)
+        alloc = suggest_links(I, f, sp, [hub_name])[0]; alloc["spoke_port"] = _next_free(f["spoke_ports"], used)
+        if alloc["spoke_port"] is None: raise RuntimeError(f"{sp} has no free WAN port for {hub_name}")
+        alloc["spoke"] = sp; out.append(alloc)
+        I["links"].append({"a": hub_name, "a_port": alloc["hub_port"], "b": sp, "b_port": alloc["spoke_port"], "prefix": alloc["wan_prefix"]})
+        I["tunnels"].append({"id": alloc["tunnel_id"], "hub": hub_name, "spoke": sp, "prefix": alloc["tunnel_prefix"]})
+        f["wiring"].append({"a": hub_name, "a_port": alloc["hub_port"], "b": sp, "b_port": alloc["spoke_port"]})   # so the next allocation sees the port as used
+    return out
 
 
 # ---- removal --------------------------------------------------------------------
@@ -168,13 +229,13 @@ def removal_plan(name):
     elif dev["role"] != "spoke": errs.append("only spokes can be removed")
     if name not in C["ROLE"]: errs.append(f"{name} is not a VM in lab.conf")
     if errs: return errs, None
-    link = next((l for l in I["links"] if name in (l["a"], l["b"])), None); tun = next((t for t in I["tunnels"] if t["spoke"] == name), None)
-    hub = next(d for d in I["devices"] if d["role"] == "hub")
-    hub_port = (link["a_port"] if link["a"] == hub["name"] else link["b_port"]) if link else None
-    return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "lan": dev["lan"], "router_id": dev["router_id"], "hub": hub["name"],
-                "hub_port": hub_port, "hub_interface": f"GigabitEthernet{hub_port}" if hub_port else None, "wan_prefix": link["prefix"] if link else None,
-                "tunnel_id": tun["id"] if tun else None, "tunnel": f"Tunnel{tun['id']}" if tun else None, "tunnel_prefix": tun["prefix"] if tun else None,
-                "tunnels_after": len(I["tunnels"]) - (1 if tun else 0), "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)}
+    cap = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50); links = []
+    for t in (t for t in I["tunnels"] if t["spoke"] == name):
+        link = next((l for l in I["links"] if {l["a"], l["b"]} == {t["hub"], name}), None)
+        hub_port = (link["a_port"] if link["a"] == t["hub"] else link["b_port"]) if link else None
+        links.append({"hub": t["hub"], "hub_port": hub_port, "hub_interface": f"GigabitEthernet{hub_port}" if hub_port else None, "wan_prefix": link["prefix"] if link else None,
+                      "tunnel_id": t["id"], "tunnel": f"Tunnel{t['id']}", "tunnel_prefix": t["prefix"], "tunnels_after": sum(1 for x in I["tunnels"] if x["hub"] == t["hub"]) - 1, "capacity": cap})
+    return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "lan": dev["lan"], "router_id": dev["router_id"], "links": links}
 
 
 def remove_from_intent(name):
@@ -190,7 +251,7 @@ def remove_from_lab_conf(name):
     for arr in ("ROLE", "MGMT_IP", "BGP_AS", "LAN", "CONSOLE_PORT", "NODE_IDX"):
         s = re.sub(rf"(\[{re.escape(name)}\]=\S+)\s*", "", s, count=1)
     s = re.sub(rf'^\s*"[^"\n]*\b{re.escape(name)}:\d+[^"\n]*"\n', "", s, flags=re.M)      # LINKS
-    s = re.sub(rf'^\s*"\d+ {re.escape(name)} [^"\n]*"\n', "", s, flags=re.M)               # TUNNELS
+    s = re.sub(rf'^\s*"\d+ (\S+ )?{re.escape(name)} [^"\n]*"\n', "", s, flags=re.M)         # TUNNELS (3- or 4-field)
     s = re.sub(rf"^(ROUTERS|ALL_NODES)=\((.*?)\)", lambda m: f"{m.group(1)}=({' '.join(x for x in m.group(2).split() if x != name)})", s, flags=re.M)
     p.write_text(s); subprocess.run(["bash", "-n", str(p)], check=True)
     assert name not in intent_mod.lab_conf("ROLE")["ROLE"], "lab.conf update did not take"
