@@ -54,3 +54,19 @@ re-creates that router's resources under the new name.
 `webapp/lab-webapp.service` is a systemd *user* unit (installed in `~/.config/systemd/user/`,
 enabled with `systemctl --user enable --now lab-webapp`; the user has lingering enabled so it
 starts at boot). Logs: `journalctl --user -u lab-webapp -f`.
+
+## Inventory page (`#inventory`)
+
+Reporting view of every VPN tunnel — the model from Nautobot's VPN app joined with live state
+collected over SSH from each **headend** (hub): IKEv2 SA status and age, VTI line protocol, eBGP
+session state / prefixes / up-time, ESP encaps/decaps/error counters, interface rates and last I/O,
+plus protected prefixes, crypto profile, change ticket and owner. Health = IKE READY + VTI up +
+BGP Established.
+
+**Capacity constraint**: each headend may terminate at most *N* tunnels (default 50). *N* is stored
+in Nautobot as the custom field `vpn_tunnel_capacity` on the hub device (seeded from
+`capacity.tunnels_per_headend` in the intent); the page shows used / free / utilisation per headend
+and the deploy pipeline refuses an intent that exceeds it.
+
+Live data is cached for 30 s; *Refresh live data* re-collects. *Export CSV* downloads the table
+(`GET /api/vpn-inventory.csv`; JSON at `GET /api/vpn-inventory`).

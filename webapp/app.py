@@ -16,9 +16,10 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import requests
+from inventory import Inventory, to_csv
 
 LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB / "nautobot")); import intent as intent_mod   # noqa: E402
@@ -33,6 +34,7 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
 
 app = FastAPI(title="C8000v IPsec VPN portal")
 runs, runs_lock, worker_lock = {}, threading.Lock(), threading.Lock()
+inventory_svc = None   # created lazily (needs the Nautobot token)
 
 
 def nautobot_token():
@@ -172,7 +174,7 @@ def parse_robot(path):
 # ---- API -------------------------------------------------------------------
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).resolve().parent / "static" / "index.html")
+    return FileResponse(Path(__file__).resolve().parent / "static" / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/intent")
@@ -195,6 +197,27 @@ def inventory():
         return {"devices": devs, "vpn_url": vpn_url, "ok": True}
     except Exception as e:  # noqa: BLE001
         return {"devices": [], "ok": False, "error": str(e)}
+
+
+def inv():
+    global inventory_svc
+    if inventory_svc is None:
+        inventory_svc = Inventory(NAUTOBOT_URL, NAUTOBOT_PUBLIC_URL, nautobot_token, os.environ.get("IOSXE_USERNAME", "admin"), os.environ.get("IOSXE_PASSWORD", "admin"))
+    return inventory_svc
+
+
+@app.get("/api/vpn-inventory")
+def vpn_inventory(refresh: bool = False, live: bool = True):
+    """Modelled tunnels (Nautobot) + live state from the headends + capacity; cached 30 s, ?refresh=1 to re-collect."""
+    try: return inv().get(refresh=refresh, with_live=live)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"inventory unavailable: {e}")
+
+
+@app.get("/api/vpn-inventory.csv")
+def vpn_inventory_csv(refresh: bool = False):
+    data = inv().get(refresh=refresh)
+    return PlainTextResponse(to_csv(data), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=vpn-inventory-{datetime.now():%Y%m%d-%H%M%S}.csv"})
 
 
 @app.post("/api/validate")

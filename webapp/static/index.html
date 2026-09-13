@@ -11,6 +11,16 @@
   header { background:#12203a; color:#fff; padding:14px 24px; display:flex; align-items:center; gap:16px }
   header h1 { font-size:18px; margin:0; font-weight:600 } header .sub { color:#9fb3d1; font-size:13px }
   header a { color:#9fd0ff }
+  header nav { display:flex; gap:4px; margin-left:24px } header nav a { color:#c7d2e3; text-decoration:none; padding:6px 12px; border-radius:6px; font-weight:500 }
+  header nav a.active { background:#243656; color:#fff }
+  main[hidden], section[hidden] { display:none }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px } .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:12px 14px }
+  .kpi .n { font-size:26px; font-weight:600; line-height:1.1 } .kpi .l { color:var(--muted); font-size:12px }
+  .kpi.warn .n { color:var(--warn) } .kpi.bad .n { color:var(--bad) } .kpi.ok .n { color:var(--ok) }
+  .cap { display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--line) } .cap .bar { flex:1; margin:0; height:14px } .cap .bar > div.warn { background:var(--warn) }
+  .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
+  .wide { overflow-x:auto } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
+  .num { text-align:right; font-variant-numeric:tabular-nums }
   main { display:grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap:20px; padding:20px 24px; max-width:1700px }
   main > section { min-width:0 }
   @media (max-width:1100px){ main { grid-template-columns:1fr } }
@@ -50,6 +60,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span></div>
 </header>
 <main>
@@ -141,6 +152,26 @@
   <div class="card">
     <h2>Recent runs</h2>
     <table class="runs"><thead><tr><th>Started</th><th>Mode</th><th>Status</th><th>VPN</th><th>Ticket</th><th>Tests</th></tr></thead><tbody id="runs"></tbody></table>
+  </div>
+</section>
+</main>
+
+<main id="view-inventory" hidden style="grid-template-columns:1fr">
+<section>
+  <div class="card">
+    <h2>VPN inventory <small id="inv-generated"></small>
+      <span><button id="inv-refresh">Refresh live data</button> <a href="/api/vpn-inventory.csv" style="margin-left:8px"><button type="button">Export CSV</button></a></span></h2>
+    <div class="kpis" id="inv-kpis"></div>
+  </div>
+  <div class="card">
+    <h2>Headend capacity <small>constraint: tunnels terminated per headend (custom field <code>vpn_tunnel_capacity</code> on the hub, checked at deploy time)</small></h2>
+    <div id="inv-capacity"></div>
+  </div>
+  <div class="card">
+    <h2>Tunnels <small>model from Nautobot's VPN app · live state from the headend (IKEv2 SA, VTI, eBGP, ESP counters)</small></h2>
+    <div class="wide"><table id="inv-tunnels"><thead><tr>
+      <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
+    </tr></thead><tbody></tbody></table></div>
   </div>
 </section>
 </main>
@@ -279,7 +310,52 @@ $('deploy').onclick = () => { if (confirm('Deploy the configuration to the route
 $('plan').onclick = () => start('plan');
 $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
-load(); loadRuns();
+// ---- views ----------------------------------------------------------------
+function showView() {
+  const v = (location.hash || '#provision').slice(1);
+  document.querySelector('main:not([id])').hidden = v !== 'provision';
+  $('view-inventory').hidden = v !== 'inventory';
+  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v));
+  if (v === 'inventory') loadInventory(false);
+}
+window.addEventListener('hashchange', showView);
+
+// ---- inventory --------------------------------------------------------------
+const age = s => s == null ? '' : s >= 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor(s % 86400 / 3600) + 'h' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : Math.floor(s / 60) + 'm';
+const bps = n => n == null ? '' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' Mb/s' : n >= 1e3 ? (n / 1e3).toFixed(0) + ' kb/s' : n + ' b/s';
+async function loadInventory(refresh) {
+  $('inv-generated').textContent = refresh ? 'collecting live data from the headends…' : 'loading…';
+  const r = await fetch('/api/vpn-inventory' + (refresh ? '?refresh=1' : ''));
+  if (!r.ok) { $('inv-generated').textContent = (await r.json()).detail; return; }
+  const d = await r.json(); const s = d.summary;
+  $('inv-generated').textContent = 'collected ' + new Date(d.generated * 1000).toLocaleString();
+  $('inv-kpis').innerHTML = [
+    ['VPN services', s.vpns, ''], ['Tunnels', s.tunnels, ''], ['Tunnels up', s.tunnels_up, s.tunnels_up === s.tunnels ? 'ok' : 'warn'], ['Tunnels down / degraded', s.tunnels_down, s.tunnels_down ? 'bad' : 'ok'],
+    ['Headends', s.headends, ''], ['Total capacity', s.capacity, ''], ['Free tunnel slots', s.free, s.free === 0 ? 'bad' : (s.free <= 5 ? 'warn' : 'ok')]
+  ].map(([l, n, c]) => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  $('inv-capacity').innerHTML = d.headends.map(h => {
+    const pct = h.capacity ? Math.min(100, 100 * h.tunnels / h.capacity) : 0, cls = pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
+    return `<div class="cap"><div style="width:220px"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b><div class="hint">${esc(h.location || '')} · ${esc(h.mgmt_ip || '')}${h.live && h.live.error ? '<div class="msg">live: ' + esc(h.live.error) + '</div>' : ''}</div></div>
+      <div class="bar"><div class="${cls}" style="width:${pct}%"></div></div>
+      <div style="width:260px"><b>${h.tunnels} / ${h.capacity}</b> tunnels (${h.utilisation}% used) · ${h.free} free · ${h.tunnels_up} up</div></div>`; }).join('') || '<div class="hint">no headends</div>';
+  $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
+    <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
+    <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
+    <td>${esc(t.vpn)}</td><td>${esc(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
+    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${esc(t.spoke || '')}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_site || '')}</td>
+    <td>${esc(t.headend_tunnel_ip)}<div class="hint">${esc(t.spoke_tunnel_ip)}</div></td>
+    <td>${esc(t.encapsulation || '')}<div class="hint">${esc(t.profile || '')}: ${esc(t.ike)}, ${esc(t.ipsec)}, DPD ${esc(t.dpd)}</div></td>
+    <td class="${l.ike_status === 'READY' ? 'test-pass' : 'test-fail'}">${esc(l.ike_status || '')}</td><td>${age(l.ike_active_s)}</td>
+    <td class="${l.line_protocol === 'up' ? 'test-pass' : 'test-fail'}">${esc(l.line_protocol || '')}</td>
+    <td>${/^\d+$/.test(l.bgp_state || '') ? `<span class="test-pass">Established</span> · ${l.bgp_state} pfx` : `<span class="test-fail">${esc(l.bgp_state || 'no session')}</span>`}<div class="hint">${esc(l.bgp_updown || '')}</div></td>
+    <td class="num">${l.encaps ?? ''}</td><td class="num">${l.decaps ?? ''}</td><td class="num ${(l.send_errors || l.recv_errors) ? 'test-fail' : ''}">${l.send_errors ?? ''} / ${l.recv_errors ?? ''}</td>
+    <td>${bps(l.in_rate_bps)} / ${bps(l.out_rate_bps)}</td><td>${esc(l.last_input || '')} / ${esc(l.last_output || '')}</td>
+    <td>${(t.protected_prefixes || []).map(esc).join('<br>')}</td><td>${esc(t.change_ticket || '')}<div class="hint">${esc(t.owner || '')}</div></td>
+    <td>${esc(t.model_status || '')}<div class="hint">${t.last_updated ? new Date(t.last_updated).toLocaleDateString() : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="21" class="hint">no tunnels modelled</td></tr>';
+}
+$('inv-refresh').onclick = () => loadInventory(true);
+
+load(); loadRuns(); showView();
 </script>
 </body>
 </html>

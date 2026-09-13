@@ -51,6 +51,7 @@ def from_lab_conf():
         "devices": devices, "links": links, "tunnels": tunnels,
         "oob": {"vrf": "Mgmt-vrf", "gateway": "10.2.0.1", "acl": "MGMT-ACCESS", "prefix": "10.2.0.0/24"},
         "domain_name": "lab.local",
+        "capacity": {"tunnels_per_headend": 50},
     }
 
 
@@ -106,6 +107,8 @@ def validate(intent):
     ids = [t.get("id") for t in intent.get("tunnels") or []]
     if len(set(ids)) != len(ids): errs.append("tunnel ids must be unique")
     if {t.get("spoke") for t in intent.get("tunnels") or []} != spokes: errs.append(f"exactly one tunnel per spoke is required ({sorted(spokes)})")
+    cap = int((intent.get("capacity") or {}).get("tunnels_per_headend") or 50)
+    if len(intent.get("tunnels") or []) > cap: errs.append(f"headend capacity exceeded: {len(intent['tunnels'])} tunnels > {cap} per headend")
     for t in intent.get("tunnels") or []:
         if not (1 <= int(t.get("id") or 0) <= 2147483647): errs.append(f"tunnel to {t.get('spoke')}: bad id")
         try:

@@ -75,6 +75,10 @@ tag_adv = get_or_create(nb.extras.tags, {"name": "bgp:advertise"}, color="ff5722
 cf = {c.key: c for c in nb.extras.custom_fields.all()}
 for key, label, ctypes in (("site_code", "Site code", ["dcim.location"]), ("contact", "Contact", ["dcim.location", "dcim.device"])):
     if key not in cf: cf[key] = nb.extras.custom_fields.create(key=key, label=label, type="text", content_types=ctypes, grouping="Metadata"); created.append(f"custom-field:{key}")
+if "vpn_tunnel_capacity" not in cf:   # the headend constraint: how many tunnels a hub may terminate (inventory page + deploy-time check)
+    cf["vpn_tunnel_capacity"] = nb.extras.custom_fields.create(key="vpn_tunnel_capacity", label="VPN tunnel capacity", type="integer", content_types=["dcim.device"],
+                                                               grouping="VPN", description="Maximum IPsec tunnels this headend may terminate"); created.append("custom-field:vpn_tunnel_capacity")
+CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 ensure(site, description=I["site"]["description"]); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
 
 # VPN model: Nautobot's core "vpn" app (3.2+). Phase 1 / Phase 2 policies -> profile -> VPN -> tunnels with
@@ -155,7 +159,7 @@ for r in ROUTERS:
     d = DEV[r]
     dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
     ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""))
-    ensure_cf(dev, contact=I["site"]["contact"])
+    ensure_cf(dev, contact=I["site"]["contact"], **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
     idx = NODES[d["mgmt_ip"]]["idx"]
