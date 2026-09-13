@@ -137,3 +137,18 @@ Every step is idempotent, so a failed run can simply be started again.
 - After an interface deletion or a reload IOS-XE re-syncs its YANG datastore and elides default values
   (`ip ssh version 2`, vty `exec-timeout 10 0`, the transform-set key size…). Default-valued attributes were
   removed from the NAC baseline, and the apply step re-plans and re-asserts once if drift remains.
+
+### Topology map
+
+The Inventory page starts with a rendered topology: hub-role routers on the top row, spokes below, one
+curved line per IPsec tunnel coloured by live health (green up / amber degraded / red down / grey no
+data), labelled `TunnelN · subnet`; hovering a line shows ports, addresses, IKE/VTI/BGP state and ESP
+counters, clicking a node or a line opens the object in Nautobot. It is plain SVG generated in the browser
+from `GET /api/vpn-inventory` (which now also returns the location's `devices`).
+
+### Resuming runs
+
+A failed or interrupted run (the portal was restarted while it ran — runs found "running" at start-up are
+marked *interrupted*) shows **Resume from the failed step**: a new run keeps the successful steps and redoes
+the rest (`POST /api/runs/<id>/resume`). Use `webapp/restart.sh` to restart the service — it refuses while a
+run is in progress.

@@ -21,6 +21,9 @@ iosxe:
   - name: mss_hub2_tunnel6
     type: cli
     content: "interface Tunnel6\n ip tcp adjust-mss 1360\n"
+  - name: mss_hub2_tunnel7
+    type: cli
+    content: "interface Tunnel7\n ip tcp adjust-mss 1360\n"
   - name: mss_spoke1_tunnel1
     type: cli
     content: "interface Tunnel1\n ip tcp adjust-mss 1360\n"
@@ -39,6 +42,9 @@ iosxe:
   - name: mss_spoke3_tunnel6
     type: cli
     content: "interface Tunnel6\n ip tcp adjust-mss 1360\n"
+  - name: mss_spoke4_tunnel7
+    type: cli
+    content: "interface Tunnel7\n ip tcp adjust-mss 1360\n"
   devices:
   - name: hub
     host: 10.2.0.11
@@ -216,6 +222,7 @@ iosxe:
     - mss_hub2_tunnel4
     - mss_hub2_tunnel5
     - mss_hub2_tunnel6
+    - mss_hub2_tunnel7
     variables:
       router_id: 10.255.1.5
       bgp_asn: 65204
@@ -291,7 +298,12 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '5'
-          shutdown: true
+          description: WAN to spoke4 Gi2
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.7.1
+            address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '6'
           shutdown: true
@@ -346,6 +358,16 @@ iosxe:
           tunnel_destination_ipv4: 100.65.6.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
+        - name: '7'
+          description: IPsec VTI to spoke4
+          ipv4:
+            address: 172.17.7.1
+            address_mask: 255.255.255.252
+          ip_mtu: 1400
+          tunnel_source: GigabitEthernet5
+          tunnel_destination_ipv4: 100.65.7.2
+          tunnel_mode_ipsec_ipv4: true
+          tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
         bgp:
           as_number: 65204
@@ -361,6 +383,9 @@ iosxe:
           - ip: 172.17.6.2
             remote_as: 65203
             description: eBGP spoke3 (Tunnel6)
+          - ip: 172.17.7.2
+            remote_as: 65205
+            description: eBGP spoke4 (Tunnel7)
           address_family:
             ipv4_unicast:
               neighbors:
@@ -369,6 +394,8 @@ iosxe:
               - ip: 172.17.5.2
                 activate: true
               - ip: 172.17.6.2
+                activate: true
+              - ip: 172.17.7.2
                 activate: true
               networks:
               - network: 10.255.1.5
@@ -758,3 +785,110 @@ iosxe:
               - network: 10.255.1.4
                 mask: 255.255.255.255
               - network: 192.168.13.0
+  - name: spoke4
+    host: 10.2.0.16
+    protocol: restconf
+    device_groups:
+    - IPSEC_VPN
+    templates:
+    - mss_spoke4_tunnel7
+    variables:
+      router_id: 10.255.1.6
+      bgp_asn: 65205
+    configuration:
+      system:
+        hostname: spoke4
+        ip_domain_name: lab.local
+      crypto:
+        ikev2:
+          proposals:
+          - name: VPN-PROP
+            encryption:
+            - aes_cbc_256
+            integrity:
+            - sha256
+            group:
+            - '14'
+          policies:
+          - name: VPN-POL
+            proposals:
+            - VPN-PROP
+          keyrings:
+          - name: VPN-KEYRING
+            peers:
+            - name: ANY
+              ipv4_address: 0.0.0.0
+              ipv4_mask: 0.0.0.0
+              pre_shared_key: ${vpn_psk}
+          profiles:
+          - name: VPN-IKEV2
+            match_identity_remote_ipv4_addresses:
+            - address: 0.0.0.0
+            authentication_local_pre_share: true
+            authentication_remote_pre_share: true
+            keyring_local: VPN-KEYRING
+            dpd_interval: 20
+            dpd_retry: 3
+            dpd_query: on-demand
+        ipsec_transform_sets:
+        - name: VPN-TS
+          esp: esp-256-aes
+          esp_hmac: esp-sha256-hmac
+        ipsec_profiles:
+        - name: VPN-IPSEC
+          set_transform_set:
+          - VPN-TS
+          set_ikev2_profile: VPN-IKEV2
+      interfaces:
+        ethernets:
+        - type: GigabitEthernet
+          id: '2'
+          description: WAN to hub2 Gi5
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 100.65.7.2
+            address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '3'
+          shutdown: true
+        loopbacks:
+        - id: 0
+          description: Router ID
+          ipv4:
+            address: 10.255.1.6
+            address_mask: 255.255.255.255
+        - id: 10
+          description: site LAN
+          ipv4:
+            address: 192.168.15.1
+            address_mask: 255.255.255.0
+        tunnels:
+        - name: '7'
+          description: IPsec VTI to hub2
+          ipv4:
+            address: 172.17.7.2
+            address_mask: 255.255.255.252
+          ip_mtu: 1400
+          tunnel_source: GigabitEthernet2
+          tunnel_destination_ipv4: 100.65.7.1
+          tunnel_mode_ipsec_ipv4: true
+          tunnel_protection_ipsec_profile: VPN-IPSEC
+      routing:
+        bgp:
+          as_number: 65205
+          router_id: 10.255.1.6
+          log_neighbor_changes: true
+          neighbors:
+          - ip: 172.17.7.1
+            remote_as: 65204
+            description: eBGP hub2 (Tunnel7)
+          address_family:
+            ipv4_unicast:
+              neighbors:
+              - ip: 172.17.7.1
+                activate: true
+              networks:
+              - network: 10.255.1.6
+                mask: 255.255.255.255
+              - network: 192.168.15.0

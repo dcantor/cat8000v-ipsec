@@ -29,6 +29,24 @@ class Inventory:
         self._cache, self._lock = None, threading.Lock()
 
     # ---- Nautobot ----------------------------------------------------------
+    def devices(self):
+        """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name }
+                 bgp_routing_instances { autonomous_system { asn } router_id { address } }
+                 interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
+        import sys; from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "nautobot")); import intent as intent_mod
+        q = q % intent_mod.load()["site"]["name"]
+        r = requests.post(f"{self.url}/api/graphql/", json={"query": q}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60); r.raise_for_status()
+        out = []
+        for d in r.json()["data"]["devices"]:
+            ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
+            out.append({"name": d["name"], "role": "hub" if d["role"]["name"] == "vpn-hub" else "spoke", "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
+                        "site": (d["location"] or {}).get("name"), "serial": d["serial"], "asn": (ri.get("autonomous_system") or {}).get("asn"),
+                        "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
+                        "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
+        return sorted(out, key=lambda d: (d["role"] != "hub", d["name"]))
+
     def model(self):
         r = requests.post(f"{self.url}/api/graphql/", json={"query": QUERY}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60)
         r.raise_for_status(); data = r.json()
@@ -64,7 +82,7 @@ class Inventory:
                     "live": None})
         for h in headends.values():
             h["free"] = max(h["capacity"] - h["tunnels"], 0); h["utilisation"] = round(100 * h["tunnels"] / h["capacity"], 1) if h["capacity"] else None
-        return {"tunnels": sorted(tunnels, key=lambda x: (x["headend"], int(x["tunnel_id"] or 0))), "headends": sorted(headends.values(), key=lambda h: h["name"]),
+        return {"tunnels": sorted(tunnels, key=lambda x: (x["headend"], int(x["tunnel_id"] or 0))), "headends": sorted(headends.values(), key=lambda h: h["name"]), "devices": self.devices(),
                 "vpns": [{"name": v["name"], "status": (v["status"] or {}).get("name"), "tunnels": len(v["vpn_tunnels"]), "profile": (v["vpn_profile"] or {}).get("name"),
                           "url": f"{self.public_url}/vpn/vpns/{v['id']}/"} for v in data["data"]["vpns"]]}
 

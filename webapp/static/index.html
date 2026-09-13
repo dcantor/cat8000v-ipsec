@@ -21,6 +21,11 @@
   .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
   .wide { overflow-x:auto } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
   .num { text-align:right; font-variant-numeric:tabular-nums }
+  .topo { font:12px system-ui,sans-serif } .topo .node rect { fill:#fff; stroke:#94a3b8; stroke-width:1.2; rx:8 } .topo .node.hub rect { stroke:#9d174d; fill:#fff5f8 } .topo .node.spoke rect { stroke:#1e40af; fill:#f5f8ff }
+  .topo .node text { fill:var(--ink) } .topo .node .nm { font-weight:600; font-size:13px } .topo .node .sub { fill:var(--muted); font-size:11px }
+  .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:#cbd5e1; stroke-dasharray:6 4 }
+  .topo .edge:hover { stroke-width:4 } .topo .elabel { font-size:10px; fill:#334155 } .topo .elabel rect { fill:#fff; stroke:var(--line); rx:3 }
+  .topo a { cursor:pointer }
   main { display:grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap:20px; padding:20px 24px; max-width:1700px }
   main > section { min-width:0 }
   @media (max-width:1100px){ main { grid-template-columns:1fr } }
@@ -47,7 +52,7 @@
   @keyframes pulse { 50% { opacity:.3 } }
   .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
   pre.log { background:#0f172a; color:#d1e3ff; padding:10px; border-radius:6px; max-height:360px; overflow:auto; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
-  .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed { color:var(--bad) } .status.running, .status.queued { color:var(--run) }
+  .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed, .status.interrupted { color:var(--bad) } .status.running, .status.queued { color:var(--run) }
   .test-pass { color:var(--ok); font-weight:600 } .test-fail { color:var(--bad); font-weight:600 }
   .msg { color:var(--bad); font-size:12px; white-space:pre-wrap }
   .bar { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin:6px 0 } .bar > div { height:100%; background:var(--ok) }
@@ -169,6 +174,11 @@
     <h2>VPN inventory <small id="inv-generated"></small>
       <span><button id="inv-refresh">Refresh live data</button> <a href="/api/vpn-inventory.csv" style="margin-left:8px"><button type="button">Export CSV</button></a></span></h2>
     <div class="kpis" id="inv-kpis"></div>
+  </div>
+  <div class="card">
+    <h2>Topology <small>hubs and spokes from Nautobot · one line per IPsec tunnel, coloured by live health · click a node or a tunnel to open it in Nautobot</small>
+      <span class="hint"><span class="health up"></span>up <span class="health degraded"></span>degraded <span class="health down"></span>down <span class="health"></span>no data</span></h2>
+    <div id="inv-topo" style="overflow-x:auto"></div>
   </div>
   <div class="card">
     <h2>Headend capacity <small>constraint: tunnels terminated per headend (custom field <code>vpn_tunnel_capacity</code> on the hub, checked at deploy time)</small></h2>
@@ -339,7 +349,7 @@ async function poll() {
 
 function render(r) {
   $('run-id').textContent = r.id;
-  $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode} · started ${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '');
+  $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode}${r.spoke ? ' ' + esc(r.spoke.name || '') : ''} · started ${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}${r.resume_of ? ' · resumed from ' + esc(r.resume_of) : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '') + ((r.status === 'failed' || r.status === 'interrupted') ? `<div style="margin-top:6px"><button type="button" onclick="resumeRun('${r.id}')">Resume from the failed step</button></div>` : '');
   $('steps').innerHTML = r.steps.map(s => `<li><span class="dot ${s.status}"></span><div class="t">${s.title}<div class="s">${esc(s.summary || '')}</div></div><span class="d">${s.status}${s.started ? ' · ' + dur(s.started, s.finished || Date.now() / 1000) : ''}</span></li>`).join('');
   if (r.log && r.log.length) {
     const el = $('log'); const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -363,6 +373,11 @@ async function loadRuns() {
   $('runs').innerHTML = rs.map(r => `<tr><td><a onclick="watch('${r.id}')">${new Date(r.started * 1000).toLocaleString()}</a></td><td>${r.mode}</td><td class="status ${r.status}">${r.status}</td><td>${esc(r.vpn || '')}</td><td>${esc(r.change_ticket || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">none yet</td></tr>';
 }
 
+async function resumeRun(id) {
+  const r = await fetch(`/api/runs/${id}/resume`, { method: 'POST' });
+  if (!r.ok) { alert((await r.json()).detail); return; }
+  watch((await r.json()).id);
+}
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 $('deploy').onclick = () => { if (confirm('Deploy the configuration to the routers via Nautobot → NAC → Terraform?')) start('deploy'); };
 $('plan').onclick = () => start('plan');
@@ -480,6 +495,7 @@ async function loadInventory(refresh) {
     ['VPN services', s.vpns, ''], ['Tunnels', s.tunnels, ''], ['Tunnels up', s.tunnels_up, s.tunnels_up === s.tunnels ? 'ok' : 'warn'], ['Tunnels down / degraded', s.tunnels_down, s.tunnels_down ? 'bad' : 'ok'],
     ['Headends', s.headends, ''], ['Total capacity', s.capacity, ''], ['Free tunnel slots', s.free, s.free === 0 ? 'bad' : (s.free <= 5 ? 'warn' : 'ok')]
   ].map(([l, n, c]) => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  renderTopology(d);
   $('inv-capacity').innerHTML = d.headends.map(h => {
     const pct = h.capacity ? Math.min(100, 100 * h.tunnels / h.capacity) : 0, cls = pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
     return `<div class="cap"><div style="width:220px"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b><div class="hint">${esc(h.location || '')} · ${esc(h.mgmt_ip || '')}${h.live && h.live.error ? '<div class="msg">live: ' + esc(h.live.error) + '</div>' : ''}</div></div>
@@ -501,6 +517,36 @@ async function loadInventory(refresh) {
     <td>${esc(t.model_status || '')}<div class="hint">${t.last_updated ? new Date(t.last_updated).toLocaleDateString() : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="21" class="hint">no tunnels modelled</td></tr>';
 }
 $('inv-refresh').onclick = () => loadInventory(true);
+
+function renderTopology(d) {
+  const hubs = d.devices.filter(x => x.role === 'hub'), spokes = d.devices.filter(x => x.role === 'spoke');
+  const W = Math.max(760, 200 * Math.max(hubs.length, spokes.length) + 80), NW = 168, NH = 66, TOP = 40, BOT = 360, H = BOT + NH + 30;
+  const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
+  place(hubs, TOP); place(spokes, BOT);
+  const node = n => { const p = pos[n.name]; return `<a href="${n.url}" target="_blank"><g class="node ${n.role}" transform="translate(${p.x},${p.y})">
+      <rect width="${NW}" height="${NH}"></rect><text class="nm" x="10" y="20">${esc(n.name)}</text><text class="sub" x="${NW - 10}" y="20" text-anchor="end">${n.role}</text>
+      <text class="sub" x="10" y="37">${esc(n.mgmt_ip || '')} · AS ${esc(n.asn ?? '?')}</text><text class="sub" x="10" y="53">LAN ${esc(n.lan || '-')} · ${esc(n.serial || '')}</text></g></a>`; };
+  // edges: one per tunnel, hub bottom-centre -> spoke top-centre; spread the start/end points so parallel tunnels stay readable
+  const byHub = {}, bySpoke = {}; d.tunnels.forEach(t => { (byHub[t.headend] = byHub[t.headend] || []).push(t); (bySpoke[t.spoke] = bySpoke[t.spoke] || []).push(t); });
+  const edges = d.tunnels.map(t => {
+    const ph = pos[t.headend], ps = pos[t.spoke]; if (!ph || !ps) return '';
+    const hi = byHub[t.headend].indexOf(t), hn = byHub[t.headend].length, si = bySpoke[t.spoke].indexOf(t), sn = bySpoke[t.spoke].length;
+    const x1 = ph.x + NW * (hi + 1) / (hn + 1), y1 = ph.y + NH, x2 = ps.x + NW * (si + 1) / (sn + 1), y2 = ps.y;
+    const my = (y1 + y2) / 2, l = t.live || {}, cls = l.health || 'none';
+    const subnet = (t.headend_tunnel_ip || '').replace(/\.(\d+)\/30$/, (m, o) => '.' + (o - 1) + '/30');
+    const label = `Tunnel${t.tunnel_id} · ${subnet}`;
+    const tip = `${t.name}: ${t.headend} ${t.headend_if} (${t.headend_src_ip}) → ${t.spoke} ${t.spoke_if} (${t.spoke_src_ip})\nTunnel ${t.headend_tunnel_ip} / ${t.spoke_tunnel_ip}\nIKE ${l.ike_status || '?'} · VTI ${l.line_protocol || '?'} · BGP ${/^\d+$/.test(l.bgp_state || '') ? 'Established (' + l.bgp_state + ' pfx)' : (l.bgp_state || '?')}\nESP ${l.encaps ?? '?'} / ${l.decaps ?? '?'} pkts`;
+    // label at a point along the cubic curve, staggered per tunnel so neighbouring labels don't overlap
+    const idx = d.tunnels.indexOf(t), f = 0.22 + 0.56 * ((idx % 4) / 3);
+    const bez = (a, c1, c2, b, u) => (1 - u) ** 3 * a + 3 * (1 - u) ** 2 * u * c1 + 3 * (1 - u) * u ** 2 * c2 + u ** 3 * b;
+    const lx = bez(x1, x1, x2, x2, f), ly = bez(y1, my, my, y2, f);
+    return `<a href="${t.url}" target="_blank"><path class="edge ${cls}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(tip)}</title></path>
+      <g class="elabel" transform="translate(${lx},${ly})"><rect x="-64" y="-9" width="128" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
+  }).join('');
+  $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <text x="12" y="${TOP - 12}" class="sub" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 12}" fill="#6b7684" font-size="11">spokes</text>
+    ${edges}${hubs.map(node).join('')}${spokes.map(node).join('')}</svg>`;
+}
 
 load(); loadRuns(); showView();
 </script>

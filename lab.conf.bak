@@ -11,25 +11,31 @@ OOB_NET="ipsec-oob"
 OOB_GATEWAY="10.2.0.1"
 
 # hub with one point-to-point WAN link per spoke (UDP tunnels between the VMs, no shared segment)
-declare -A ROLE=(    [hub]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke )
-declare -A MGMT_IP=( [hub]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 )
-declare -A BGP_AS=(  [hub]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 )
-declare -A LAN=(     [hub]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 )
+declare -A ROLE=(    [hub]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke [hub2]=hub )
+declare -A MGMT_IP=( [hub]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 [hub2]=10.2.0.15 )
+declare -A BGP_AS=(  [hub]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 [hub2]=65204 )
+declare -A LAN=(     [hub]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 [hub2]=192.168.14.0/24 )
 # WAN links: "node:port node:port  prefix"  (port = GigabitEthernet number); first end gets .1, second .2
 LINKS=(
   "hub:2 spoke1:2 100.65.1.0/30"
   "hub:3 spoke2:2 100.65.2.0/30"
   "hub:4 spoke3:2 100.65.3.0/30"
+  "hub2:2 spoke1:3 100.65.4.0/30"
+  "hub2:3 spoke2:3 100.65.5.0/30"
+  "hub2:4 spoke3:3 100.65.6.0/30"
 )
 # IPsec VTI tunnels over those links: "hub-tunnel spoke tunnel-prefix"
 TUNNELS=(
-  "1 spoke1 172.17.1.0/30"
-  "2 spoke2 172.17.2.0/30"
-  "3 spoke3 172.17.3.0/30"
+  "1 hub spoke1 172.17.1.0/30"
+  "2 hub spoke2 172.17.2.0/30"
+  "3 hub spoke3 172.17.3.0/30"
+  "4 hub2 spoke1 172.17.4.0/30"
+  "5 hub2 spoke2 172.17.5.0/30"
+  "6 hub2 spoke3 172.17.6.0/30"
 )
 
-declare -A CONSOLE_PORT=( [hub]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 )
-declare -A NODE_IDX=( [hub]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
+declare -A CONSOLE_PORT=( [hub]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [hub2]=5205 )
+declare -A NODE_IDX=( [hub]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 [hub2]=5 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
 MAC_OUI="52:54:00:c7"
 UDP_BASE=22000
 # spoke-facing ports: the hub has Gi2..Gi(1+HUB_PORTS) so spokes can be added without touching the hub VM;
@@ -37,5 +43,5 @@ UDP_BASE=22000
 HUB_PORTS=8
 SPOKE_PORTS=2
 
-ROUTERS=(hub spoke1 spoke2 spoke3 )
-ALL_NODES=(hub spoke1 spoke2 spoke3 )
+ROUTERS=(hub spoke1 spoke2 spoke3 hub2 )
+ALL_NODES=(hub spoke1 spoke2 spoke3 hub2 )

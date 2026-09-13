@@ -1,0 +1,296 @@
+{
+ "id": "2026-09-13_13-02-55-14a3",
+ "mode": "spoke",
+ "status": "failed",
+ "started": 1789318975.0461774,
+ "finished": 1789319988.1319168,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1789318975.0467303,
+   "finished": 1789318975.0749779,
+   "summary": "spoke4 (10.2.0.16), AS 65205: hub2 GigabitEthernet5 / Tunnel7"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "success",
+   "started": 1789318975.0752249,
+   "finished": 1789318975.0890782,
+   "summary": "lab.conf updated (hub2:5 <-> spoke4:2), nodes/spoke4/iosxe_config.txt written"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "success",
+   "started": 1789318975.089265,
+   "finished": 1789318976.6891944,
+   "summary": "VM spoke4 defined and started (console 127.0.0.1:5206)"
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "success",
+   "started": 1789318976.6895661,
+   "finished": 1789319850.7500677,
+   "summary": "spoke4 reachable: ssh admin@10.2.0.16, RESTCONF up"
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "success",
+   "started": 1789319850.750428,
+   "finished": 1789319892.751206,
+   "summary": "spoke4 discovered by Nautobot (Sync Devices From Network)"
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "success",
+   "started": 1789319892.7515738,
+   "finished": 1789319892.7723362,
+   "summary": "intent now has 6 devices / 7 tunnels; hub2 gets GigabitEthernet5 100.65.7.1/30, Tunnel7, neighbor 172.17.7.2 remote-as 65205"
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "failed",
+   "started": 1789319892.772576,
+   "finished": 1789319988.1318974,
+   "summary": "Nautobot seed failed (rc=-15)"
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "Nautobot seed failed (rc=-15)",
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "hub2",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke4",
+  "mgmt_ip": "10.2.0.16",
+  "node_idx": 6,
+  "console_port": 5206,
+  "router_id": "10.255.1.6",
+  "lan": "192.168.15.0/24",
+  "asn": 65205,
+  "role": "spoke",
+  "comments": "",
+  "site_code": "LAB-IPSEC",
+  "contact": "noc@lab.local",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "links": [
+   {
+    "hub": "hub2",
+    "hub_port": 5,
+    "spoke_port": 2,
+    "tunnel_id": 7,
+    "wan_prefix": "100.65.7.0/30",
+    "tunnel_prefix": "172.17.7.0/30",
+    "hub_wan_ip": "100.65.7.1",
+    "spoke_wan_ip": "100.65.7.2",
+    "hub_tunnel_ip": "172.17.7.1",
+    "spoke_tunnel_ip": "172.17.7.2",
+    "hub_ports_free": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "hub_tunnels": 3,
+    "spoke": "spoke4"
+   }
+  ],
+  "context": {
+   "hubs": [
+    {
+     "name": "hub",
+     "tunnels": 3,
+     "capacity": 50,
+     "ports_free": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    },
+    {
+     "name": "hub2",
+     "tunnels": 3,
+     "capacity": 50,
+     "ports_free": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   ],
+   "capacity": 50,
+   "spoke_ports": [
+    2,
+    3
+   ]
+  }
+ },
+ "log": [
+  {
+   "t": 1789318975.0742812,
+   "line": "spoke4 (10.2.0.16), AS 65205: hub2 GigabitEthernet5 / Tunnel7"
+  },
+  {
+   "t": 1789318975.074974,
+   "line": "hub2 will get: GigabitEthernet5 100.65.7.1/30, Tunnel7 172.17.7.1/30 -> 100.65.7.2, neighbor 172.17.7.2 remote-as 65205"
+  },
+  {
+   "t": 1789318975.0890749,
+   "line": "lab.conf updated (hub2:5 <-> spoke4:2), nodes/spoke4/iosxe_config.txt written"
+  },
+  {
+   "t": 1789318975.0895886,
+   "line": "$ ./lab.sh up spoke4"
+  },
+  {
+   "t": 1789318975.2778199,
+   "line": "[spoke4] creating overlay disk on c8000v-universalk9_16G_serial.17.15.06.qcow2"
+  },
+  {
+   "t": 1789318975.2896705,
+   "line": "[spoke4] building day-0 config ISO"
+  },
+  {
+   "t": 1789318976.6877239,
+   "line": "[spoke4] started (console: 127.0.0.1:5206)"
+  },
+  {
+   "t": 1789318976.6898224,
+   "line": "this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF"
+  },
+  {
+   "t": 1789318976.6898277,
+   "line": "$ ./lab.sh bootstrap spoke4"
+  },
+  {
+   "t": 1789318976.7249796,
+   "line": "[spoke4] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
+  },
+  {
+   "t": 1789319344.4442668,
+   "line": "[spoke4] applying config + generating SSH keys"
+  },
+  {
+   "t": 1789319362.6685905,
+   "line": "[spoke4] license boot level not active yet: reloading once"
+  },
+  {
+   "t": 1789319850.7484226,
+   "line": "[spoke4] ready: ssh admin@10.2.0.16 (admin), RESTCONF up"
+  },
+  {
+   "t": 1789319850.7506635,
+   "line": "$ ./lab.sh nautobot onboard 10.2.0.16"
+  },
+  {
+   "t": 1789319892.6753895,
+   "line": "==> running 'Sync Devices From Network' for ['10.2.0.16']"
+  },
+  {
+   "t": 1789319892.6753943,
+   "line": "==> SUCCESS  http://10.0.0.10:8080/extras/job-results/d2a6443d-dca8-4a50-91f7-c46d56b0673a/"
+  },
+  {
+   "t": 1789319892.6753972,
+   "line": "   hub: C8000V cisco_xe serial=9WXMDTWSSI1 primary=10.2.0.11/24"
+  },
+  {
+   "t": 1789319892.6753995,
+   "line": "   hub2: C8000V cisco_xe serial=96D35SH1LV7 primary=10.2.0.15/24"
+  },
+  {
+   "t": 1789319892.6754026,
+   "line": "   spoke1: C8000V cisco_xe serial=9RYBV99709W primary=10.2.0.12/24"
+  },
+  {
+   "t": 1789319892.6754055,
+   "line": "   spoke2: C8000V cisco_xe serial=9LBJH9OA7V9 primary=10.2.0.13/24"
+  },
+  {
+   "t": 1789319892.6754084,
+   "line": "   spoke3: C8000V cisco_xe serial=9AOSNQTAIFD primary=10.2.0.14/24"
+  },
+  {
+   "t": 1789319892.6754103,
+   "line": "   spoke4: C8000V cisco_xe serial=98XJY06YDSQ primary=10.2.0.16/24"
+  },
+  {
+   "t": 1789319892.7723317,
+   "line": "intent now has 6 devices / 7 tunnels; hub2 gets GigabitEthernet5 100.65.7.1/30, Tunnel7, neighbor 172.17.7.2 remote-as 65205"
+  },
+  {
+   "t": 1789319892.7728157,
+   "line": "$ ./lab.sh nautobot seed"
+  },
+  {
+   "t": 1789319988.1319113,
+   "line": "!! Nautobot seed failed (rc=-15)"
+  }
+ ]
+}

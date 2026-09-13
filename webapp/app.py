@@ -53,12 +53,18 @@ def nautobot_token():
 
 
 class Run:
-    def __init__(self, mode, intent, options, spoke=None):
+    def __init__(self, mode, intent, options, spoke=None, resume_of=None):
         self.id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "-" + uuid.uuid4().hex[:4]
         self.mode, self.intent, self.options, self.spoke = mode, intent, options, spoke
         self.started, self.finished, self.status = time.time(), None, "queued"
         self.steps = [{"name": s, "title": STEP_TITLES[s], "status": "pending", "started": None, "finished": None, "summary": ""} for s in self.plan()]
-        self.log, self.tests, self.results_dir, self.error = [], None, None, None
+        self.log, self.tests, self.results_dir, self.error, self.resume_of, self.removal = [], None, None, None, resume_of, None
+        if resume_of:   # steps that succeeded in the interrupted/failed run are carried over, everything from the failure on is redone
+            done = {st["name"]: st for st in resume_of["steps"] if st["status"] == "success"}
+            for st in self.steps:
+                if st["name"] not in done: break
+                st.update({"status": "success", "summary": f"(from run {resume_of['id']}) {done[st['name']]['summary']}", "started": done[st["name"]]["started"], "finished": done[st["name"]]["finished"]})
+            if self.mode == "remove" and "rm_validate" in done: self.removal = resume_of.get("removal")
 
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
@@ -88,7 +94,8 @@ class Run:
         d = {"id": self.id, "mode": self.mode, "status": self.status, "started": self.started, "finished": self.finished, "steps": self.steps,
              "tests": self.tests, "results_dir": self.results_dir, "error": self.error, "options": self.options,
              "site": self.intent.get("site", {}).get("name"), "vpn": self.intent.get("vpn", {}).get("name"), "change_ticket": self.intent.get("vpn", {}).get("change_ticket"),
-             "devices": [d["name"] for d in self.intent.get("devices", [])], "spoke": self.spoke}
+             "devices": [d["name"] for d in self.intent.get("devices", [])], "spoke": self.spoke, "resume_of": self.resume_of and self.resume_of["id"],
+             "removal": getattr(self, "removal", None)}
         if with_log: d["log"] = self.log
         return d
 
@@ -113,6 +120,7 @@ class Run:
         self.status = "running"; self.persist()
         try:
             for s in self.steps:
+                if s["status"] == "success": continue   # carried over from the run being resumed
                 s["status"], s["started"] = "running", time.time(); self.persist()
                 getattr(self, "do_" + s["name"])(s)
                 s["status"], s["finished"] = "success", time.time(); self.persist()
@@ -136,7 +144,9 @@ class Run:
 
     def do_spoke_labconf(self, s):
         for l in self.spoke.get("links", []): l["spoke"] = self.spoke["name"]
-        spokes.add_to_lab_conf(self.spoke); d = spokes.write_day0(self.spoke)
+        if self.spoke["name"] in intent_mod.lab_conf("ROLE")["ROLE"]: self.say("already in lab.conf (resumed run)")
+        else: spokes.add_to_lab_conf(self.spoke)
+        d = spokes.write_day0(self.spoke)
         s["summary"] = "lab.conf updated (" + ", ".join(f"{l['hub']}:{l['hub_port']} <-> {self.spoke['name']}:{l['spoke_port']}" for l in self.spoke.get("links", [])) + f"), {d.relative_to(LAB)}/iosxe_config.txt written"
         self.say(s["summary"])
 
@@ -158,7 +168,8 @@ class Run:
         s["summary"] = f"{self.spoke['name']} discovered by Nautobot (Sync Devices From Network)"
 
     def do_spoke_intent(self, s):
-        self.intent = spokes.add_to_intent(self.spoke)
+        cur = intent_mod.load()
+        self.intent = cur if any(d["name"] == self.spoke["name"] for d in cur["devices"]) else spokes.add_to_intent(self.spoke)
         (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
         hc = spokes.hub_changes(self.spoke)
         s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels; " + "; ".join(f"{l['hub']} gets {l['interface']} {l['wan_ip']}, {l['tunnel']}, neighbor {l['bgp_neighbor']}" for l in hc["links"])
@@ -202,7 +213,8 @@ class Run:
         s["summary"] = f"{self.spoke['name']} discovered by Nautobot"
 
     def do_hub_intent(self, s):
-        self.intent = spokes.add_to_intent({**self.spoke, "role": "hub"})
+        cur = intent_mod.load()
+        self.intent = cur if any(d["name"] == self.spoke["name"] for d in cur["devices"]) else spokes.add_to_intent({**self.spoke, "role": "hub"})
         (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
         s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels"
 
@@ -227,7 +239,8 @@ class Run:
         s["summary"] = f"{len(done)} objects removed"
 
     def do_rm_intent(self, s):
-        new = spokes.remove_from_intent(self.spoke["name"]); spokes.remove_from_lab_conf(self.spoke["name"])
+        new = spokes.remove_from_intent(self.spoke["name"])
+        if self.spoke["name"] in intent_mod.lab_conf("ROLE")["ROLE"]: spokes.remove_from_lab_conf(self.spoke["name"])
         problems = intent_mod.validate(new)
         if problems: raise RuntimeError("intent invalid after removal: " + "; ".join(problems))
         intent_mod.save(new); self.intent = new; (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(new, indent=2))
@@ -428,6 +441,37 @@ def start_run(body: dict):
         with worker_lock: run.execute()
     threading.Thread(target=work, daemon=True).start()
     return run.to_dict(with_log=False)
+
+
+@app.post("/api/runs/{run_id}/resume")
+def resume_run(run_id: str):
+    """Start a new run that keeps the successful steps of a failed/interrupted run and redoes the rest."""
+    old = runs.get(run_id); d = old.to_dict() if old else (json.loads((RUNS_DIR / f"{run_id}.json").read_text()) if (RUNS_DIR / f"{run_id}.json").exists() else None)
+    if d is None: raise HTTPException(404, "no such run")
+    if d["status"] not in ("failed", "interrupted"): raise HTTPException(409, f"run is {d['status']}")
+    f = RUNS_DIR / f"{run_id}.intent.json"
+    intent = json.loads(f.read_text()) if (f.exists() and d["mode"] in ("deploy", "plan")) else intent_mod.load()
+    with runs_lock:
+        if any(r.status in ("queued", "running") for r in runs.values()): raise HTTPException(409, "a run is already in progress")
+        run = Run(d["mode"], intent, d.get("options") or {}, d.get("spoke"), resume_of=d); runs[run.id] = run
+    def work():
+        with worker_lock: run.execute()
+    threading.Thread(target=work, daemon=True).start()
+    return run.to_dict(with_log=False)
+
+
+@app.on_event("startup")
+def mark_interrupted():
+    """Runs that were in progress when the server stopped are marked so they can be resumed."""
+    for f in RUNS_DIR.glob("*.json"):
+        if f.name.endswith(".intent.json"): continue
+        try: d = json.loads(f.read_text())
+        except ValueError: continue
+        if d.get("status") in ("running", "queued"):
+            for st in d["steps"]:
+                if st["status"] == "running": st["status"] = "failed"; st["summary"] = st["summary"] or "interrupted (server restarted)"
+                elif st["status"] == "pending": st["status"] = "skipped"
+            d["status"], d["error"], d["finished"] = "interrupted", "interrupted: the portal was restarted", time.time(); f.write_text(json.dumps(d, indent=1))
 
 
 @app.get("/api/runs")
