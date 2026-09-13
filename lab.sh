@@ -73,7 +73,7 @@ router_xml() {     # Gi1 = OOB mgmt; Gi2.. = point-to-point WAN links (UDP tunne
   cat <<X
 <domain type='kvm'>
   <name>$n</name>
-  <uuid>$(uuidgen --sha1 --namespace @dns --name "cat8000v-ipsec.$n")</uuid>
+  <uuid>$(uuidgen --sha1 --namespace @dns --name "cat8000v-ipsec.${MGMT_IP[$n]}")</uuid>
   <title>Catalyst 8000v ${ROLE[$n]} ($n)</title>
   <memory unit='MiB'>$C8000V_RAM_MIB</memory>
   <vcpu placement='static'>$C8000V_VCPU</vcpu>
@@ -294,6 +294,10 @@ cmd_intent() {     # lab-intent.json: init (from lab.conf) | validate | show
   python3 "$LAB_DIR/nautobot/intent.py" "$@"
 }
 
+cmd_rename() {     # rename a (stopped) router everywhere: ./lab.sh rename OLD NEW
+  python3 "$LAB_DIR/nautobot/rename_node.py" "$@"
+}
+
 cmd_webapp() {     # VPN provisioning portal (FastAPI/uvicorn) on http://0.0.0.0:8090
   [[ -x "$LAB_DIR/webapp/.venv/bin/uvicorn" ]] || "$LAB_DIR/webapp/setup.sh"
   [[ -f "$LAB_DIR/lab-intent.json" ]] || python3 "$LAB_DIR/nautobot/intent.py" init
@@ -321,6 +325,7 @@ usage: $(basename "$0") <command> [node...]
   test [robot args]  run the Robot Framework tests
   intent <cmd>       init|validate|show  lab-intent.json (the document the web app edits)
   webapp             start the VPN provisioning portal on http://<host>:8090
+  rename OLD NEW     rename a stopped router (VM, lab.conf, intent, terraform state); then rebuild/up + nautobot seed
   nautobot <cmd>     onboard|seed|render|golden|token  (shared Nautobot at $NAUTOBOT_URL)
   rebuild [node..]   re-generate domain XML / day-0 ISO (keeps disks)
   clean [node..]     stop, undefine and delete overlay disks
@@ -330,6 +335,6 @@ U
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|intent|webapp|rebuild|clean) "cmd_$cmd" "$@" ;;
+  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|intent|webapp|rename|rebuild|clean) "cmd_$cmd" "$@" ;;
   *) usage; exit 1 ;;
 esac

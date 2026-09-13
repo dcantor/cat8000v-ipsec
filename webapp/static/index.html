@@ -206,7 +206,7 @@
         <div><label>Contact</label><input id="sp.contact" readonly></div>
         <div><label>Change ticket</label><input id="sp.change_ticket"></div>
         <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
-        <div style="grid-column:1/-1"><label>Connect to headend(s)</label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
+        <div style="grid-column:1/-1"><label>Connect to headends <span class="hint">(select at least 2 — every spoke gets redundant headends)</span></label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
       </div>
       <div class="hint" style="margin-top:8px">The spoke is a new Catalyst 8000v VM on this host (<span id="sp.ram"></span> MiB RAM). Its management address goes into the day-0 config; everything else is pushed by Network-as-Code after Nautobot has been updated.</div>
     </div>
@@ -418,7 +418,7 @@ function showWiz() {
 }
 async function wizNext() {
   if (wizStep === 1) {
-    if (!selectedHubs().length) { $('wiz-problems').textContent = '• select at least one headend'; return; }
+    if (selectedHubs().length < 2) { $('wiz-problems').textContent = '• select at least 2 headends'; return; }
     await refreshLinks();
     const spec = wizCollect();
     const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
@@ -520,12 +520,16 @@ $('inv-refresh').onclick = () => loadInventory(true);
 
 function renderTopology(d) {
   const hubs = d.devices.filter(x => x.role === 'hub'), spokes = d.devices.filter(x => x.role === 'spoke');
-  const W = Math.max(760, 200 * Math.max(hubs.length, spokes.length) + 80), NW = 168, NH = 66, TOP = 40, BOT = 360, H = BOT + NH + 30;
+  // node box: four text lines; width from the longest line (≈6.4px per character at 11px, 7.8px at 13px bold)
+  const lines = n => [`${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`, `S/N ${n.serial || '-'}`];
+  const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
+  const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 40, BOT = 370, H = BOT + NH + 30;
+  const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length) + 60);
   const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
   place(hubs, TOP); place(spokes, BOT);
   const node = n => { const p = pos[n.name]; return `<a href="${n.url}" target="_blank"><g class="node ${n.role}" transform="translate(${p.x},${p.y})">
-      <rect width="${NW}" height="${NH}"></rect><text class="nm" x="10" y="20">${esc(n.name)}</text><text class="sub" x="${NW - 10}" y="20" text-anchor="end">${n.role}</text>
-      <text class="sub" x="10" y="37">${esc(n.mgmt_ip || '')} · AS ${esc(n.asn ?? '?')}</text><text class="sub" x="10" y="53">LAN ${esc(n.lan || '-')} · ${esc(n.serial || '')}</text></g></a>`; };
+      <rect width="${NW}" height="${NH}"></rect><text class="nm" x="10" y="19">${esc(n.name)}</text><text class="sub" x="${NW - 10}" y="19" text-anchor="end">${n.role}</text>
+      ${lines(n).map((l, i) => `<text class="sub" x="10" y="${36 + i * 15}">${esc(l)}</text>`).join('')}</g></a>`; };
   // edges: one per tunnel, hub bottom-centre -> spoke top-centre; spread the start/end points so parallel tunnels stay readable
   const byHub = {}, bySpoke = {}; d.tunnels.forEach(t => { (byHub[t.headend] = byHub[t.headend] || []).push(t); (bySpoke[t.spoke] = bySpoke[t.spoke] || []).push(t); });
   const edges = d.tunnels.map(t => {
@@ -534,14 +538,14 @@ function renderTopology(d) {
     const x1 = ph.x + NW * (hi + 1) / (hn + 1), y1 = ph.y + NH, x2 = ps.x + NW * (si + 1) / (sn + 1), y2 = ps.y;
     const my = (y1 + y2) / 2, l = t.live || {}, cls = l.health || 'none';
     const subnet = (t.headend_tunnel_ip || '').replace(/\.(\d+)\/30$/, (m, o) => '.' + (o - 1) + '/30');
-    const label = `Tunnel${t.tunnel_id} · ${subnet}`;
-    const tip = `${t.name}: ${t.headend} ${t.headend_if} (${t.headend_src_ip}) → ${t.spoke} ${t.spoke_if} (${t.spoke_src_ip})\nTunnel ${t.headend_tunnel_ip} / ${t.spoke_tunnel_ip}\nIKE ${l.ike_status || '?'} · VTI ${l.line_protocol || '?'} · BGP ${/^\d+$/.test(l.bgp_state || '') ? 'Established (' + l.bgp_state + ' pfx)' : (l.bgp_state || '?')}\nESP ${l.encaps ?? '?'} / ${l.decaps ?? '?'} pkts`;
+    const label = `Tunnel${t.tunnel_id}`;
+    const tip = `${t.name}: ${t.headend} ${t.headend_if} (${t.headend_src_ip}) → ${t.spoke} ${t.spoke_if} (${t.spoke_src_ip})\n${subnet}: ${t.headend_tunnel_ip} / ${t.spoke_tunnel_ip}\nIKE ${l.ike_status || '?'} · VTI ${l.line_protocol || '?'} · BGP ${/^\d+$/.test(l.bgp_state || '') ? 'Established (' + l.bgp_state + ' pfx)' : (l.bgp_state || '?')}\nESP ${l.encaps ?? '?'} / ${l.decaps ?? '?'} pkts`;
     // label at a point along the cubic curve, staggered per tunnel so neighbouring labels don't overlap
-    const idx = d.tunnels.indexOf(t), f = 0.22 + 0.56 * ((idx % 4) / 3);
+    const idx = d.tunnels.indexOf(t), f = 0.16 + 0.68 * ((idx % 6) / 5);
     const bez = (a, c1, c2, b, u) => (1 - u) ** 3 * a + 3 * (1 - u) ** 2 * u * c1 + 3 * (1 - u) * u ** 2 * c2 + u ** 3 * b;
     const lx = bez(x1, x1, x2, x2, f), ly = bez(y1, my, my, y2, f);
     return `<a href="${t.url}" target="_blank"><path class="edge ${cls}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(tip)}</title></path>
-      <g class="elabel" transform="translate(${lx},${ly})"><rect x="-64" y="-9" width="128" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
+      <g class="elabel" transform="translate(${lx},${ly})"><rect x="${-(label.length * 6.2 + 12) / 2}" y="-9" width="${label.length * 6.2 + 12}" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
   }).join('');
   $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <text x="12" y="${TOP - 12}" class="sub" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 12}" fill="#6b7684" font-size="11">spokes</text>

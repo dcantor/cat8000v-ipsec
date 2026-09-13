@@ -42,7 +42,7 @@
   "psk": "cisco123",
   "devices": [
     {
-      "name": "hub",
+      "name": "east-headend",
       "mgmt_ip": "10.2.0.11",
       "role": "hub",
       "asn": 65200,
@@ -51,7 +51,7 @@
       "comments": ""
     },
     {
-      "name": "hub2",
+      "name": "central-headend",
       "mgmt_ip": "10.2.0.15",
       "role": "hub",
       "asn": 65204,
@@ -60,7 +60,7 @@
       "comments": ""
     },
     {
-      "name": "hub3",
+      "name": "west-headend",
       "mgmt_ip": "10.2.0.17",
       "role": "hub",
       "asn": 65206,
@@ -116,91 +116,91 @@
   ],
   "links": [
     {
-      "a": "hub",
+      "a": "east-headend",
       "a_port": 2,
       "b": "spoke1",
       "b_port": 2,
       "prefix": "100.65.1.0/30"
     },
     {
-      "a": "hub",
+      "a": "east-headend",
       "a_port": 3,
       "b": "spoke2",
       "b_port": 2,
       "prefix": "100.65.2.0/30"
     },
     {
-      "a": "hub",
+      "a": "east-headend",
       "a_port": 4,
       "b": "spoke3",
       "b_port": 2,
       "prefix": "100.65.3.0/30"
     },
     {
-      "a": "hub2",
+      "a": "central-headend",
       "a_port": 2,
       "b": "spoke1",
       "b_port": 3,
       "prefix": "100.65.4.0/30"
     },
     {
-      "a": "hub2",
+      "a": "central-headend",
       "a_port": 3,
       "b": "spoke2",
       "b_port": 3,
       "prefix": "100.65.5.0/30"
     },
     {
-      "a": "hub2",
+      "a": "central-headend",
       "a_port": 4,
       "b": "spoke3",
       "b_port": 3,
       "prefix": "100.65.6.0/30"
     },
     {
-      "a": "hub2",
+      "a": "central-headend",
       "a_port": 5,
       "b": "spoke4",
       "b_port": 2,
       "prefix": "100.65.7.0/30"
     },
     {
-      "a": "hub3",
+      "a": "west-headend",
       "a_port": 2,
       "b": "spoke1",
       "b_port": 4,
       "prefix": "100.65.8.0/30"
     },
     {
-      "a": "hub3",
+      "a": "west-headend",
       "a_port": 3,
       "b": "spoke2",
       "b_port": 4,
       "prefix": "100.65.9.0/30"
     },
     {
-      "a": "hub3",
+      "a": "west-headend",
       "a_port": 4,
       "b": "spoke3",
       "b_port": 4,
       "prefix": "100.65.10.0/30"
     },
     {
-      "a": "hub3",
+      "a": "west-headend",
       "a_port": 5,
       "b": "spoke4",
       "b_port": 3,
       "prefix": "100.65.11.0/30"
     },
     {
-      "a": "hub2",
+      "a": "central-headend",
       "a_port": 6,
       "b": "spoke5",
       "b_port": 2,
       "prefix": "100.65.12.0/30"
     },
     {
-      "a": "hub3",
+      "a": "west-headend",
       "a_port": 6,
       "b": "spoke5",
       "b_port": 3,
@@ -212,77 +212,77 @@
       "id": 1,
       "spoke": "spoke1",
       "prefix": "172.17.1.0/30",
-      "hub": "hub"
+      "hub": "east-headend"
     },
     {
       "id": 2,
       "spoke": "spoke2",
       "prefix": "172.17.2.0/30",
-      "hub": "hub"
+      "hub": "east-headend"
     },
     {
       "id": 3,
       "spoke": "spoke3",
       "prefix": "172.17.3.0/30",
-      "hub": "hub"
+      "hub": "east-headend"
     },
     {
       "id": 4,
-      "hub": "hub2",
+      "hub": "central-headend",
       "spoke": "spoke1",
       "prefix": "172.17.4.0/30"
     },
     {
       "id": 5,
-      "hub": "hub2",
+      "hub": "central-headend",
       "spoke": "spoke2",
       "prefix": "172.17.5.0/30"
     },
     {
       "id": 6,
-      "hub": "hub2",
+      "hub": "central-headend",
       "spoke": "spoke3",
       "prefix": "172.17.6.0/30"
     },
     {
       "id": 7,
-      "hub": "hub2",
+      "hub": "central-headend",
       "spoke": "spoke4",
       "prefix": "172.17.7.0/30"
     },
     {
       "id": 8,
-      "hub": "hub3",
+      "hub": "west-headend",
       "spoke": "spoke1",
       "prefix": "172.17.8.0/30"
     },
     {
       "id": 9,
-      "hub": "hub3",
+      "hub": "west-headend",
       "spoke": "spoke2",
       "prefix": "172.17.9.0/30"
     },
     {
       "id": 10,
-      "hub": "hub3",
+      "hub": "west-headend",
       "spoke": "spoke3",
       "prefix": "172.17.10.0/30"
     },
     {
       "id": 11,
-      "hub": "hub3",
+      "hub": "west-headend",
       "spoke": "spoke4",
       "prefix": "172.17.11.0/30"
     },
     {
       "id": 12,
-      "hub": "hub2",
+      "hub": "central-headend",
       "spoke": "spoke5",
       "prefix": "172.17.12.0/30"
     },
     {
       "id": 13,
-      "hub": "hub3",
+      "hub": "west-headend",
       "spoke": "spoke5",
       "prefix": "172.17.13.0/30"
     }

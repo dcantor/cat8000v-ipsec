@@ -240,7 +240,9 @@ for r in ROUTERS:
 for t in TUNNELS:
     tid, hub, spoke = int(t["id"]), t["hub"], t["spoke"]
     # the spoke's peering towards this hub (matched by description, then re-pointed if the tunnel address changed)
-    existing = [e for e in bgp.peer_endpoints.filter(routing_instance=ri[spoke].id) if str(e.description or "").startswith(f"eBGP {hub} (")]
+    eps_spoke = list(bgp.peer_endpoints.filter(routing_instance=ri[spoke].id))
+    existing = ([e for e in eps_spoke if str(getattr(e.source_ip, "id", "")) == tun_ip[(spoke, tid)].id]
+                or [e for e in eps_spoke if str(e.description or "").startswith(f"eBGP {hub} (")])
     if existing:
         eps = {spoke: existing[0], hub: existing[0].peer}
         ensure(eps[spoke], source_ip=tun_ip[(spoke, tid)].id, autonomous_system=asn[spoke].id, description=f"eBGP {hub} (Tunnel{tid})")

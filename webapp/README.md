@@ -103,7 +103,7 @@ there only seed the intent — after the portal has edited the intent, `lab-inte
 
 Any number of hub-role routers can exist; every tunnel is a (hub, spoke) pair with its own link, /30s and
 TunnelN number (the same number at both ends). Step 1 of the wizard has **Connect to headend(s)**
-checkboxes (one, several or all hubs); step 2 then shows one addressing row per selected hub and the
+checkboxes (**at least two** — every spoke gets redundant headends; enforced in the UI and by the API); step 2 then shows one addressing row per selected hub and the
 review one "coordinated configuration" box per hub. Spokes have `SPOKE_PORTS` (2) WAN ports, one per hub.
 
 A new hub is provisioned with `POST /api/runs {"mode":"hub","hub":<GET /api/hubs/suggest>}`: VM → bootstrap →
@@ -152,3 +152,12 @@ A failed or interrupted run (the portal was restarted while it ran — runs foun
 marked *interrupted*) shows **Resume from the failed step**: a new run keeps the successful steps and redoes
 the rest (`POST /api/runs/<id>/resume`). Use `webapp/restart.sh` to restart the service — it refuses while a
 run is in progress.
+
+### Renaming a router
+
+`./lab.sh rename OLD NEW` (VM stopped): renames the libvirt domain, `nodes/<name>/`, every `lab.conf` entry,
+the intent, and the Terraform state (`state mv` + the `device` attribute inside each resource), then
+`./lab.sh rebuild NEW && ./lab.sh up NEW` (the day-0 ISO re-applies the hostname at boot), `./lab.sh nautobot seed`
+(devices are matched by management IP, so the Nautobot device is renamed in place), render, `nac apply`, and
+`./lab.sh nautobot onboard <ip>` to refresh the serial. VM UUIDs (→ C8000v serials) are derived from the
+management IP so a rename does not change the serial after the one-time rebuild.

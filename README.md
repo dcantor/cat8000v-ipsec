@@ -1,7 +1,7 @@
 # Catalyst 8000v IPsec VTI + eBGP lab (libvirt/KVM)
 
-Hubs and spokes on Cisco Catalyst 8000v (17.15.06) — initially one hub and two spokes, grown from
-the portal to two hubs and three spokes — joined by **static point-to-point IPsec VTIs** (`tunnel mode ipsec ipv4`, IKEv2 with pre-shared key)
+Headends and spokes on Cisco Catalyst 8000v (17.15.06) — initially one hub and two spokes, grown
+from the portal to three headends (east/central/west) and five spokes — joined by **static point-to-point IPsec VTIs** (`tunnel mode ipsec ipv4`, IKEv2 with pre-shared key)
 and **eBGP, one AS per site**. Built and configured as code: libvirt VMs (`lab.sh`),
 Cisco Network-as-Code / Terraform (`nac/`), Robot Framework validation (`tests/`),
 and modelled in the shared Nautobot (`nautobot/`).

@@ -13,7 +13,7 @@ IOS_NAMES = {"ikev2_proposal": "VPN-PROP", "ikev2_policy": "VPN-POL", "ikev2_key
 
 def lab_conf(*names):
     out = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; declare -p {' '.join(names)}"], capture_output=True, text=True, check=True).stdout
-    return {n: dict(re.findall(r'\[(\w+)\]="([^"]*)"', re.search(rf"declare -[aA] {n}=\((.*?)\)\n", out, re.S).group(1))) for n in names}
+    return {n: dict(re.findall(r'\[([\w-]+)\]="([^"]*)"', re.search(rf"declare -[aA] {n}=\((.*?)\)\n", out, re.S).group(1))) for n in names}
 
 
 def wiring():

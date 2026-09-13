@@ -7,6 +7,7 @@ LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB / "nautobot")); import intent as intent_mod   # noqa: E402
 
 RAM_MIB = 4096
+MIN_HEADENDS = 2     # every spoke needs redundant headends
 
 
 def facts():
@@ -111,7 +112,7 @@ def validate(spec):
 
 def validate_links(links, I, f, name):
     errs = []; hub_names = {h["name"] for h in f["hubs"]}
-    if not links: errs.append("connect to at least one hub")
+    if len(links) < MIN_HEADENDS: errs.append(f"a spoke must connect to at least {MIN_HEADENDS} headends ({len(hub_names)} available)")
     if len({l.get("hub") for l in links}) != len(links): errs.append("one link per hub")
     used_pfx = _used_prefixes(I); tids = {int(t["id"]) for t in I["tunnels"]}; sports = set()
     for l in links:
