@@ -70,3 +70,31 @@ and the deploy pipeline refuses an intent that exceeds it.
 
 Live data is cached for 30 s; *Refresh live data* re-collects. *Export CSV* downloads the table
 (`GET /api/vpn-inventory.csv`; JSON at `GET /api/vpn-inventory`).
+
+## Add-spoke wizard (Provision → *＋ Add spoke…*)
+
+Guided flow to connect a **new spoke router** to the hub. Everything is auto-allocated and shown as
+*suggested* (editable, re-validated on every step):
+
+| Step | What the user sees |
+|---|---|
+| 1 · Identity & metadata | hostname (`spokeN`), management IP (next free in the OOB /24), site / site code / contact (from the site), change ticket, comments |
+| 2 · Addressing | hub port (lowest free of Gi2–Gi9 on the hub), WAN p2p /30 (`100.65.N.0/30`), tunnel number (next id), tunnel /30 (`172.17.N.0/30`), router-id (`10.255.1.N`), site LAN (`192.168.N.0/24`), AS number (next after the hub's) — plus the headend capacity check |
+| 3 · Review | side by side: what the spoke gets and what the **hub** gets (WAN interface + address, TunnelN + destination, eBGP neighbour, Nautobot cable/tunnel/peering, capacity after) |
+
+*Provision spoke* starts a run (mode `spoke`) with these steps before the normal pipeline:
+
+1. validate the allocation (free hub port, unused prefixes/ids/AS, capacity, free host memory)
+2. register the spoke in `lab.conf` (roles, mgmt IP, AS, LAN, console port, node index, `LINKS`, `TUNNELS`) and write `nodes/<spoke>/iosxe_config.txt` from `nodes/_template/`
+3. `./lab.sh up <spoke>` — overlay disk, day-0 ISO, libvirt domain, boot
+4. `./lab.sh bootstrap <spoke>` — day-0 via console, SSH keys, license boot level (reload), RESTCONF (6–10 min)
+5. `./lab.sh nautobot onboard <ip>` — Sync Devices From Network
+6. add the device, the hub↔spoke link and the tunnel to `lab-intent.json`
+7. seed → render → plan → apply → Golden Config → tests, exactly as for *Deploy* — the hub's new WAN port, TunnelN and BGP neighbour come out of the same Nautobot model, so **hub and spoke are configured in one Terraform apply**.
+
+Why the hub never needs a reboot: the hub VM has 8 spoke-facing ports (`HUB_PORTS` in `lab.conf`) and each
+link's UDP socket pair is anchored on the hub side (`port_local`/`port_far` in `lab.sh`), so a new spoke only
+has to point at the hub's existing port.
+
+`lab.conf` stays the truth for VM facts (names, management IPs, console ports, wiring); the AS/LAN columns
+there only seed the intent — after the portal has edited the intent, `lab-intent.json` wins.

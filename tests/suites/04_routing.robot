@@ -17,11 +17,12 @@ Hub has an Established eBGP session with each spoke over its tunnel
         Should Contain    ${nbr}    external link
     END
 
-Every spoke peers with the hub only and receives four prefixes
+Every spoke peers with the hub only and receives every other site's LAN and loopback
+    ${want}=    Evaluate    2 * (len($ROUTER_NAMES) - 1)    # hub's LAN+loopback plus 2 per other spoke
     FOR    ${s}    IN    @{SPOKES}
         ${t}=    Set Variable    ${TUNNELS}[${s}]
         ${sum}=    Show    ${s}    show bgp ipv4 unicast summary | begin Neighbor
-        Should Match Regexp    ${sum}    (?m)^${t}[hub_ip]\\s+4\\s+${ROUTERS}[${HUB}][asn]\\s+.*\\s4\\s*$    msg=${s}: expected 4 prefixes from the hub
+        Should Match Regexp    ${sum}    (?m)^${t}[hub_ip]\\s+4\\s+${ROUTERS}[${HUB}][asn]\\s+.*\\s${want}\\s*$    msg=${s}: expected ${want} prefixes from the hub
         ${count}=    Get Line Count    ${sum}
         Should Be Equal As Integers    ${count}    2    msg=spokes must peer with the hub only
     END

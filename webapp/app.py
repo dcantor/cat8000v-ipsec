@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import requests
 from inventory import Inventory, to_csv
+import spokes
 
 LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB / "nautobot")); import intent as intent_mod   # noqa: E402
@@ -27,8 +28,10 @@ RUNS_DIR = Path(__file__).resolve().parent / "runs"; RUNS_DIR.mkdir(exist_ok=Tru
 RESULTS = LAB / "results"
 NAUTOBOT_URL = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080")
 NAUTOBOT_PUBLIC_URL = os.environ.get("NAUTOBOT_PUBLIC_URL", "http://192.168.50.231:8080")
-STEPS = ["validate", "save", "nautobot", "render", "plan", "apply", "golden", "test"]
 STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot": "Nautobot source of truth (seed)",
+               "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
+               "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
+               "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
                "render": "Render NAC data from Nautobot", "plan": "Terraform plan", "apply": "Terraform apply + save config",
                "golden": "Golden Config backup / intended / compliance", "test": "Robot Framework tests"}
 
@@ -45,15 +48,20 @@ def nautobot_token():
 
 
 class Run:
-    def __init__(self, mode, intent, options):
+    def __init__(self, mode, intent, options, spoke=None):
         self.id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "-" + uuid.uuid4().hex[:4]
-        self.mode, self.intent, self.options = mode, intent, options
+        self.mode, self.intent, self.options, self.spoke = mode, intent, options, spoke
         self.started, self.finished, self.status = time.time(), None, "queued"
         self.steps = [{"name": s, "title": STEP_TITLES[s], "status": "pending", "started": None, "finished": None, "summary": ""} for s in self.plan()]
         self.log, self.tests, self.results_dir, self.error = [], None, None, None
 
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
+        if self.mode == "spoke":
+            steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "plan", "apply"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", True): steps.append("test")
+            return steps
         if self.mode == "plan": return ["validate", "save", "nautobot", "render", "plan"]
         steps = ["validate", "save", "nautobot", "render", "plan", "apply"]
         if self.options.get("golden", True): steps.append("golden")
@@ -64,7 +72,7 @@ class Run:
         d = {"id": self.id, "mode": self.mode, "status": self.status, "started": self.started, "finished": self.finished, "steps": self.steps,
              "tests": self.tests, "results_dir": self.results_dir, "error": self.error, "options": self.options,
              "site": self.intent.get("site", {}).get("name"), "vpn": self.intent.get("vpn", {}).get("name"), "change_ticket": self.intent.get("vpn", {}).get("change_ticket"),
-             "devices": [d["name"] for d in self.intent.get("devices", [])]}
+             "devices": [d["name"] for d in self.intent.get("devices", [])], "spoke": self.spoke}
         if with_log: d["log"] = self.log
         return d
 
@@ -100,6 +108,43 @@ class Run:
                 if s["status"] == "pending": s["status"] = "skipped"
             self.error = str(e); self.status = "failed"; self.say(f"!! {e}")
         self.finished = time.time(); self.persist()
+
+    # ---- spoke provisioning steps ---------------------------------------------
+    def do_spoke_validate(self, s):
+        problems = spokes.validate(self.spoke)
+        if problems: raise RuntimeError("invalid spoke: " + "; ".join(problems))
+        hc = spokes.hub_changes(self.spoke)
+        s["summary"] = f"{self.spoke['name']} ({self.spoke['mgmt_ip']}) on {hc['hub']} {hc['interface']}, {hc['tunnel']} {self.spoke['tunnel_prefix']}, AS {self.spoke['asn']}"
+        self.say(s["summary"]); self.say("hub will get: " + ", ".join(f"{k}={v}" for k, v in hc.items() if k != "spoke"))
+
+    def do_spoke_labconf(self, s):
+        spokes.add_to_lab_conf(self.spoke); d = spokes.write_day0(self.spoke)
+        s["summary"] = f"lab.conf updated (link {self.spoke['hub']}:{self.spoke['hub_port']} <-> {self.spoke['name']}:{self.spoke['spoke_port']}), {d.relative_to(LAB)}/iosxe_config.txt written"
+        self.say(s["summary"])
+
+    def do_spoke_vm(self, s):
+        rc = self.sh(["./lab.sh", "up", self.spoke["name"]])
+        if rc: raise RuntimeError(f"lab.sh up failed (rc={rc})")
+        s["summary"] = f"VM {self.spoke['name']} defined and started (console 127.0.0.1:{self.spoke['console_port']})"
+
+    def do_spoke_bootstrap(self, s):
+        self.say("this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF")
+        rc = self.sh(["./lab.sh", "bootstrap", self.spoke["name"]], timeout=2400)
+        if rc: raise RuntimeError(f"bootstrap failed (rc={rc})")
+        if not any("RESTCONF up" in l["line"] for l in self.log): raise RuntimeError("RESTCONF did not come up on the new spoke")
+        s["summary"] = f"{self.spoke['name']} reachable: ssh admin@{self.spoke['mgmt_ip']}, RESTCONF up"
+
+    def do_spoke_onboard(self, s):
+        rc = self.sh(["./lab.sh", "nautobot", "onboard", self.spoke["mgmt_ip"]])
+        if rc: raise RuntimeError(f"onboarding failed (rc={rc})")
+        s["summary"] = f"{self.spoke['name']} discovered by Nautobot (Sync Devices From Network)"
+
+    def do_spoke_intent(self, s):
+        self.intent = spokes.add_to_intent(self.spoke)
+        (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
+        hc = spokes.hub_changes(self.spoke)
+        s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels; hub gets {hc['interface']} {hc['wan_ip']}, {hc['tunnel']} {hc['tunnel_ip']}, neighbor {hc['bgp_neighbor']}"
+        self.say(s["summary"])
 
     # ---- steps ---------------------------------------------------------------
     def do_validate(self, s):
@@ -225,16 +270,34 @@ def validate(body: dict):
     return {"problems": intent_mod.validate(body.get("intent") or {})}
 
 
+@app.get("/api/spokes/suggest")
+def spoke_suggest():
+    return spokes.suggest()
+
+
+@app.post("/api/spokes/validate")
+def spoke_validate(body: dict):
+    spec = body.get("spoke") or {}
+    problems = spokes.validate(spec)
+    return {"problems": problems, "hub_changes": spokes.hub_changes(spec) if not problems else None}
+
+
 @app.post("/api/runs")
 def start_run(body: dict):
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test"): raise HTTPException(400, "mode must be deploy, plan or test")
-    intent = body.get("intent") if mode != "test" else intent_mod.load()
-    problems = intent_mod.validate(intent or {})
-    if problems: raise HTTPException(422, {"problems": problems})
+    if mode not in ("deploy", "plan", "test", "spoke"): raise HTTPException(400, "mode must be deploy, plan, test or spoke")
+    spoke = None
+    if mode == "spoke":
+        spoke = body.get("spoke") or {}; problems = spokes.validate(spoke)
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    else:
+        intent = body.get("intent") if mode != "test" else intent_mod.load()
+        problems = intent_mod.validate(intent or {})
+        if problems: raise HTTPException(422, {"problems": problems})
     with runs_lock:
         if any(r.status in ("queued", "running") for r in runs.values()): raise HTTPException(409, "a run is already in progress")
-        run = Run(mode, intent, body.get("options") or {}); runs[run.id] = run
+        run = Run(mode, intent, body.get("options") or {}, spoke); runs[run.id] = run
     def work():
         with worker_lock: run.execute()
     threading.Thread(target=work, daemon=True).start()

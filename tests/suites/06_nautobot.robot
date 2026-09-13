@@ -133,12 +133,12 @@ The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies an
 
 BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the live sessions
     ${d}=    Nautobot Graphql    { bgp_routing_instances(device:[${ROUTER_GQL}]) { device { name } autonomous_system { asn } router_id { address } endpoints { source_ip { address } autonomous_system { asn } peer { source_ip { address } autonomous_system { asn } routing_instance { device { name } } } } } }
-    Length Should Be    ${d}[bgp_routing_instances]    3
+    Length Should Be    ${d}[bgp_routing_instances]    ${{ len($ROUTER_NAMES) }}
     FOR    ${ri}    IN    @{d}[bgp_routing_instances]
         ${r}=    Set Variable    ${ri}[device][name]
         Should Be Equal As Integers    ${ri}[autonomous_system][asn]    ${ROUTERS}[${r}][asn]
         Should Be Equal    ${ri}[router_id][address]    ${ROUTERS}[${r}][router_id]/32
-        ${expected}=    Set Variable If    '${r}' == '${HUB}'    2    1
+        ${expected}=    Set Variable If    '${r}' == '${HUB}'    ${{ len($SPOKES) }}    1
         Length Should Be    ${ri}[endpoints]    ${expected}
         ${sum}=    Show    ${r}    show bgp ipv4 unicast summary | begin Neighbor
         FOR    ${ep}    IN    @{ri}[endpoints]

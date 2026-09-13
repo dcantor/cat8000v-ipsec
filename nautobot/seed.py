@@ -34,7 +34,8 @@ LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
 WIRED = {}                                              # (router, port) -> "peer GiN"
 for l in LINKS:
     WIRED[(l["a"], l["a_port"])] = f"{l['b']} Gi{l['b_port']}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} Gi{l['a_port']}"
-OUI = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; echo $MAC_OUI"], capture_output=True, text=True).stdout.strip() or "52:54:00:c7"
+SC = intent_mod.scalars("MAC_OUI", "HUB_PORTS", "SPOKE_PORTS"); OUI = SC["MAC_OUI"] or "52:54:00:c7"
+PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2))}   # spoke-facing / WAN ports per role
 
 created = []
 def gql(query):
@@ -163,11 +164,11 @@ for r in ROUTERS:
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
     idx = NODES[d["mgmt_ip"]]["idx"]
-    g1 = ensure_iface(dev, "GigabitEthernet1", "1000base-t", "OOB management (Mgmt-vrf)", mgmt_only=True, vrf=mgmt_vrf.id, mac=f"{OUI}:0{idx}:01")
+    g1 = ensure_iface(dev, "GigabitEthernet1", "1000base-t", "OOB management (Mgmt-vrf)", mgmt_only=True, vrf=mgmt_vrf.id, mac=f"{OUI}:{idx:02x}:01")
     ensure_ip(g1, f"{d['mgmt_ip']}/24", primary_of=dev)
-    for port in (2, 3):  # wired ports get description/enabled from the links; set here so one update suffices
+    for port in PORTS[d["role"]]:  # wired ports get description/enabled from the links; set here so one update suffices
         wired = WIRED.get((r, port))
-        gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:0{idx}:0{port}")
+        gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
     lo0 = ensure_iface(dev, "Loopback0", "virtual", "Router ID"); tag(ensure_prefix(f"{d['router_id']}/32", prole["loopback"], f"{r} router-id")); ensure_ip(lo0, f"{d['router_id']}/32")
     lo10 = ensure_iface(dev, "Loopback10", "virtual", "site LAN"); tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(lo10, f"{LAN_IP[r]}/24")
     devs[r] = dev

@@ -40,6 +40,17 @@ for _ in range(120):
 print(f"==> {st}  {a.url}/extras/job-results/{jr}/")
 for e in nb.extras.job_logs.filter(job_result=jr):
     if str(e.log_level) in ("warning", "error", "critical", "failure"): print(f"   [{e.log_level}] {e.message[:200]}")
+# the onboarding job does not refresh existing devices, and a C8000v's serial follows the VM UUID: re-read it over SSH
+try:
+    from netmiko import ConnectHandler
+    for d in nb.dcim.devices.filter(location=site.id):
+        ip = getattr(d.primary_ip4, "address", None)
+        if not ip or ip.split("/")[0] not in a.ips: continue
+        c = ConnectHandler(device_type="cisco_xe", host=ip.split("/")[0], username=os.environ.get("IOSXE_USERNAME", "admin"), password=os.environ.get("IOSXE_PASSWORD", "admin"))
+        serial = c.send_command("show version | include Processor board ID").split()[-1]; c.disconnect()
+        if serial and serial != d.serial: d.update({"serial": serial}); print(f"   {d.name}: serial refreshed {d.serial} -> {serial}")
+except ImportError:
+    pass
 for d in nb.dcim.devices.filter(location=site.id):
     print(f"   {d.name}: {d.device_type.model} {getattr(d.platform,'name',None)} serial={d.serial} primary={getattr(d.primary_ip4,'address',None)}")
 sys.exit(0 if st == "SUCCESS" else 1)

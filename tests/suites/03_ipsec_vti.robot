@@ -70,7 +70,7 @@ Traffic through the tunnels is encrypted with the modelled transform set
 The hub holds exactly one IKEv2 session per spoke
     ${sess}=    Show    ${HUB}    show crypto ikev2 session | include ^Session-id
     ${n}=    Get Line Count    ${sess}
-    Should Be Equal As Integers    ${n}    2    msg=${sess}
+    Should Be Equal As Integers    ${n}    ${{ len($SPOKES) }}    msg=${sess}
 
 *** Keywords ***
 Encaps Advanced

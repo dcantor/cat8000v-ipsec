@@ -55,6 +55,13 @@
   .runs a { cursor:pointer; color:var(--accent) }
   .hint { color:var(--muted); font-size:12px }
   details summary { cursor:pointer; color:var(--muted) }
+  .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.55); display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; z-index:10 }
+  .modal { background:#fff; border-radius:10px; width:min(900px, 100%); padding:20px 24px; box-shadow:0 20px 60px rgba(0,0,0,.3) }
+  .wiz-steps { display:flex; gap:8px; margin:0 0 16px; padding:0; list-style:none } .wiz-steps li { flex:1; padding:8px 10px; border-radius:6px; background:#f1f5f9; color:var(--muted); font-size:13px }
+  .wiz-steps li.active { background:var(--accent); color:#fff } .wiz-steps li.done { background:#dcfce7; color:#166534 }
+  .review { display:grid; grid-template-columns:1fr 1fr; gap:14px } .review .box { border:1px solid var(--line); border-radius:8px; padding:12px } .review h4 { margin:0 0 6px; font-size:13px }
+  .review dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:13px } .review dt { color:var(--muted) } .review dd { margin:0; font-family:ui-monospace,Menlo,monospace }
+  .suggest { color:var(--ok); font-size:11px }
 </style>
 </head>
 <body>
@@ -77,7 +84,7 @@
     </div>
 
     <div class="card">
-      <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small></h2>
+      <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
       <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>Comments</th></tr></thead><tbody></tbody></table>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
     </div>
@@ -175,6 +182,49 @@
   </div>
 </section>
 </main>
+
+<div class="modal-bg" id="wiz" hidden>
+  <div class="modal">
+    <h2 style="margin:0 0 12px;font-size:16px">Add a spoke router <small style="font-weight:normal;color:var(--muted)">guided provisioning: VM → bootstrap → Nautobot → NAC/Terraform on hub + spoke → tests</small></h2>
+    <ul class="wiz-steps"><li data-s="1">1 · Identity &amp; metadata</li><li data-s="2">2 · Addressing (auto-suggested)</li><li data-s="3">3 · Review &amp; provision</li></ul>
+    <div id="wiz-1">
+      <div class="grid g3">
+        <div><label>Hostname</label><input id="sp.name"></div>
+        <div><label>Management IP <span class="suggest">suggested</span></label><input id="sp.mgmt_ip"></div>
+        <div><label>Site</label><input id="sp.site" readonly></div>
+        <div><label>Site code</label><input id="sp.site_code" readonly></div>
+        <div><label>Contact</label><input id="sp.contact" readonly></div>
+        <div><label>Change ticket</label><input id="sp.change_ticket"></div>
+        <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
+      </div>
+      <div class="hint" style="margin-top:8px">The spoke is a new Catalyst 8000v VM on this host (<span id="sp.ram"></span> MiB RAM). Its management address goes into the day-0 config; everything else is pushed by Network-as-Code after Nautobot has been updated.</div>
+    </div>
+    <div id="wiz-2" hidden>
+      <div class="grid g3">
+        <div><label>Hub</label><input id="sp.hub" readonly></div>
+        <div><label>Hub port (free: <span id="sp.hubfree"></span>) <span class="suggest">suggested</span></label><input id="sp.hub_port" type="number" min="2"></div>
+        <div><label>Spoke WAN port</label><input id="sp.spoke_port" readonly value="2"></div>
+        <div><label>WAN point-to-point /30 <span class="suggest">suggested</span></label><input id="sp.wan_prefix"></div>
+        <div><label>Tunnel number <span class="suggest">suggested</span></label><input id="sp.tunnel_id" type="number" min="1"></div>
+        <div><label>Tunnel /30 <span class="suggest">suggested</span></label><input id="sp.tunnel_prefix"></div>
+        <div><label>Router-id (Loopback0) <span class="suggest">suggested</span></label><input id="sp.router_id"></div>
+        <div><label>Site LAN /24 (Loopback10) <span class="suggest">suggested</span></label><input id="sp.lan"></div>
+        <div><label>AS number <span class="suggest">suggested</span></label><input id="sp.asn" type="number"></div>
+      </div>
+      <div class="hint" style="margin-top:8px">Hub takes the first address of each /30, the spoke the second. Headend capacity: <span id="sp.cap"></span>.</div>
+    </div>
+    <div id="wiz-3" hidden>
+      <div class="review" id="wiz-review"></div>
+      <div class="hint" style="margin-top:10px">Provisioning creates the VM and waits for it to boot (6–10 min), onboards it into Nautobot, adds the link/tunnel/BGP peering to the intent, then runs the normal pipeline — Terraform configures <b>both the hub and the new spoke</b> in the same apply — followed by Golden Config and the tests.</div>
+    </div>
+    <div id="wiz-problems" class="problems" style="margin-top:10px"></div>
+    <div class="actions" style="margin-top:16px">
+      <button type="button" id="wiz-cancel">Cancel</button>
+      <button type="button" id="wiz-back" style="margin-left:auto">Back</button>
+      <button type="button" class="primary" id="wiz-next">Next</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -276,7 +326,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke') load(); }
 }
 
 function render(r) {
@@ -310,6 +360,57 @@ $('deploy').onclick = () => { if (confirm('Deploy the configuration to the route
 $('plan').onclick = () => start('plan');
 $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
+// ---- add-spoke wizard -------------------------------------------------------
+let wizStep = 1, wizSpec = null;
+const SP_FIELDS = ['name', 'mgmt_ip', 'change_ticket', 'comments', 'hub', 'hub_port', 'spoke_port', 'wan_prefix', 'tunnel_id', 'tunnel_prefix', 'router_id', 'lan', 'asn'];
+async function openWizard() {
+  const r = await fetch('/api/spokes/suggest'); if (!r.ok) { alert('cannot suggest a spoke: ' + (await r.text())); return; }
+  wizSpec = await r.json();
+  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = wizSpec[k] ?? ''; });
+  $('sp.site').value = base.site.name; $('sp.site_code').value = wizSpec.site_code; $('sp.contact').value = wizSpec.contact; $('sp.ram').textContent = wizSpec.ram_mib;
+  $('sp.hubfree').textContent = wizSpec.context.hub_ports_free.map(p => 'Gi' + p).join(', ') || 'none';
+  $('sp.cap').textContent = `${wizSpec.context.tunnels} of ${wizSpec.context.capacity} tunnels in use on ${wizSpec.context.hub}`;
+  wizStep = 1; showWiz(); $('wiz').hidden = false;
+}
+function wizCollect() {
+  const spec = { ...wizSpec };
+  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) spec[k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
+  return spec;
+}
+function showWiz() {
+  [1, 2, 3].forEach(i => { $('wiz-' + i).hidden = i !== wizStep; const li = document.querySelector(`.wiz-steps li[data-s="${i}"]`); li.className = i === wizStep ? 'active' : (i < wizStep ? 'done' : ''); });
+  $('wiz-back').hidden = wizStep === 1; $('wiz-next').textContent = wizStep === 3 ? 'Provision spoke' : 'Next'; $('wiz-problems').textContent = '';
+}
+async function wizNext() {
+  const spec = wizCollect();
+  const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
+  if (wizStep === 1) {
+    const mine = v.problems.filter(p => /hostname|management IP|memory|intent/.test(p));
+    if (mine.length) { $('wiz-problems').textContent = '• ' + mine.join('\n• '); return; }
+    wizStep = 2; showWiz(); return;
+  }
+  if (v.problems.length) { $('wiz-problems').textContent = '• ' + v.problems.join('\n• '); return; }
+  if (wizStep === 2) {
+    const h = v.hub_changes, sp = h.spoke;
+    $('wiz-review').innerHTML = `<div class="box"><h4>Spoke ${esc(spec.name)} (new VM, ${esc(spec.mgmt_ip)})</h4><dl>
+        <dt>WAN</dt><dd>${esc(sp.interface)} ${esc(sp.wan_ip)}</dd><dt>Tunnel</dt><dd>${esc(sp.tunnel)} ${esc(sp.tunnel_ip)} → dest ${esc(sp.tunnel_destination)}</dd>
+        <dt>Loopbacks</dt><dd>${esc(sp.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)} · neighbor ${esc(sp.bgp_neighbor)}</dd>
+        <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)})</dd>
+        <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
+      <div class="box"><h4>Hub ${esc(h.hub)} (coordinated configuration)</h4><dl>
+        <dt>WAN</dt><dd>${esc(h.interface)} ${esc(h.wan_ip)} (no shutdown, cdp)</dd><dt>Tunnel</dt><dd>${esc(h.tunnel)} ${esc(h.tunnel_ip)} → dest ${esc(h.tunnel_destination)}, ipsec profile</dd>
+        <dt>eBGP</dt><dd>neighbor ${esc(h.bgp_neighbor)}</dd><dt>Nautobot</dt><dd>cable ${esc(h.interface)} ↔ ${esc(sp.interface)}, VPN tunnel ${esc(h.hub)}-${esc(spec.name)}, endpoints, peering</dd>
+        <dt>Capacity</dt><dd>${wizSpec.context.tunnels + 1} / ${wizSpec.context.capacity} tunnels after provisioning</dd></dl></div>`;
+    wizStep = 3; showWiz(); return;
+  }
+  // step 3: go
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'spoke', spoke: spec, options: { golden: $('opt.golden').checked, test: $('opt.test').checked } }) });
+  if (!r.ok) { const e = await r.json(); $('wiz-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json(); $('wiz').hidden = true; watch(run.id);
+}
+$('add-spoke').onclick = openWizard; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
+$('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
+
 // ---- views ----------------------------------------------------------------
 function showView() {
   const v = (location.hash || '#provision').slice(1);

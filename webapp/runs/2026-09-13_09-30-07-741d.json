@@ -1,0 +1,716 @@
+{
+ "id": "2026-09-13_09-30-07-741d",
+ "mode": "test",
+ "status": "success",
+ "started": 1789306207.585889,
+ "finished": 1789306307.9896402,
+ "steps": [
+  {
+   "name": "validate",
+   "title": "Validate intent",
+   "status": "success",
+   "started": 1789306207.5866477,
+   "finished": 1789306207.5994828,
+   "summary": "3 devices, 2 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "success",
+   "started": 1789306207.5997376,
+   "finished": 1789306307.9892669,
+   "summary": "26/26 tests passed"
+  }
+ ],
+ "tests": {
+  "suites": [
+   {
+    "name": "01 Management",
+    "tests": [
+     {
+      "name": "Routers are reachable over the OOB network with SSH and RESTCONF",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "10.830104",
+      "start": "2026-09-13T09:30:14.608898"
+     },
+     {
+      "name": "Management interface lives in Mgmt-vrf with a default route to the host",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.997523",
+      "start": "2026-09-13T09:30:25.439220"
+     },
+     {
+      "name": "License boot level provides the security feature set",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.497624",
+      "start": "2026-09-13T09:30:28.436940"
+     },
+     {
+      "name": "AAA, SSH and VTY hardening from the NAC baseline",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "7.986373",
+      "start": "2026-09-13T09:30:29.934740"
+     }
+    ],
+    "passed": 4,
+    "failed": 0
+   },
+   {
+    "name": "02 Underlay",
+    "tests": [
+     {
+      "name": "WAN point-to-point interfaces are up with the modelled addresses",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "5.017399",
+      "start": "2026-09-13T09:30:37.955478"
+     },
+     {
+      "name": "Each spoke reaches the hub across its own link and nothing else",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "6.475432",
+      "start": "2026-09-13T09:30:42.973054"
+     },
+     {
+      "name": "CDP shows the hub on each spoke's WAN port and both spokes on the hub",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.983776",
+      "start": "2026-09-13T09:30:49.448663"
+     },
+     {
+      "name": "Loopbacks carry the router-id and the site LAN",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.520425",
+      "start": "2026-09-13T09:30:51.433130"
+     }
+    ],
+    "passed": 4,
+    "failed": 0
+   },
+   {
+    "name": "03 Ipsec Vti",
+    "tests": [
+     {
+      "name": "Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec profile",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "5.007343",
+      "start": "2026-09-13T09:30:52.989543"
+     },
+     {
+      "name": "Tunnels are up/up at both ends and the tunnel subnet is reachable",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.027779",
+      "start": "2026-09-13T09:30:57.997051"
+     },
+     {
+      "name": "IKEv2 SAs are READY with the modelled proposal and PSK authentication",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.967723",
+      "start": "2026-09-13T09:31:01.024999"
+     },
+     {
+      "name": "Traffic through the tunnels is encrypted with the modelled transform set",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "4.039475",
+      "start": "2026-09-13T09:31:03.992882"
+     },
+     {
+      "name": "The hub holds exactly one IKEv2 session per spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.509541",
+      "start": "2026-09-13T09:31:08.032525"
+     }
+    ],
+    "passed": 5,
+    "failed": 0
+   },
+   {
+    "name": "04 Routing",
+    "tests": [
+     {
+      "name": "Hub has an Established eBGP session with each spoke over its tunnel",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.527594",
+      "start": "2026-09-13T09:31:08.577079"
+     },
+     {
+      "name": "Every spoke peers with the hub only and receives four prefixes",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.844493",
+      "start": "2026-09-13T09:31:11.104878"
+     },
+     {
+      "name": "Spokes see each other's LAN and loopback via the hub with the AS path hub-spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.983710",
+      "start": "2026-09-13T09:31:13.949527"
+     },
+     {
+      "name": "Hub learns each spoke's LAN directly from that spoke",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.490752",
+      "start": "2026-09-13T09:31:15.933390"
+     },
+     {
+      "name": "Site LANs reach each other through the encrypted tunnels",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.519726",
+      "start": "2026-09-13T09:31:16.424308"
+     }
+    ],
+    "passed": 5,
+    "failed": 0
+   },
+   {
+    "name": "05 Nac Compliance",
+    "tests": [
+     {
+      "name": "Terraform plan reports no drift from the NAC data model",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "3.927839",
+      "start": "2026-09-13T09:31:19.988512"
+     }
+    ],
+    "passed": 1,
+    "failed": 0
+   },
+   {
+    "name": "06 Nautobot",
+    "tests": [
+     {
+      "name": "Routers exist in Nautobot with role, serial, platform and management IP matching reality",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "5.850840",
+      "start": "2026-09-13T09:31:23.919431"
+     },
+     {
+      "name": "WAN links are modelled as cables between the hub and spoke ports with /30 addresses",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.288281",
+      "start": "2026-09-13T09:31:29.770441"
+     },
+     {
+      "name": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per spoke, hub/spoke endpoints",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "2.282433",
+      "start": "2026-09-13T09:31:30.058893"
+     },
+     {
+      "name": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "6.141738",
+      "start": "2026-09-13T09:31:32.341487"
+     },
+     {
+      "name": "BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the live sessions",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.578864",
+      "start": "2026-09-13T09:31:38.483399"
+     },
+     {
+      "name": "NAC device model rendered from Nautobot matches the committed file",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.563805",
+      "start": "2026-09-13T09:31:40.062430"
+     },
+     {
+      "name": "Golden Config: router backups are in Gitea and every compliance row is compliant",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "0.577131",
+      "start": "2026-09-13T09:31:40.626399"
+     }
+    ],
+    "passed": 7,
+    "failed": 0
+   }
+  ],
+  "total": 26,
+  "passed": 26,
+  "failed": 0
+ },
+ "results_dir": "2026-09-13_09-30-07",
+ "error": null,
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042001",
+ "devices": [
+  "hub",
+  "spoke1",
+  "spoke2"
+ ],
+ "log": [
+  {
+   "t": 1789306207.599478,
+   "line": "3 devices, 2 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "t": 1789306207.5998945,
+   "line": "$ ./lab.sh test"
+  },
+  {
+   "t": 1789306207.6376374,
+   "line": "==> results: /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07"
+  },
+  {
+   "t": 1789306207.6376529,
+   "line": "==> capturing router configurations (pre-run)"
+  },
+  {
+   "t": 1789306214.1049201,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/hub.running-config.txt (8638 bytes)"
+  },
+  {
+   "t": 1789306214.1049252,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/hub.startup-config.txt (4838 bytes)"
+  },
+  {
+   "t": 1789306214.1049278,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/spoke1.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789306214.1049302,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/spoke1.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789306214.1049316,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/spoke2.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789306214.1049323,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/pre-run/spoke2.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789306214.1979523,
+   "line": "==> running Robot Framework suites"
+  },
+  {
+   "t": 1789306214.4157,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306214.4159613,
+   "line": "c8000v ipsec vti lab                                                          "
+  },
+  {
+   "t": 1789306214.4159646,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306214.6097186,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane of the C..."
+  },
+  {
+   "t": 1789306214.6097224,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306225.4407442,
+   "line": "Routers are reachable over the OOB network with SSH and RESTCONF      | PASS |"
+  },
+  {
+   "t": 1789306225.4407482,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306228.4368415,
+   "line": "Management interface lives in Mgmt-vrf with a default route to the... | PASS |"
+  },
+  {
+   "t": 1789306228.4368548,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306229.935562,
+   "line": "License boot level provides the security feature set                  | PASS |"
+  },
+  {
+   "t": 1789306229.9355664,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306237.9211845,
+   "line": "AAA, SSH and VTY hardening from the NAC baseline                      | PASS |"
+  },
+  {
+   "t": 1789306237.9211879,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306237.9534836,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane... | PASS |"
+  },
+  {
+   "t": 1789306237.953505,
+   "line": "4 tests, 4 passed, 0 failed"
+  },
+  {
+   "t": 1789306237.953512,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306237.9554503,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: a dedicated point-to-poin..."
+  },
+  {
+   "t": 1789306237.9554589,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306242.9729645,
+   "line": "WAN point-to-point interfaces are up with the modelled addresses      | PASS |"
+  },
+  {
+   "t": 1789306242.9729683,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306249.4507232,
+   "line": "Each spoke reaches the hub across its own link and nothing else       | PASS |"
+  },
+  {
+   "t": 1789306249.4507267,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306251.4326196,
+   "line": "CDP shows the hub on each spoke's WAN port and both spokes on the hub | PASS |"
+  },
+  {
+   "t": 1789306251.4330018,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306252.953639,
+   "line": "Loopbacks carry the router-id and the site LAN                        | PASS |"
+  },
+  {
+   "t": 1789306252.9536524,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306252.986476,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: a dedicated poin... | PASS |"
+  },
+  {
+   "t": 1789306252.9865131,
+   "line": "4 tests, 4 passed, 0 failed"
+  },
+  {
+   "t": 1789306252.9866703,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306252.990616,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tunnel mode..."
+  },
+  {
+   "t": 1789306252.99062,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306257.9974358,
+   "line": "Each tunnel is a static VTI sourced from the WAN link and protecte... | PASS |"
+  },
+  {
+   "t": 1789306257.99744,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306261.024916,
+   "line": "Tunnels are up/up at both ends and the tunnel subnet is reachable     | PASS |"
+  },
+  {
+   "t": 1789306261.0249197,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306263.9928095,
+   "line": "IKEv2 SAs are READY with the modelled proposal and PSK authentication | PASS |"
+  },
+  {
+   "t": 1789306263.9928212,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306268.0324419,
+   "line": "Traffic through the tunnels is encrypted with the modelled transfo... | PASS |"
+  },
+  {
+   "t": 1789306268.0324543,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306268.5421457,
+   "line": "The hub holds exactly one IKEv2 session per spoke                     | PASS |"
+  },
+  {
+   "t": 1789306268.5421548,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306268.5745127,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tu... | PASS |"
+  },
+  {
+   "t": 1789306268.5745451,
+   "line": "5 tests, 5 passed, 0 failed"
+  },
+  {
+   "t": 1789306268.5745509,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306268.5770407,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per site, hub..."
+  },
+  {
+   "t": 1789306268.5770488,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306271.1056135,
+   "line": "Hub has an Established eBGP session with each spoke over its tunnel   | PASS |"
+  },
+  {
+   "t": 1789306271.105618,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306273.9494548,
+   "line": "Every spoke peers with the hub only and receives four prefixes        | PASS |"
+  },
+  {
+   "t": 1789306273.9494586,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306275.9333222,
+   "line": "Spokes see each other's LAN and loopback via the hub with the AS p... | PASS |"
+  },
+  {
+   "t": 1789306275.9333255,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306276.4247186,
+   "line": "Hub learns each spoke's LAN directly from that spoke                  | PASS |"
+  },
+  {
+   "t": 1789306276.4247224,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306279.9441137,
+   "line": "Site LANs reach each other through the encrypted tunnels              | PASS |"
+  },
+  {
+   "t": 1789306279.9441242,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306279.9766417,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per ... | PASS |"
+  },
+  {
+   "t": 1789306279.9766731,
+   "line": "5 tests, 5 passed, 0 failed"
+  },
+  {
+   "t": 1789306279.9766786,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306279.9884677,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance: the rou..."
+  },
+  {
+   "t": 1789306279.9884806,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306283.9164336,
+   "line": "Terraform plan reports no drift from the NAC data model               | PASS |"
+  },
+  {
+   "t": 1789306283.916438,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306283.9169211,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance... | PASS |"
+  },
+  {
+   "t": 1789306283.9169402,
+   "line": "1 test, 1 passed, 0 failed"
+  },
+  {
+   "t": 1789306283.9169464,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306283.9193907,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in the shared..."
+  },
+  {
+   "t": 1789306283.9193993,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306289.7703528,
+   "line": "Routers exist in Nautobot with role, serial, platform and manageme... | PASS |"
+  },
+  {
+   "t": 1789306289.7703652,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306290.0588121,
+   "line": "WAN links are modelled as cables between the hub and spoke ports w... | PASS |"
+  },
+  {
+   "t": 1789306290.0588245,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306292.3414152,
+   "line": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunne... | PASS |"
+  },
+  {
+   "t": 1789306292.3414323,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306298.4834569,
+   "line": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase... | PASS |"
+  },
+  {
+   "t": 1789306298.4834607,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306300.0623534,
+   "line": "BGP model: one AS per site, eBGP peerings over the tunnel addresse... | PASS |"
+  },
+  {
+   "t": 1789306300.062364,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306300.6263134,
+   "line": "NAC device model rendered from Nautobot matches the committed file    | PASS |"
+  },
+  {
+   "t": 1789306300.6263268,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306301.2036157,
+   "line": "Golden Config: router backups are in Gitea and every compliance ro... | PASS |"
+  },
+  {
+   "t": 1789306301.2036262,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789306301.2361872,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in t... | PASS |"
+  },
+  {
+   "t": 1789306301.2362301,
+   "line": "7 tests, 7 passed, 0 failed"
+  },
+  {
+   "t": 1789306301.2362368,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306301.2366915,
+   "line": "c8000v ipsec vti lab                                                  | PASS |"
+  },
+  {
+   "t": 1789306301.2367458,
+   "line": "26 tests, 26 passed, 0 failed"
+  },
+  {
+   "t": 1789306301.2367568,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789306301.2376075,
+   "line": "Output:  /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/output.xml"
+  },
+  {
+   "t": 1789306301.3129103,
+   "line": "Log:     /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/log.html"
+  },
+  {
+   "t": 1789306301.3162348,
+   "line": "Report:  /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/report.html"
+  },
+  {
+   "t": 1789306301.4366615,
+   "line": "==> capturing router configurations (post-run backup)"
+  },
+  {
+   "t": 1789306307.895522,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/hub.running-config.txt (8638 bytes)"
+  },
+  {
+   "t": 1789306307.8955255,
+   "line": "[hub] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/hub.startup-config.txt (4838 bytes)"
+  },
+  {
+   "t": 1789306307.8955276,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/spoke1.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789306307.8955302,
+   "line": "[spoke1] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/spoke1.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789306307.895533,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/spoke2.running-config.txt (8201 bytes)"
+  },
+  {
+   "t": 1789306307.8955355,
+   "line": "[spoke2] /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/configs/post-run/spoke2.startup-config.txt (4397 bytes)"
+  },
+  {
+   "t": 1789306307.974678,
+   "line": "    no configuration changes during the run"
+  },
+  {
+   "t": 1789306307.981096,
+   "line": "==> report: /home/dcantor/cat8000v-ipsec/results/2026-09-13_09-30-07/report.html  (rc=0)"
+  }
+ ]
+}

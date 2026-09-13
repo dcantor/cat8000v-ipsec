@@ -27,9 +27,14 @@ def wiring():
 
 
 def nodes():
-    """VM facts from lab.conf keyed by management IP: name, node index (MAC/loopback numbering), role."""
-    C = lab_conf("ROLE", "MGMT_IP", "NODE_IDX")
-    return {C["MGMT_IP"][n]: {"node": n, "idx": int(C["NODE_IDX"][n]), "role": C["ROLE"][n]} for n in C["ROLE"]}
+    """VM facts from lab.conf keyed by management IP: name, node index (MAC/loopback numbering), role, console port."""
+    C = lab_conf("ROLE", "MGMT_IP", "NODE_IDX", "CONSOLE_PORT")
+    return {C["MGMT_IP"][n]: {"node": n, "idx": int(C["NODE_IDX"][n]), "role": C["ROLE"][n], "console": int(C["CONSOLE_PORT"][n])} for n in C["ROLE"]}
+
+
+def scalars(*names):
+    out = subprocess.run(["bash", "-c", f"source {LAB}/lab.conf; for v in {' '.join(names)}; do echo \"${{!v}}\"; done"], capture_output=True, text=True, check=True).stdout.splitlines()
+    return dict(zip(names, out))
 
 
 def from_lab_conf():

@@ -61,7 +61,7 @@ def crypto_model(prof):
                                      "integrity": [x.lower() for x in p1["integrity_algorithm"]], "group": list(p1["dh_group"])}],
                       "policies": [{"name": ios["ikev2_policy"], "proposals": [ios["ikev2_proposal"]]}],
                       "keyrings": [{"name": ios["ikev2_keyring"], "peers": [{"name": ios["keyring_peer"], "ipv4_address": "0.0.0.0", "ipv4_mask": "0.0.0.0", "pre_shared_key": "${vpn_psk}"}]}],
-                      "profiles": [{"name": ios["ikev2_profile"], "match_identity_remote_ipv4_addresses": [{"address": "0.0.0.0", "mask": "0.0.0.0"}],
+                      "profiles": [{"name": ios["ikev2_profile"], "match_identity_remote_ipv4_addresses": [{"address": "0.0.0.0"}],   # no mask: IOS drops "0.0.0.0" on reload, which would read back as drift
                                     "authentication_local_pre_share": True, "authentication_remote_pre_share": True, "keyring_local": ios["ikev2_keyring"],
                                     **({"dpd_interval": prof["keepalive_interval"], "dpd_retry": prof["keepalive_retries"], "dpd_query": "on-demand"} if prof["keepalive_enabled"] else {})}]},
             "ipsec_transform_sets": [{"name": ios["transform_set"], "esp": ESP_ENC[norm(p2["encryption_algorithm"][0])], "esp_hmac": ESP_HMAC[norm(p2["integrity_algorithm"][0])]}],

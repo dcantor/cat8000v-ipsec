@@ -28,7 +28,10 @@ ensure_networks() {
 }
 
 # ---- point-to-point WAN links (UDP tunnels between VMs) --------------------
-port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }
+port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }           # UDP port a node's NIC listens on when it anchors a link
+port_far()   { echo $(( UDP_BASE + 10000 + NODE_IDX[$1]*100 + $2 )); }   # ...and the port it sends to (the other end listens there)
+node_ports() { if [[ "${ROLE[$1]}" == "hub" ]]; then seq 2 $((1 + HUB_PORTS)); else seq 2 $((1 + SPOKE_PORTS)); fi; }
+mac()        { printf '%s:%02x:%02x' "$MAC_OUI" "${NODE_IDX[$1]}" "$2"; }
 link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
   local me="$1:$2" l a b pfx
   for l in "${LINKS[@]}"; do
@@ -65,11 +68,12 @@ no_offload_xml() {   # IOS-XE's TCP stack rejects partially-checksummed segments
 X
 }
 
-router_xml() {     # Gi1 = OOB mgmt; Gi2/Gi3 = point-to-point WAN links (UDP tunnels, black-holed when unwired)
+router_xml() {     # Gi1 = OOB mgmt; Gi2.. = point-to-point WAN links (UDP tunnels, black-holed when unwired)
   local n="$1" i="${NODE_IDX[$1]}" d; d="$(node_dir "$n")"
   cat <<X
 <domain type='kvm'>
   <name>$n</name>
+  <uuid>$(uuidgen --sha1 --namespace @dns --name "cat8000v-ipsec.$n")</uuid>
   <title>Catalyst 8000v ${ROLE[$n]} ($n)</title>
   <memory unit='MiB'>$C8000V_RAM_MIB</memory>
   <vcpu placement='static'>$C8000V_VCPU</vcpu>
@@ -93,27 +97,31 @@ router_xml() {     # Gi1 = OOB mgmt; Gi2/Gi3 = point-to-point WAN links (UDP tun
     </disk>
     <!-- GigabitEthernet1: OOB management ${MGMT_IP[$n]} (Mgmt-vrf) -->
     <interface type='network'>
-      <mac address='$MAC_OUI:0$i:01'/>
+      <mac address='$(mac "$n" 1)'/>
       <source network='$OOB_NET'/>
       <model type='virtio'/>
 $(no_offload_xml)
       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
 X
-  local p peer remote
-  for p in 2 3; do
+  local p peer remote local
+  for p in $(node_ports "$n"); do
     peer="$(link_peer "$n" "$p")"
+    # the first end of a link (the hub) always listens on port_local/sends to port_far - wired or not - so the
+    # hub's XML never changes when spokes are added; the second end mirrors that pair
+    local="$(port_local "$n" "$p")"; remote="$(port_far "$n" "$p")"
     if [[ -n "$peer" ]]; then
-      read -r pn pp pfx _ <<<"$peer"; remote="$(port_local "$pn" "$pp")"
+      read -r pn pp pfx end <<<"$peer"
+      [[ "$end" == "2" ]] && { local="$(port_far "$pn" "$pp")"; remote="$(port_local "$pn" "$pp")"; }
       echo "    <!-- GigabitEthernet$p: $(wan_ip "$n" "$p") <-> $pn Gi$pp ($pfx) -->"
     else
-      remote=$(( UDP_BASE + 10000 + i*100 + p )); echo "    <!-- GigabitEthernet$p: unwired -->"
+      echo "    <!-- GigabitEthernet$p: unwired -->"
     fi
     cat <<X
     <interface type='udp'>
-      <mac address='$MAC_OUI:0$i:0$p'/>
+      <mac address='$(mac "$n" "$p")'/>
       <source address='127.0.0.1' port='$remote'>
-        <local address='127.0.0.1' port='$(port_local "$n" "$p")'/>
+        <local address='127.0.0.1' port='$local'/>
       </source>
       <model type='virtio'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='$(printf '0x%02x' $((2+p)))' function='0x0'/>
