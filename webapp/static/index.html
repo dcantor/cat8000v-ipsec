@@ -336,7 +336,7 @@ async function start(mode) {
 
 function watch(id) {
   current = id; logCount = 0; $('log').textContent = ''; $('testcard').hidden = true;
-  document.querySelectorAll('.actions button').forEach(b => b.disabled = true);
+  document.querySelectorAll('#f .actions button').forEach(b => b.disabled = true);
   clearInterval(pollTimer); poll(); pollTimer = setInterval(poll, 2000);
 }
 
@@ -344,7 +344,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove') load(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove') load(); }
 }
 
 function render(r) {
