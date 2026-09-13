@@ -1,0 +1,329 @@
+! spoke3 (10.2.0.14) show running-config captured 2026-09-13 11:00:37
+Building configuration...
+
+Current configuration : 8130 bytes
+!
+! Last configuration change at 14:56:00 UTC Sun Sep 13 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname spoke3
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-426441824
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-426441824
+ revocation-check none
+ rsakeypair TP-self-signed-426441824
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+!
+crypto pki certificate chain TP-self-signed-426441824
+ certificate self-signed 01
+  3082032E 30820216 A0030201 02020101 300D0609 2A864886 F70D0101 0D050030 
+  30312E30 2C060355 04030C25 494F532D 53656C66 2D536967 6E65642D 43657274 
+  69666963 6174652D 34323634 34313832 34301E17 0D323630 39313331 34343834 
+  325A170D 33363039 31323134 34383432 5A303031 2E302C06 03550403 0C25494F 
+  532D5365 6C662D53 69676E65 642D4365 72746966 69636174 652D3432 36343431 
+  38323430 82012230 0D06092A 864886F7 0D010101 05000382 010F0030 82010A02 
+  82010100 C6610F9E D72509B8 A896EA2D FE3EC835 E5FDD4C4 79FB2FFC 235E921E 
+  6FA6B445 2B278128 3DC0C203 D4030F60 E97950D9 D6F8795F 58DAAC72 58800C71 
+  42868BC3 49685D4C 8A54915D C28E62C7 6A055736 89468F58 37002937 957E5490 
+  7291A895 0CA0083E 7392BE23 E40024B2 8D22FC4D A75FC566 461322FF 8B058528 
+  B1DA7C3E 55D7BE20 5A4CD9AF DCA8ACE3 A35BEE85 646B6D4B 88E6574C 44AD187F 
+  DCFE19DF E3F2D526 FE2706CD F5F1900B 2BE51E3F 073048C4 0A947A20 DF0B92A5 
+  F1EC5BA8 B73AE943 BD15403F 08A19541 A375868F 333E4550 DBD2200C 7D223DBA 
+  79AECA47 363317BF BA7AAE8D 3F8485D0 B072BBF8 F2C3CDF1 6B68F369 0518E1A9 
+  D028DE23 02030100 01A35330 51301D06 03551D0E 04160414 EC49AB01 8D2EC7BD 
+  80F057C5 D1A45CB4 8E4C135E 301F0603 551D2304 18301680 14EC49AB 018D2EC7 
+  BD80F057 C5D1A45C B48E4C13 5E300F06 03551D13 0101FF04 05300301 01FF300D 
+  06092A86 4886F70D 01010D05 00038201 010020C2 D08F9DAA 7B435953 4B3BCBA4 
+  8A8360C7 5D0A9F0B 477AA481 8BC7899C 793E14E3 98C92CD3 0625F741 ADC197B4 
+  E21D910E 4E64FEFB 6F278EDD 23398F11 5B33CC08 85C2D576 DA85B663 B06F0279 
+  9D9E6CD3 6D6C653E 1D9B8C4A 983B4F06 DD521B6E 1BB52872 5B020166 FD569774 
+  260C60A6 BD0535E6 6459722A 3860B75D 89687DF8 E505A1F7 AE8C7E1F 08FCF158 
+  ADE1EED9 4B08B285 E6DB388B 21245BE6 217BAA6F 6ED7E6D4 D3BACD9F B8ACD29E 
+  9C855487 F481BECC 0BA00066 F5DEC58B 2A857130 C46C3B0F 48D2F51D E5CC2F75 
+  3E72C1FD A5BCE76C 0DC9213D 6EF560E5 3FA65997 9A1D92BB 84511945 6F32BDD1 
+  65C7D1D2 59A0B154 CDC74218 D02510A3 97D9
+  	quit
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01
+  30820321 30820209 A0030201 02020101 300D0609 2A864886 F70D0101 0B050030 
+  32310E30 0C060355 040A1305 43697363 6F312030 1E060355 04031317 43697363 
+  6F204C69 63656E73 696E6720 526F6F74 20434130 1E170D31 33303533 30313934 
+  3834375A 170D3338 30353330 31393438 34375A30 32310E30 0C060355 040A1305 
+  43697363 6F312030 1E060355 04031317 43697363 6F204C69 63656E73 696E6720 
+  526F6F74 20434130 82012230 0D06092A 864886F7 0D010101 05000382 010F0030 
+  82010A02 82010100 A6BCBD96 131E05F7 145EA72C 2CD686E6 17222EA1 F1EFF64D 
+  CBB4C798 212AA147 C655D8D7 9471380D 8711441E 1AAF071A 9CAE6388 8A38E520 
+  1C394D78 462EF239 C659F715 B98C0A59 5BBB5CBD 0CFEBEA3 700A8BF7 D8F256EE 
+  4AA4E80D DB6FD1C9 60B1FD18 FFC69C96 6FA68957 A2617DE7 104FDC5F EA2956AC 
+  7390A3EB 2B5436AD C847A2C5 DAB553EB 69A9A535 58E9F3E3 C0BD23CF 58BD7188 
+  68E69491 20F320E7 948E71D7 AE3BCC84 F10684C7 4BC8E00F 539BA42B 42C68BB7 
+  C7479096 B4CB2D62 EA2F505D C7B062A4 6811D95B E8250FC4 5D5D5FB8 8F27D191 
+  C55F0D76 61F9A4CD 3D992327 A8BB03BD 4E6D7069 7CBADF8B DF5F4368 95135E44 
+  DFC7C6CF 04DD7FD1 02030100 01A34230 40300E06 03551D0F 0101FF04 04030201 
+  06300F06 03551D13 0101FF04 05300301 01FF301D 0603551D 0E041604 1449DC85 
+  4B3D31E5 1B3E6A17 606AF333 3D3B4C73 E8300D06 092A8648 86F70D01 010B0500 
+  03820101 00507F24 D3932A66 86025D9F E838AE5C 6D4DF6B0 49631C78 240DA905 
+  604EDCDE FF4FED2B 77FC460E CD636FDB DD44681E 3A5673AB 9093D3B1 6C9E3D8B 
+  D98987BF E40CBD9E 1AECA0C2 2189BB5C 8FA85686 CD98B646 5575B146 8DFC66A8 
+  467A3DF4 4D565700 6ADF0F0D CF835015 3C04FF7C 21E878AC 11BA9CD2 55A9232C 
+  7CA7B7E6 C1AF74F6 152E99B7 B1FCF9BB E973DE7F 5BDDEB86 C71E3B49 1765308B 
+  5FB0DA06 B92AFE7F 494E8A9E 07B85737 F3A58BE1 1A48A229 C37C1E69 39F08678 
+  80DDCD16 D6BACECA EEBC7CF9 8428787B 35202CDC 60E4616A B623CDBD 230E3AFB 
+  418616A9 4093E049 4D10AB75 27E86F73 932E35B5 8862FDAE 0275156F 719BB2F0 
+  D697DF7F 28
+  	quit
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 9TARTOQ9L2Q
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$dJMcI2VUnkTlY.$hLyxW7ZBfdnfPi.SsprWHI2X0fbk0yYPB.VDUxwzEkE
+!
+username admin privilege 15 secret 9 $9$laENaPfCPvnjJE$Tmh2XL0/3pI/8eE8pZzfMRYhWS9Jbq6ASkB1ZOCXL6w
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key cisco123
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2
+ match identity remote address 0.0.0.0 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.4 255.255.255.255
+!
+interface Loopback10
+ description site LAN
+ ip address 192.168.13.1 255.255.255.0
+!
+interface Tunnel3
+ description IPsec VTI to hub
+ ip address 172.17.3.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.3.1
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.14 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to hub Gi4
+ ip address 100.65.3.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ no ip address
+ shutdown
+ negotiation auto
+!
+router bgp 65203
+ bgp router-id 10.255.1.4
+ bgp log-neighbor-changes
+ neighbor 172.17.3.1 remote-as 65200
+ neighbor 172.17.3.1 description eBGP hub (Tunnel3)
+ !
+ address-family ipv4
+  network 10.255.1.4 mask 255.255.255.255
+  network 192.168.13.0
+  neighbor 172.17.3.1 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

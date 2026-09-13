@@ -148,6 +148,11 @@ def ensure_ip(itf, cidr, primary_of=None, exclusive=True):
     if primary_of is not None: ensure(primary_of, primary_ip4=ip.id)
     return ip
 def ensure_cable(x, y):
+    for itf in (x, y):   # a cable left with one end (its device was deleted) is replaced
+        c = itf.cable
+        if c and (getattr(c, "termination_b", None) is None or getattr(c, "termination_a", None) is None):
+            requests.delete(f"{a.url}/api/dcim/cables/{c.id}/", headers=H, timeout=30); created.append(f"removed dangling cable on {itf.device.name}/{itf.name}")
+    x, y = nb.dcim.interfaces.get(x.id), nb.dcim.interfaces.get(y.id)
     if x.cable or y.cable: return
     nb.dcim.cables.create(termination_a_type="dcim.interface", termination_a_id=x.id, termination_b_type="dcim.interface", termination_b_id=y.id, status=connected.id)
     created.append(f"cable:{x.device.name}:{x.name}-{y.device.name}:{y.name}")

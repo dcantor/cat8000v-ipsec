@@ -233,6 +233,7 @@ def remove_from_nautobot(name, url, token, prefixes=()):
     # the hub's WAN address on the port facing this spoke (the cable goes with the spoke's interface)
     for itf in (get("dcim/interfaces/", device=name, depth=1) if dev else []):
         for ip in get("ipam/ip-addresses/", interfaces=itf["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"address {ip['address']}")
+        if itf.get("cable"): delete(f"dcim/cables/{itf['cable']['id']}/", f"cable on {name}/{itf['name']}")   # else it lingers half-terminated on the hub
         ci = itf.get("connected_interface") or {}
         if ci.get("id"):
             for ip in get("ipam/ip-addresses/", interfaces=ci["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"hub WAN address {ip['address']}")
