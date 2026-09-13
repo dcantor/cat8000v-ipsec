@@ -61,7 +61,8 @@ class Run:
     def to_dict(self, with_log=True):
         d = {"id": self.id, "mode": self.mode, "status": self.status, "started": self.started, "finished": self.finished, "steps": self.steps,
              "tests": self.tests, "results_dir": self.results_dir, "error": self.error, "options": self.options,
-             "site": self.intent.get("site", {}).get("name"), "vpn": self.intent.get("vpn", {}).get("name"), "change_ticket": self.intent.get("vpn", {}).get("change_ticket")}
+             "site": self.intent.get("site", {}).get("name"), "vpn": self.intent.get("vpn", {}).get("name"), "change_ticket": self.intent.get("vpn", {}).get("change_ticket"),
+             "devices": [d["name"] for d in self.intent.get("devices", [])]}
         if with_log: d["log"] = self.log
         return d
 

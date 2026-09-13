@@ -261,7 +261,7 @@ function render(r) {
     $('testcard').hidden = false;
     const t = r.tests, pct = t.total ? Math.round(100 * t.passed / t.total) : 0;
     $('test-summary').innerHTML = `<div><span class="${t.failed ? 'test-fail' : 'test-pass'}">${t.failed ? 'FAIL' : 'PASS'}</span> — ${t.passed}/${t.total} tests passed</div><div class="bar"><div class="${t.failed ? 'fail' : ''}" style="width:${pct}%"></div></div>`;
-    $('test-links').innerHTML = r.results_dir ? `<a href="/results/${r.results_dir}/report.html" target="_blank">report.html</a> · <a href="/results/${r.results_dir}/log.html" target="_blank">log.html</a> · <a href="/results/${r.results_dir}/configs/" target="_blank">config backups</a>` : '';
+    $('test-links').innerHTML = r.results_dir ? `<a href="/results/${r.results_dir}/report.html" target="_blank">report.html</a> · <a href="/results/${r.results_dir}/log.html" target="_blank">log.html</a> · backups: ${(r.devices || []).map(d => `<a href="/results/${r.results_dir}/configs/post-run/${d}.running-config.txt" target="_blank">${esc(d)}</a>`).join(' ')} · <a href="/results/${r.results_dir}/configs/pre-vs-post.diff" target="_blank">diff</a>` : '';
     $('test-suites').innerHTML = t.suites.map(s => `<h3 style="font-size:13px;margin:12px 0 4px">${esc(s.name)} <span class="${s.failed ? 'test-fail' : 'test-pass'}">${s.passed}/${s.tests.length}</span></h3>
       <table>${s.tests.map(x => `<tr><td style="width:60px" class="${x.status === 'PASS' ? 'test-pass' : 'test-fail'}">${x.status}</td><td>${esc(x.name)}${x.status !== 'PASS' ? `<div class="msg">${esc(x.message)}</div>` : ''}</td><td style="width:60px;color:var(--muted)">${x.elapsed ? Number(x.elapsed).toFixed(1) + 's' : ''}</td></tr>`).join('')}</table>`).join('');
   }
