@@ -1,0 +1,12 @@
+[Unit]
+Description=C8000v IPsec lab - VPN provisioning portal (http://0.0.0.0:8090)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/dcantor/cat8000v-ipsec
+ExecStart=/home/dcantor/cat8000v-ipsec/lab.sh webapp
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

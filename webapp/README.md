@@ -48,3 +48,9 @@ Limits by design: the routers themselves (VM names, management addresses, which 
 are fixed by `lab.conf`/libvirt — the portal validates that the links in the form match the wiring.
 Renaming a router is allowed (Nautobot devices are matched by management IP) but Terraform then
 re-creates that router's resources under the new name.
+
+## Running it as a service
+
+`webapp/lab-webapp.service` is a systemd *user* unit (installed in `~/.config/systemd/user/`,
+enabled with `systemctl --user enable --now lab-webapp`; the user has lingering enabled so it
+starts at boot). Logs: `journalctl --user -u lab-webapp -f`.

@@ -26,6 +26,10 @@ and modelled in the shared Nautobot (`nautobot/`).
 
 ## Quick start
 
+The **VPN provisioning portal** (http://192.168.50.231:8090, [webapp/README.md](webapp/README.md))
+does all of the below from a web form: edit site / router / tunnel / crypto metadata, press
+*Deploy*, watch Nautobot → NAC → Terraform → tests run, read the test report.
+
 ```bash
 ./lab.sh up               # define networks + routers, start them
 ./lab.sh bootstrap        # first boot only: day-0, SSH keys, license level (auto-reload), RESTCONF (~6 min)
@@ -50,6 +54,8 @@ and modelled in the shared Nautobot (`nautobot/`).
 | `nac/data/device_groups.nac.yaml` | group `IPSEC_VPN`: only the pre-shared key (`vpn_psk`) |
 | `nac/data/devices.nac.yaml` | **GENERATED from Nautobot**: WAN interfaces, loopbacks, VTI templates, crypto suite, full eBGP block per router |
 | `nautobot/` | onboarding, seed, renderer, Golden Config setup + `c8000v-ipsec.j2`, saved GraphQL query `nac-c8000v-ipsec-model` |
+| `lab-intent.json` | the VPN service intent (site, hostnames, metadata, tunnels, crypto, PSK) — created from `lab.conf` by `./lab.sh intent init`, edited by the portal, read by seed/render/tests |
+| `webapp/` | VPN provisioning portal: FastAPI backend + single-page UI (`./lab.sh webapp`, systemd user unit) |
 | `tests/suites/` | `01_management`, `02_underlay`, `03_ipsec_vti`, `04_routing`, `05_nac_compliance`, `06_nautobot` |
 | `results/` | one folder per run: `configs/pre-run`, `configs/post-run`, diff, Robot report/log; `results/latest` symlink |
 
