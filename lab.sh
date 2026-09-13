@@ -224,7 +224,7 @@ cmd_bootstrap() {  # wait for boot, (re)apply day-0, generate SSH keys; then wai
   for n in $(nodes_or_all "$@"); do
     local d; d="$(node_dir "$n")"
     echo "[$n] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
-    python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 900 >/dev/null
+    python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 1800 >/dev/null
     echo "[$n] applying config + generating SSH keys"
     python3 "$LAB_DIR/tools/console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/iosxe_config.txt" >/dev/null
     python3 "$LAB_DIR/tools/console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/post-boot.txt" >/dev/null
@@ -241,7 +241,7 @@ for cmd in ("\r", "write memory\r", "reload\r", "\r", "\r"):
 s.close()
 PY
       sleep 60
-      python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 900 >/dev/null
+      python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 1800 >/dev/null
     fi
     for _ in $(seq 60); do restconf_ready "$n" && break; sleep 10; done
     restconf_ready "$n" && echo "[$n] ready: ssh admin@${MGMT_IP[$n]} (admin), RESTCONF up" || echo "[$n] warning: RESTCONF not answering yet"

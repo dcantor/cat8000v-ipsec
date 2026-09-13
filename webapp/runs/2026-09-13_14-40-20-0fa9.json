@@ -1,0 +1,318 @@
+{
+ "id": "2026-09-13_14-40-20-0fa9",
+ "mode": "spoke",
+ "status": "failed",
+ "started": 1789324820.2730753,
+ "finished": 1789325723.4630036,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1789324820.2734303,
+   "finished": 1789324820.3059092,
+   "summary": "spoke5 (10.2.0.18), AS 65207: hub2 GigabitEthernet6 / Tunnel12; hub3 GigabitEthernet6 / Tunnel13"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "success",
+   "started": 1789324820.3062246,
+   "finished": 1789324820.328967,
+   "summary": "lab.conf updated (hub2:6 <-> spoke5:2, hub3:6 <-> spoke5:3), nodes/spoke5/iosxe_config.txt written"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "success",
+   "started": 1789324820.329341,
+   "finished": 1789324822.724823,
+   "summary": "VM spoke5 defined and started (console 127.0.0.1:5208)"
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "failed",
+   "started": 1789324822.725206,
+   "finished": 1789325723.4629889,
+   "summary": "bootstrap failed (rc=1)"
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "bootstrap failed (rc=1)",
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "hub2",
+  "hub3",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke5",
+  "mgmt_ip": "10.2.0.18",
+  "node_idx": 8,
+  "console_port": 5208,
+  "router_id": "10.255.1.8",
+  "lan": "192.168.17.0/24",
+  "asn": 65207,
+  "role": "spoke",
+  "comments": "",
+  "site_code": "LAB-IPSEC",
+  "contact": "noc@lab.local",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "links": [
+   {
+    "hub": "hub2",
+    "hub_port": 6,
+    "spoke_port": 2,
+    "tunnel_id": 12,
+    "wan_prefix": "100.65.12.0/30",
+    "tunnel_prefix": "172.17.12.0/30",
+    "hub_wan_ip": "100.65.12.1",
+    "spoke_wan_ip": "100.65.12.2",
+    "hub_tunnel_ip": "172.17.12.1",
+    "spoke_tunnel_ip": "172.17.12.2",
+    "hub_ports_free": [
+     6,
+     7,
+     8,
+     9
+    ],
+    "hub_tunnels": 4,
+    "spoke": "spoke5"
+   },
+   {
+    "hub": "hub3",
+    "hub_port": 6,
+    "spoke_port": 3,
+    "tunnel_id": 13,
+    "wan_prefix": "100.65.13.0/30",
+    "tunnel_prefix": "172.17.13.0/30",
+    "hub_wan_ip": "100.65.13.1",
+    "spoke_wan_ip": "100.65.13.2",
+    "hub_tunnel_ip": "172.17.13.1",
+    "spoke_tunnel_ip": "172.17.13.2",
+    "hub_ports_free": [
+     6,
+     7,
+     8,
+     9
+    ],
+    "hub_tunnels": 4,
+    "spoke": "spoke5"
+   }
+  ],
+  "context": {
+   "hubs": [
+    {
+     "name": "hub",
+     "tunnels": 3,
+     "capacity": 50,
+     "ports_free": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    },
+    {
+     "name": "hub2",
+     "tunnels": 4,
+     "capacity": 50,
+     "ports_free": [
+      6,
+      7,
+      8,
+      9
+     ]
+    },
+    {
+     "name": "hub3",
+     "tunnels": 4,
+     "capacity": 50,
+     "ports_free": [
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   ],
+   "capacity": 50,
+   "spoke_ports": [
+    2,
+    3,
+    4,
+    5
+   ]
+  }
+ },
+ "resume_of": null,
+ "removal": null,
+ "log": [
+  {
+   "t": 1789324820.305899,
+   "line": "spoke5 (10.2.0.18), AS 65207: hub2 GigabitEthernet6 / Tunnel12; hub3 GigabitEthernet6 / Tunnel13"
+  },
+  {
+   "t": 1789324820.3059032,
+   "line": "hub2 will get: GigabitEthernet6 100.65.12.1/30, Tunnel12 172.17.12.1/30 -> 100.65.12.2, neighbor 172.17.12.2 remote-as 65207"
+  },
+  {
+   "t": 1789324820.3059053,
+   "line": "hub3 will get: GigabitEthernet6 100.65.13.1/30, Tunnel13 172.17.13.1/30 -> 100.65.13.2, neighbor 172.17.13.2 remote-as 65207"
+  },
+  {
+   "t": 1789324820.3289642,
+   "line": "lab.conf updated (hub2:6 <-> spoke5:2, hub3:6 <-> spoke5:3), nodes/spoke5/iosxe_config.txt written"
+  },
+  {
+   "t": 1789324820.3295457,
+   "line": "$ ./lab.sh up spoke5"
+  },
+  {
+   "t": 1789324820.71307,
+   "line": "[spoke5] creating overlay disk on c8000v-universalk9_16G_serial.17.15.06.qcow2"
+  },
+  {
+   "t": 1789324820.7222176,
+   "line": "[spoke5] building day-0 config ISO"
+  },
+  {
+   "t": 1789324822.724414,
+   "line": "[spoke5] started (console: 127.0.0.1:5208)"
+  },
+  {
+   "t": 1789324822.725446,
+   "line": "this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF"
+  },
+  {
+   "t": 1789324822.725452,
+   "line": "$ ./lab.sh bootstrap spoke5"
+  },
+  {
+   "t": 1789324822.8347275,
+   "line": "[spoke5] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
+  },
+  {
+   "t": 1789325723.4103577,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789325723.4110477,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tools/console.py\", line 94, in <module>"
+  },
+  {
+   "t": 1789325723.4110518,
+   "line": "    main()"
+  },
+  {
+   "t": 1789325723.4110537,
+   "line": "    ~~~~^^"
+  },
+  {
+   "t": 1789325723.4110653,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tools/console.py\", line 72, in main"
+  },
+  {
+   "t": 1789325723.4110692,
+   "line": "    c.expect_prompt(t, nudge=True)"
+  },
+  {
+   "t": 1789325723.4110713,
+   "line": "    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^"
+  },
+  {
+   "t": 1789325723.4110742,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tools/console.py\", line 52, in expect_prompt"
+  },
+  {
+   "t": 1789325723.4110768,
+   "line": "    raise TimeoutError(\"no prompt within %ss\" % timeout)"
+  },
+  {
+   "t": 1789325723.411086,
+   "line": "TimeoutError: no prompt within 900s"
+  },
+  {
+   "t": 1789325723.4629993,
+   "line": "!! bootstrap failed (rc=1)"
+  }
+ ]
+}

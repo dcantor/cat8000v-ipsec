@@ -1,0 +1,159 @@
+{
+ "id": "2026-09-13_13-44-26-4688",
+ "mode": "hub",
+ "status": "failed",
+ "started": 1789321466.0322363,
+ "finished": 1789321466.0927734,
+ "steps": [
+  {
+   "name": "hub_validate",
+   "title": "Validate hub allocation",
+   "status": "failed",
+   "started": 1789321466.03321,
+   "finished": 1789321466.092741,
+   "summary": "spoke1 has no free WAN port for hub3"
+  },
+  {
+   "name": "hub_labconf",
+   "title": "Register the hub in lab.conf + day-0 config (links to every spoke)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "hub_vm",
+   "title": "Create and boot the hub VM",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "hub_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "hub_onboard",
+   "title": "Onboard the hub into Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "hub_intent",
+   "title": "Add the hub, its links and tunnels to the intent",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "spoke1 has no free WAN port for hub3",
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "hub2",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "hub3",
+  "mgmt_ip": "10.2.0.17",
+  "node_idx": 7,
+  "console_port": 5207,
+  "router_id": "10.255.1.7",
+  "lan": "192.168.16.0/24",
+  "asn": 65206,
+  "role": "hub",
+  "comments": "",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "connect_spokes": [
+   "spoke1",
+   "spoke2",
+   "spoke3",
+   "spoke4"
+  ],
+  "context": {
+   "spokes": [
+    "spoke1",
+    "spoke2",
+    "spoke3",
+    "spoke4"
+   ],
+   "capacity": 50
+  }
+ },
+ "resume_of": null,
+ "removal": null,
+ "log": [
+  {
+   "t": 1789321466.0927534,
+   "line": "!! spoke1 has no free WAN port for hub3"
+  }
+ ]
+}
