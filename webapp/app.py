@@ -32,6 +32,8 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
                "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
                "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
+               "rm_validate": "Validate removal", "rm_down": "Power off the spoke VM", "rm_nautobot": "Remove the spoke from Nautobot (tunnel, endpoints, BGP, device, addresses)",
+               "rm_intent": "Remove from lab.conf and the intent", "rm_state": "Forget the spoke in the Terraform state", "rm_vm": "Delete the VM",
                "render": "Render NAC data from Nautobot", "plan": "Terraform plan", "apply": "Terraform apply + save config",
                "golden": "Golden Config backup / intended / compliance", "test": "Robot Framework tests"}
 
@@ -59,6 +61,12 @@ class Run:
         if self.mode == "test": return ["validate", "test"]
         if self.mode == "spoke":
             steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "plan", "apply"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", True): steps.append("test")
+            return steps
+        if self.mode == "remove":
+            # hub config is removed by Terraform (native tunnel/ethernet/BGP resources are destroyed) once the spoke is gone from Nautobot
+            steps = ["rm_validate", "rm_down", "rm_nautobot", "rm_intent", "nautobot", "render", "rm_state", "plan", "apply", "rm_vm"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
             return steps
@@ -146,6 +154,40 @@ class Run:
         s["summary"] = f"intent now has {len(self.intent['devices'])} devices / {len(self.intent['tunnels'])} tunnels; hub gets {hc['interface']} {hc['wan_ip']}, {hc['tunnel']} {hc['tunnel_ip']}, neighbor {hc['bgp_neighbor']}"
         self.say(s["summary"])
 
+    # ---- spoke removal steps --------------------------------------------------
+    def do_rm_validate(self, s):
+        problems, det = spokes.removal_plan(self.spoke["name"])
+        if problems: raise RuntimeError("cannot remove: " + "; ".join(problems))
+        self.removal = det
+        s["summary"] = f"{det['name']} ({det['mgmt_ip']}): frees {det['hub']} {det['hub_interface']}, {det['tunnel']} {det['tunnel_prefix']}, WAN {det['wan_prefix']}, AS {det['asn']}; {det['tunnels_after']}/{det['capacity']} tunnels after"
+        self.say(s["summary"])
+
+    def do_rm_down(self, s):
+        rc = self.sh(["./lab.sh", "down", self.spoke["name"]])
+        if rc: raise RuntimeError(f"lab.sh down failed (rc={rc})")
+        s["summary"] = "VM powered off (config saved)"
+
+    def do_rm_nautobot(self, s):
+        det = self.removal
+        pfx = [p for p in (det.get("wan_prefix"), det.get("tunnel_prefix"), det.get("lan"), f"{det['router_id']}/32") if p]
+        done = spokes.remove_from_nautobot(self.spoke["name"], NAUTOBOT_URL, nautobot_token(), pfx)
+        for d in done: self.say("  removed " + d)
+        s["summary"] = f"{len(done)} objects removed"
+
+    def do_rm_intent(self, s):
+        new = spokes.remove_from_intent(self.spoke["name"]); spokes.remove_from_lab_conf(self.spoke["name"])
+        problems = intent_mod.validate(new)
+        if problems: raise RuntimeError("intent invalid after removal: " + "; ".join(problems))
+        intent_mod.save(new); self.intent = new; (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(new, indent=2))
+        s["summary"] = f"intent now has {len(new['devices'])} devices / {len(new['tunnels'])} tunnels; lab.conf no longer lists {self.spoke['name']}"
+
+    def do_rm_state(self, s):
+        n = spokes.forget_in_terraform(self.spoke["name"], self.say); s["summary"] = f"{n} resources dropped from the state (the router is gone; the hub's are destroyed by the apply)"
+
+    def do_rm_vm(self, s):
+        spokes.destroy_vm(self.spoke["name"], self.options.get("delete_disk", True))
+        s["summary"] = "VM undefined" + (", disk and node directory deleted" if self.options.get("delete_disk", True) else " (disk kept)")
+
     # ---- steps ---------------------------------------------------------------
     def do_validate(self, s):
         problems = intent_mod.validate(self.intent)
@@ -178,10 +220,23 @@ class Run:
     def do_apply(self, s):
         if getattr(self, "plan_rc", 2) == 0:
             s["summary"] = "nothing to apply"; self.say("no changes — skipping apply"); return
+        # the NAC module has no dependency from tunnel interfaces to the IPsec profile they reference, so on a new
+        # router the VTI could be pushed before its profile exists ("Device refused one or more commands"):
+        # create the crypto profiles (and everything they depend on) first
+        rc = self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1",
+                      "-target=module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile"])
+        if rc: raise RuntimeError(f"terraform apply (crypto profiles first) failed (rc={rc})")
         rc = self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1"])
         if rc: raise RuntimeError(f"terraform apply failed (rc={rc})")
         summary = [l["line"] for l in self.log if l["line"].startswith("Apply complete")]
         s["summary"] = summary[-1] if summary else "applied"
+        # IOS-XE re-syncs its YANG datastore after interface deletions/reloads and then elides some values (e.g. the
+        # transform-set key size), which reads back as drift: converge with one more apply instead of failing later
+        rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", "-parallelism=1"])
+        if rc == 2:
+            self.say("post-apply drift (DMI re-sync) — re-asserting once")
+            if self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1"]): raise RuntimeError("convergence apply failed")
+            s["summary"] += " (+1 convergence apply)"
 
     def do_golden(self, s):
         rc = self.sh(["./lab.sh", "nautobot", "golden"])
@@ -282,12 +337,22 @@ def spoke_validate(body: dict):
     return {"problems": problems, "hub_changes": spokes.hub_changes(spec) if not problems else None}
 
 
+@app.get("/api/spokes/{name}/removal")
+def spoke_removal(name: str):
+    problems, det = spokes.removal_plan(name)
+    return {"problems": problems, "details": det}
+
+
 @app.post("/api/runs")
 def start_run(body: dict):
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke"): raise HTTPException(400, "mode must be deploy, plan, test or spoke")
+    if mode not in ("deploy", "plan", "test", "spoke", "remove"): raise HTTPException(400, "mode must be deploy, plan, test, spoke or remove")
     spoke = None
-    if mode == "spoke":
+    if mode == "remove":
+        spoke = body.get("spoke") or {}; problems, _ = spokes.removal_plan(spoke.get("name", ""))
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    elif mode == "spoke":
         spoke = body.get("spoke") or {}; problems = spokes.validate(spoke)
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()

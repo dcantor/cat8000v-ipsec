@@ -1,0 +1,187 @@
+{
+ "id": "2026-09-13_10-45-59-4638",
+ "mode": "spoke",
+ "status": "running",
+ "started": 1789310759.8334973,
+ "finished": null,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1789310759.8344162,
+   "finished": 1789310759.8670835,
+   "summary": "spoke3 (10.2.0.14) on hub GigabitEthernet4, Tunnel3 172.17.3.0/30, AS 65203"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "success",
+   "started": 1789310759.8673325,
+   "finished": 1789310759.8768885,
+   "summary": "lab.conf updated (link hub:4 <-> spoke3:2), nodes/spoke3/iosxe_config.txt written"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "success",
+   "started": 1789310759.8770938,
+   "finished": 1789310760.9649,
+   "summary": "VM spoke3 defined and started (console 127.0.0.1:5204)"
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "running",
+   "started": 1789310760.965216,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "pending",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": null,
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "spoke1",
+  "spoke2"
+ ],
+ "spoke": {
+  "name": "spoke3",
+  "mgmt_ip": "10.2.0.14",
+  "node_idx": 4,
+  "console_port": 5204,
+  "hub": "hub",
+  "hub_port": 4,
+  "spoke_port": 2,
+  "tunnel_id": 3,
+  "wan_prefix": "100.65.3.0/30",
+  "tunnel_prefix": "172.17.3.0/30",
+  "router_id": "10.255.1.4",
+  "lan": "192.168.13.0/24",
+  "asn": 65203,
+  "comments": "",
+  "site_code": "LAB-IPSEC",
+  "contact": "noc@lab.local",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "context": {
+   "hub": "hub",
+   "hub_ports_free": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "tunnels": 2,
+   "capacity": 50,
+   "hub_wan_ip": "100.65.3.1",
+   "spoke_wan_ip": "100.65.3.2",
+   "hub_tunnel_ip": "172.17.3.1",
+   "spoke_tunnel_ip": "172.17.3.2"
+  }
+ },
+ "log": [
+  {
+   "t": 1789310759.8670716,
+   "line": "spoke3 (10.2.0.14) on hub GigabitEthernet4, Tunnel3 172.17.3.0/30, AS 65203"
+  },
+  {
+   "t": 1789310759.8670812,
+   "line": "hub will get: hub=hub, interface=GigabitEthernet4, wan_ip=100.65.3.1/30, tunnel=Tunnel3, tunnel_ip=172.17.3.1/30, tunnel_destination=100.65.3.2, bgp_neighbor=172.17.3.2 remote-as 65203"
+  },
+  {
+   "t": 1789310759.876885,
+   "line": "lab.conf updated (link hub:4 <-> spoke3:2), nodes/spoke3/iosxe_config.txt written"
+  },
+  {
+   "t": 1789310759.8772757,
+   "line": "$ ./lab.sh up spoke3"
+  },
+  {
+   "t": 1789310759.9415338,
+   "line": "[spoke3] creating overlay disk on c8000v-universalk9_16G_serial.17.15.06.qcow2"
+  },
+  {
+   "t": 1789310759.9505932,
+   "line": "[spoke3] building day-0 config ISO"
+  },
+  {
+   "t": 1789310760.9633894,
+   "line": "[spoke3] started (console: 127.0.0.1:5204)"
+  }
+ ]
+}

@@ -10,10 +10,8 @@ iosxe:
       system:
         ip_domain_name: "${domain_name}"
         ip_domain_lookup: false
-        ssh:
-          version: 2
-          time_out: 60
-          authentication_retries: 3
+        ssh:                      # version 2 and 3 retries are the 17.15 defaults: after a DMI resync (reload,
+          time_out: 60            # interface deletion) defaults are elided and would show up as drift
         login_on_success_log: true
         login_on_failure_log: true
       service:
@@ -60,10 +58,7 @@ iosxe:
         vtys:
           - number_from: 0
             number_to: 4
-            login_authentication: default
-            transport_input: [ssh]
-            exec_timeout_minutes: 10
-            exec_timeout_seconds: 0
+            transport_input: [ssh]      # (login authentication default / exec-timeout 10 0 are defaults, see above)
             logging_synchronous: true
             access_classes:
               - access_list: MGMT-ACCESS

@@ -28,7 +28,9 @@ and modelled in the shared Nautobot (`nautobot/`).
 
 The **VPN provisioning portal** (http://192.168.50.231:8090, [webapp/README.md](webapp/README.md))
 does all of the below from a web form: edit site / router / tunnel / crypto metadata, press
-*Deploy*, watch Nautobot → NAC → Terraform → tests run, read the test report.
+*Deploy*, watch Nautobot → NAC → Terraform → tests run, read the test report; the *Inventory*
+page reports every tunnel against the headend capacity (50), and the *Add spoke* wizard /
+*Remove* action provision or decommission spoke VMs with the hub configured in the same run.
 
 ```bash
 ./lab.sh up               # define networks + routers, start them
@@ -87,7 +89,8 @@ and how `devices.nac.yaml` is rendered from it.
   lives in NAC data.
 - **NAC quirks** (same as the DMVPN lab): provider `CiscoDevNet/iosxe` 0.15 over
   RESTCONF, `save_config=false` + a `cisco-ia:save-config` RPC from `lab.sh nac`,
-  tunnel interfaces via `iosxe_cli` templates (the provider has no VTI resource),
-  `cdp: true` on the C8000v ethernets, `-parallelism=1` to avoid 409 lock races.
+  VTIs as native `interfaces.tunnels` (only `ip tcp adjust-mss` needs a CLI template),
+  `cdp: true` on the C8000v ethernets, `-parallelism=1` to avoid 409 lock races,
+  unwired hub ports rendered as explicit `shutdown` so Terraform owns their state.
 - **Golden Config**: 17 compliance features (`wan-interface` added by this lab) —
   51/51 compliant; the template renders unused Gi ports as `shutdown` too.

@@ -1,0 +1,141 @@
+{
+ "id": "2026-09-13_10-22-14-f7da",
+ "mode": "remove",
+ "status": "failed",
+ "started": 1789309334.272849,
+ "finished": 1789309339.702209,
+ "steps": [
+  {
+   "name": "rm_validate",
+   "title": "Validate removal",
+   "status": "success",
+   "started": 1789309334.2738824,
+   "finished": 1789309334.28036,
+   "summary": "spoke3 (10.2.0.14): frees hub GigabitEthernet4, Tunnel3 172.17.3.0/30, WAN 100.65.3.0/30, AS 65203; 2/50 tunnels after"
+  },
+  {
+   "name": "rm_down",
+   "title": "Power off the spoke VM",
+   "status": "success",
+   "started": 1789309334.2806308,
+   "finished": 1789309334.3282757,
+   "summary": "VM powered off (config saved)"
+  },
+  {
+   "name": "rm_nautobot",
+   "title": "Remove the spoke from Nautobot (tunnel, endpoints, BGP, device, addresses)",
+   "status": "failed",
+   "started": 1789309334.3285596,
+   "finished": 1789309339.702091,
+   "summary": "delete prefix 100.65.3.0/30: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: 100.65.3.1/30 (0bf8000a-8dd9-40e8-90ad-ffe830b84a6f)\"}"
+  },
+  {
+   "name": "rm_intent",
+   "title": "Remove from lab.conf and the intent",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rm_state",
+   "title": "Forget the spoke in the Terraform state",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rm_vm",
+   "title": "Delete the VM",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "delete prefix 100.65.3.0/30: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: 100.65.3.1/30 (0bf8000a-8dd9-40e8-90ad-ffe830b84a6f)\"}",
+ "options": {
+  "delete_disk": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "spoke1",
+  "spoke2",
+  "spoke3"
+ ],
+ "spoke": {
+  "name": "spoke3"
+ },
+ "log": [
+  {
+   "t": 1789309334.2803566,
+   "line": "spoke3 (10.2.0.14): frees hub GigabitEthernet4, Tunnel3 172.17.3.0/30, WAN 100.65.3.0/30, AS 65203; 2/50 tunnels after"
+  },
+  {
+   "t": 1789309334.280837,
+   "line": "$ ./lab.sh down spoke3"
+  },
+  {
+   "t": 1789309334.32797,
+   "line": "[spoke3] not running"
+  },
+  {
+   "t": 1789309339.7021005,
+   "line": "!! delete prefix 100.65.3.0/30: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: 100.65.3.1/30 (0bf8000a-8dd9-40e8-90ad-ffe830b84a6f)\"}"
+  }
+ ]
+}

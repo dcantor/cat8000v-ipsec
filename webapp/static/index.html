@@ -13,7 +13,7 @@
   header a { color:#9fd0ff }
   header nav { display:flex; gap:4px; margin-left:24px } header nav a { color:#c7d2e3; text-decoration:none; padding:6px 12px; border-radius:6px; font-weight:500 }
   header nav a.active { background:#243656; color:#fff }
-  main[hidden], section[hidden] { display:none }
+  main[hidden], section[hidden], .modal-bg[hidden] { display:none }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px } .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:12px 14px }
   .kpi .n { font-size:26px; font-weight:600; line-height:1.1 } .kpi .l { color:var(--muted); font-size:12px }
   .kpi.warn .n { color:var(--warn) } .kpi.bad .n { color:var(--bad) } .kpi.ok .n { color:var(--ok) }
@@ -85,7 +85,7 @@
 
     <div class="card">
       <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
-      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>Comments</th></tr></thead><tbody></tbody></table>
+      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
     </div>
 
@@ -226,6 +226,16 @@
   </div>
 </div>
 
+<div class="modal-bg" id="rm" hidden>
+  <div class="modal" style="width:min(720px,100%)">
+    <h2 style="margin:0 0 12px;font-size:16px">Remove spoke <span id="rm-name"></span></h2>
+    <div id="rm-body"></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:12px"><input type="checkbox" id="rm-disk" checked style="width:auto"> delete the VM disk and node directory (uncheck to keep them for forensics)</label>
+    <div id="rm-problems" class="problems" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:16px"><button type="button" id="rm-cancel">Cancel</button><button type="button" class="primary" id="rm-go" style="margin-left:auto;background:var(--bad);border-color:var(--bad)">Remove spoke</button></div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 let base = null, wiring = [], nodes = {}, current = null, pollTimer = null, logCount = 0;
@@ -259,7 +269,8 @@ function fill(I) {
     tr.innerHTML = `<td><input data-dev="${i}" data-k="name" value="${d.name}"></td><td><input readonly value="${d.mgmt_ip}"></td>
       <td><span class="pill ${d.role}">${d.role}</span></td><td><input data-dev="${i}" data-k="asn" type="number" value="${d.asn}"></td>
       <td><input data-dev="${i}" data-k="router_id" value="${d.router_id}"></td><td><input data-dev="${i}" data-k="lan" value="${d.lan}"></td>
-      <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>`;
+      <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>
+      <td>${d.role === 'spoke' ? `<button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
     tb.appendChild(tr);
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
@@ -273,6 +284,7 @@ function fill(I) {
       <td><input data-tun="${i}" data-k="prefix" value="${t.prefix}"></td>`;
     tt.appendChild(tr);
   });
+  tb.querySelectorAll('button.rm').forEach(b => b.onclick = () => openRemove(b.dataset.name));
   // keep spoke labels in sync with hostname edits
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
     const d = I.devices[inp.dataset.dev];
@@ -326,7 +338,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke') load(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('.actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'remove') load(); }
 }
 
 function render(r) {
@@ -410,6 +422,29 @@ async function wizNext() {
 }
 $('add-spoke').onclick = openWizard; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
 $('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
+
+// ---- remove-spoke dialog ------------------------------------------------------
+let rmName = null;
+async function openRemove(name) {
+  rmName = name; $('rm-name').textContent = name; $('rm-problems').textContent = ''; $('rm-body').innerHTML = 'loading…'; $('rm').hidden = false;
+  const r = await (await fetch(`/api/spokes/${encodeURIComponent(name)}/removal`)).json();
+  if (r.problems.length) { $('rm-body').innerHTML = ''; $('rm-problems').textContent = '• ' + r.problems.join('\n• '); $('rm-go').disabled = true; return; }
+  const d = r.details; $('rm-go').disabled = false;
+  $('rm-body').innerHTML = `<div class="review"><div class="box"><h4>Spoke ${esc(d.name)} (${esc(d.mgmt_ip)})</h4><dl>
+      <dt>VM</dt><dd>powered off, then undefined</dd><dt>Nautobot</dt><dd>device, interfaces, addresses, prefixes, VPN endpoint, BGP instance, AS ${esc(d.asn)}</dd>
+      <dt>Released</dt><dd>LAN ${esc(d.lan)}, router-id ${esc(d.router_id)}, WAN ${esc(d.wan_prefix || '-')}, tunnel ${esc(d.tunnel_prefix || '-')}</dd></dl></div>
+    <div class="box"><h4>Hub ${esc(d.hub)} (coordinated clean-up)</h4><dl>
+      <dt>Tunnel</dt><dd>${esc(d.tunnel || '-')} removed (Terraform destroy)</dd><dt>WAN</dt><dd>${esc(d.hub_interface || '-')} address removed, port shut down and freed</dd>
+      <dt>eBGP</dt><dd>neighbour for AS ${esc(d.asn)} removed</dd><dt>Nautobot</dt><dd>VPN tunnel ${esc(d.hub)}-${esc(d.name)}, hub endpoint, cable, peering</dd>
+      <dt>Capacity</dt><dd>${d.tunnels_after} / ${d.capacity} tunnels after removal</dd></dl></div></div>
+    <div class="hint" style="margin-top:10px">Order: power off → Nautobot clean-up → intent/lab.conf → seed/render → forget the spoke in Terraform state → plan/apply on the hub → Golden Config → tests → delete the VM.</div>`;
+}
+$('rm-cancel').onclick = () => { $('rm').hidden = true; };
+$('rm-go').onclick = async () => {
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'remove', spoke: { name: rmName }, options: { golden: $('opt.golden').checked, test: $('opt.test').checked, delete_disk: $('rm-disk').checked } }) });
+  if (!r.ok) { const e = await r.json(); $('rm-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json(); $('rm').hidden = true; watch(run.id);
+};
 
 // ---- views ----------------------------------------------------------------
 function showView() {

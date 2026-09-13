@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Render nac/data/devices.nac.yaml for the C8000v IPsec VTI + eBGP lab from Nautobot.
 
-Per router: management host, WAN GiN interfaces from the cabled links, loopbacks, VTI tunnels from the core
-VPN app (the TunnelN interface's VPN tunnel endpoint: source interface/address, the VPN tunnel it terminates
-and the far endpoint's source address = tunnel destination), the IKEv2/IPsec suite from the endpoint's VPN
+Per router: management host, WAN GiN interfaces from the cabled links, loopbacks, VTI tunnels as native NAC tunnel
+interfaces from the core VPN app (the TunnelN interface's VPN tunnel endpoint: source interface/address, the VPN
+tunnel it terminates and the far endpoint's source address = tunnel destination), the IKEv2/IPsec suite from the endpoint's VPN
 profile (Phase 1 / Phase 2 policies, Cisco object names in extra_options.ios), and eBGP from
 nautobot-bgp-models (one AS per site). Only the PSK stays in device_groups.nac.yaml.  Usage: NAUTOBOT_TOKEN=... render_nac.py [--check]
 """
@@ -44,14 +44,16 @@ def far_end(ep):
     for t in ep["endpoint_z_vpn_tunnels"]: return t, t["endpoint_a"]
     return None, None
 
-def tunnel_cli(i, ip, mask):
+def tunnel_model(i, ip, mask):
+    """Native NAC tunnel interface (iosxe_interface_tunnel) - destroyed cleanly when a spoke is removed."""
     ep = i["vpn_tunnel_endpoints_tunnel"]; tun, peer = far_end(ep); ios = ep["vpn_profile"]["extra_options"]["ios"]
-    lines = [f"interface {i['name']}", f" description {i['description']}", f" ip address {ip} {mask}", " ip mtu 1400", " ip tcp adjust-mss 1360",
-             f" tunnel source {ep['source_interface']['name']}"]
-    if peer: lines.append(f" tunnel destination {peer['source_ipaddress']['address'].split('/')[0]}")
-    lines.append(f" tunnel mode {ENCAP[norm(tun['encapsulation'])]}")
-    lines.append(f" tunnel protection ipsec profile {ios['ipsec_profile']}")
-    return "\n".join(lines) + "\n"
+    assert norm(tun["encapsulation"]) == "IPSEC_TUNNEL", f"{i['name']}: only IPsec-Tunnel encapsulation is rendered natively"
+    return {"name": i["name"][6:], "description": i["description"], "ipv4": {"address": ip, "address_mask": mask}, "ip_mtu": 1400,
+            "tunnel_source": ep["source_interface"]["name"], "tunnel_destination_ipv4": peer["source_ipaddress"]["address"].split("/")[0],
+            "tunnel_mode_ipsec_ipv4": True, "tunnel_protection_ipsec_profile": ios["ipsec_profile"]}
+
+def mss_cli(i):   # the module has no ip_tcp_adjust_mss attribute for tunnels: one raw line on top of the native interface
+    return f"interface {i['name']}\n ip tcp adjust-mss 1360\n"
 
 def crypto_model(prof):
     """NAC crypto: block from a VPN profile (one Phase 1 and one Phase 2 policy)."""
@@ -69,16 +71,19 @@ def crypto_model(prof):
 
 def render(dev):
     name, ctx = dev["name"], dev["config_context"] or {}
-    ethernets, loopbacks, networks, templates, router_id, profiles, templates_vpn = [], [], [], [], None, {}, []
+    ethernets, loopbacks, tunnels, networks, templates, router_id, profiles, templates_vpn = [], [], [], [], [], None, {}, []
     for i in dev["interfaces"]:
         ips = i["ip_addresses"]
+        n = i["name"]
+        if n.startswith("GigabitEthernet") and n != "GigabitEthernet1" and not i["enabled"]:
+            ethernets.append({"type": "GigabitEthernet", "id": n[15:], "shutdown": True})   # unwired spoke-facing port: NAC owns the shut state
+            continue
         if not ips: continue
         ip, mask = parts(ips[0]["address"]); parent = ips[0]["parent"] or {}
         if any(t["name"] == "bgp:advertise" for t in parent.get("tags", [])):
             pfx = ipaddress.IPv4Network(parent["prefix"])
             classful = pfx.prefixlen == 24 and 192 <= int(str(pfx.network_address).split(".")[0]) <= 223
             networks.append({"network": str(pfx.network_address)} if classful else {"network": str(pfx.network_address), "mask": str(pfx.netmask)})
-        n = i["name"]
         if n.startswith("GigabitEthernet") and n != "GigabitEthernet1":
             ethernets.append({"type": "GigabitEthernet", "id": n[15:], "description": i["description"], "shutdown": not i["enabled"], "cdp": True,
                               "ipv4": {"address": ip, "address_mask": mask}})
@@ -86,7 +91,8 @@ def render(dev):
             loopbacks.append({"id": int(n[8:]), "description": i["description"], "ipv4": {"address": ip, "address_mask": mask}})
             if n == "Loopback0": router_id = ip
         elif n.startswith("Tunnel") and i["vpn_tunnel_endpoints_tunnel"]:
-            templates.append({"name": f"tunnel_{name}_{n.lower()}", "type": "cli", "content": tunnel_cli(i, ip, mask)})
+            tunnels.append(tunnel_model(i, ip, mask))
+            templates.append({"name": f"mss_{name}_{n.lower()}", "type": "cli", "content": mss_cli(i)})
             profiles[i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]["name"]] = i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]
             templates_vpn.append(far_end(i["vpn_tunnel_endpoints_tunnel"])[0] or {})
     assert len(profiles) <= 1, f"{name}: one VPN profile per router is supported, got {list(profiles)}"
@@ -106,7 +112,7 @@ def render(dev):
             "variables": {"router_id": router_id, "bgp_asn": ri["autonomous_system"]["asn"]},
             "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
                               **({"crypto": crypto_model(next(iter(profiles.values())))} if profiles else {}),
-                              "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks},
+                              "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks, "tunnels": sorted(tunnels, key=lambda t: int(t["name"]))},
                               "routing": {"bgp": bgp}}}
 
 rendered = [render(d) for d in devices]

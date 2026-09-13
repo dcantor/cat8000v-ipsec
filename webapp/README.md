@@ -98,3 +98,30 @@ has to point at the hub's existing port.
 
 `lab.conf` stays the truth for VM facts (names, management IPs, console ports, wiring); the AS/LAN columns
 there only seed the intent — after the portal has edited the intent, `lab-intent.json` wins.
+
+## Remove spoke (Routers table → *Remove…*)
+
+Decommissions a spoke and cleans up the hub. The dialog shows the plan (what is released on the spoke,
+what is removed from the hub, capacity after) and whether to keep the VM disk. The run (mode `remove`):
+
+1. validate (must be a spoke known to the intent and to `lab.conf`)
+2. power the VM off (`./lab.sh down`)
+3. Nautobot clean-up: BGP peering + routing instance, VPN tunnel + both endpoints, the hub's TunnelN interface and
+   address, the device (interfaces, cable), every address in its WAN/tunnel/LAN/loopback prefixes, the prefixes, its AS
+4. drop it from `lab.conf` and `lab-intent.json`
+5. seed → render (the hub's port becomes an explicitly *shut* NAC interface)
+6. `terraform state rm` of the spoke's resources (the router no longer exists — nothing to destroy there)
+7. plan/apply: Terraform **destroys the hub's TunnelN, BGP neighbour and WAN address** (the VTIs are native
+   `iosxe_interface_tunnel` resources now, so destroy really removes them)
+8. delete the VM (and, by default, its disk and `nodes/<spoke>/`)
+9. Golden Config and tests
+
+Every step is idempotent, so a failed run can simply be started again.
+
+## Platform notes learned the hard way
+
+- A C8000v's serial number follows the VM UUID: `lab.sh` gives every domain a deterministic UUID
+  (`uuidgen --sha1`) so rebuilding a domain keeps the serial; onboarding refreshes serials over SSH anyway.
+- After an interface deletion or a reload IOS-XE re-syncs its YANG datastore and elides default values
+  (`ip ssh version 2`, vty `exec-timeout 10 0`, the transform-set key size…). Default-valued attributes were
+  removed from the NAC baseline, and the apply step re-plans and re-asserts once if drift remains.

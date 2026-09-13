@@ -1,0 +1,5296 @@
+{
+ "id": "2026-09-13_10-34-20-aa85",
+ "mode": "spoke",
+ "status": "failed",
+ "started": 1789310060.032788,
+ "finished": 1789310478.0798368,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1789310060.0337954,
+   "finished": 1789310060.0647168,
+   "summary": "spoke3 (10.2.0.14) on hub GigabitEthernet4, Tunnel3 172.17.3.0/30, AS 65203"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "success",
+   "started": 1789310060.0649068,
+   "finished": 1789310060.0724819,
+   "summary": "lab.conf updated (link hub:4 <-> spoke3:2), nodes/spoke3/iosxe_config.txt written"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "success",
+   "started": 1789310060.0726504,
+   "finished": 1789310061.1257207,
+   "summary": "VM spoke3 defined and started (console 127.0.0.1:5204)"
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "success",
+   "started": 1789310061.1260157,
+   "finished": 1789310344.8511174,
+   "summary": "spoke3 reachable: ssh admin@10.2.0.14, RESTCONF up"
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "success",
+   "started": 1789310344.8515537,
+   "finished": 1789310371.1925051,
+   "summary": "spoke3 discovered by Nautobot (Sync Devices From Network)"
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "success",
+   "started": 1789310371.192854,
+   "finished": 1789310371.207564,
+   "summary": "intent now has 4 devices / 3 tunnels; hub gets GigabitEthernet4 100.65.3.1/30, Tunnel3 172.17.3.1/30, neighbor 172.17.3.2 remote-as 65203"
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "success",
+   "started": 1789310371.2077842,
+   "finished": 1789310416.3797584,
+   "summary": "seed complete: 42 changes:"
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "success",
+   "started": 1789310416.3801618,
+   "finished": 1789310418.5410497,
+   "summary": "nac/data/devices.nac.yaml + device_groups.nac.yaml regenerated from Nautobot"
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "success",
+   "started": 1789310418.5415115,
+   "finished": 1789310431.8609698,
+   "summary": "Plan: 33 to add, 1 to change, 1 to destroy."
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "failed",
+   "started": 1789310431.862057,
+   "finished": 1789310478.0798225,
+   "summary": "terraform apply failed (rc=1)"
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "terraform apply failed (rc=1)",
+ "options": {
+  "golden": true,
+  "test": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "hub",
+  "spoke1",
+  "spoke2",
+  "spoke3"
+ ],
+ "spoke": {
+  "name": "spoke3",
+  "mgmt_ip": "10.2.0.14",
+  "node_idx": 4,
+  "console_port": 5204,
+  "hub": "hub",
+  "hub_port": 4,
+  "spoke_port": 2,
+  "tunnel_id": 3,
+  "wan_prefix": "100.65.3.0/30",
+  "tunnel_prefix": "172.17.3.0/30",
+  "router_id": "10.255.1.4",
+  "lan": "192.168.13.0/24",
+  "asn": 65203,
+  "comments": "",
+  "site_code": "LAB-IPSEC",
+  "contact": "noc@lab.local",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "context": {
+   "hub": "hub",
+   "hub_ports_free": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "tunnels": 2,
+   "capacity": 50,
+   "hub_wan_ip": "100.65.3.1",
+   "spoke_wan_ip": "100.65.3.2",
+   "hub_tunnel_ip": "172.17.3.1",
+   "spoke_tunnel_ip": "172.17.3.2"
+  }
+ },
+ "log": [
+  {
+   "t": 1789310060.0647058,
+   "line": "spoke3 (10.2.0.14) on hub GigabitEthernet4, Tunnel3 172.17.3.0/30, AS 65203"
+  },
+  {
+   "t": 1789310060.0647142,
+   "line": "hub will get: hub=hub, interface=GigabitEthernet4, wan_ip=100.65.3.1/30, tunnel=Tunnel3, tunnel_ip=172.17.3.1/30, tunnel_destination=100.65.3.2, bgp_neighbor=172.17.3.2 remote-as 65203"
+  },
+  {
+   "t": 1789310060.0724788,
+   "line": "lab.conf updated (link hub:4 <-> spoke3:2), nodes/spoke3/iosxe_config.txt written"
+  },
+  {
+   "t": 1789310060.0728188,
+   "line": "$ ./lab.sh up spoke3"
+  },
+  {
+   "t": 1789310060.1456428,
+   "line": "[spoke3] creating overlay disk on c8000v-universalk9_16G_serial.17.15.06.qcow2"
+  },
+  {
+   "t": 1789310060.154767,
+   "line": "[spoke3] building day-0 config ISO"
+  },
+  {
+   "t": 1789310061.1253264,
+   "line": "[spoke3] started (console: 127.0.0.1:5204)"
+  },
+  {
+   "t": 1789310061.1261961,
+   "line": "this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF"
+  },
+  {
+   "t": 1789310061.1262014,
+   "line": "$ ./lab.sh bootstrap spoke3"
+  },
+  {
+   "t": 1789310061.1502051,
+   "line": "[spoke3] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
+  },
+  {
+   "t": 1789310215.7157812,
+   "line": "[spoke3] applying config + generating SSH keys"
+  },
+  {
+   "t": 1789310344.8493607,
+   "line": "[spoke3] ready: ssh admin@10.2.0.14 (admin), RESTCONF up"
+  },
+  {
+   "t": 1789310344.851808,
+   "line": "$ ./lab.sh nautobot onboard 10.2.0.14"
+  },
+  {
+   "t": 1789310371.1267226,
+   "line": "==> running 'Sync Devices From Network' for ['10.2.0.14']"
+  },
+  {
+   "t": 1789310371.1267273,
+   "line": "==> SUCCESS  http://10.0.0.10:8080/extras/job-results/70ba1e6b-24d1-48db-9ad1-0da4c92d7554/"
+  },
+  {
+   "t": 1789310371.1267297,
+   "line": "   hub: C8000V cisco_xe serial=9WXMDTWSSI1 primary=10.2.0.11/24"
+  },
+  {
+   "t": 1789310371.126732,
+   "line": "   spoke1: C8000V cisco_xe serial=9RYBV99709W primary=10.2.0.12/24"
+  },
+  {
+   "t": 1789310371.1267345,
+   "line": "   spoke2: C8000V cisco_xe serial=9LBJH9OA7V9 primary=10.2.0.13/24"
+  },
+  {
+   "t": 1789310371.1267369,
+   "line": "   spoke3: C8000V cisco_xe serial=98FD0J2KXVJ primary=10.2.0.14/24"
+  },
+  {
+   "t": 1789310371.2075605,
+   "line": "intent now has 4 devices / 3 tunnels; hub gets GigabitEthernet4 100.65.3.1/30, Tunnel3 172.17.3.1/30, neighbor 172.17.3.2 remote-as 65203"
+  },
+  {
+   "t": 1789310371.2079613,
+   "line": "$ ./lab.sh nautobot seed"
+  },
+  {
+   "t": 1789310416.341901,
+   "line": "seed complete: 42 changes:"
+  },
+  {
+   "t": 1789310416.3419058,
+   "line": "  updated GigabitEthernet4: description, enabled"
+  },
+  {
+   "t": 1789310416.3419087,
+   "line": "  updated spoke3: role"
+  },
+  {
+   "t": 1789310416.3419094,
+   "line": "  custom fields on spoke3"
+  },
+  {
+   "t": 1789310416.341912,
+   "line": "  vrf-device:spoke3"
+  },
+  {
+   "t": 1789310416.3419144,
+   "line": "  updated GigabitEthernet1: type, description, vrf, mac_address"
+  },
+  {
+   "t": 1789310416.3419158,
+   "line": "  interface:spoke3/GigabitEthernet2"
+  },
+  {
+   "t": 1789310416.341917,
+   "line": "  updated GigabitEthernet2: description, mac_address"
+  },
+  {
+   "t": 1789310416.3419192,
+   "line": "  interface:spoke3/GigabitEthernet3"
+  },
+  {
+   "t": 1789310416.3419218,
+   "line": "  updated GigabitEthernet3: description, enabled, mac_address"
+  },
+  {
+   "t": 1789310416.3419242,
+   "line": "  interface:spoke3/Loopback0"
+  },
+  {
+   "t": 1789310416.3419254,
+   "line": "  updated Loopback0: description"
+  },
+  {
+   "t": 1789310416.3419278,
+   "line": "  prefix:10.255.1.4/32"
+  },
+  {
+   "t": 1789310416.3419302,
+   "line": "  updated 10.255.1.4/32: Global: role, description"
+  },
+  {
+   "t": 1789310416.3419316,
+   "line": "  tag bgp:advertise on 10.255.1.4/32"
+  },
+  {
+   "t": 1789310416.341934,
+   "line": "  ip:10.255.1.4/32"
+  },
+  {
+   "t": 1789310416.3419359,
+   "line": "  interface:spoke3/Loopback10"
+  },
+  {
+   "t": 1789310416.3419383,
+   "line": "  updated Loopback10: description"
+  },
+  {
+   "t": 1789310416.3419402,
+   "line": "  prefix:192.168.13.0/24"
+  },
+  {
+   "t": 1789310416.3419416,
+   "line": "  updated 192.168.13.0/24: Global: role, description"
+  },
+  {
+   "t": 1789310416.341944,
+   "line": "  tag bgp:advertise on 192.168.13.0/24"
+  },
+  {
+   "t": 1789310416.3419454,
+   "line": "  ip:192.168.13.1/24"
+  },
+  {
+   "t": 1789310416.3419473,
+   "line": "  prefix:100.65.3.0/30"
+  },
+  {
+   "t": 1789310416.3419487,
+   "line": "  updated 100.65.3.0/30: Global: role, description"
+  },
+  {
+   "t": 1789310416.3419511,
+   "line": "  ip:100.65.3.1/30"
+  },
+  {
+   "t": 1789310416.3419523,
+   "line": "  ip:100.65.3.2/30"
+  },
+  {
+   "t": 1789310416.3419545,
+   "line": "  prefix:172.17.3.0/30"
+  },
+  {
+   "t": 1789310416.3419561,
+   "line": "  updated 172.17.3.0/30: Global: role, description"
+  },
+  {
+   "t": 1789310416.3419569,
+   "line": "  ip:172.17.3.1/30"
+  },
+  {
+   "t": 1789310416.3419583,
+   "line": "  vpn-endpoint:hub/Tunnel3 via GigabitEthernet4"
+  },
+  {
+   "t": 1789310416.3419592,
+   "line": "  interface:spoke3/Tunnel3"
+  },
+  {
+   "t": 1789310416.3419616,
+   "line": "  updated Tunnel3: description"
+  },
+  {
+   "t": 1789310416.341964,
+   "line": "  ip:172.17.3.2/30"
+  },
+  {
+   "t": 1789310416.3419652,
+   "line": "  vpn-endpoint:spoke3/Tunnel3 via GigabitEthernet2"
+  },
+  {
+   "t": 1789310416.3419664,
+   "line": "  vpn-tunnels:hub-spoke3"
+  },
+  {
+   "t": 1789310416.341969,
+   "line": "  updated hub-spoke3: description"
+  },
+  {
+   "t": 1789310416.3419702,
+   "line": "  autonomous-systems:65203"
+  },
+  {
+   "t": 1789310416.3419712,
+   "line": "  bgp-ri:spoke3"
+  },
+  {
+   "t": 1789310416.3419735,
+   "line": "  bgp-af:spoke3"
+  },
+  {
+   "t": 1789310416.341975,
+   "line": "  bgp-peering:hub<->spoke3 (Tunnel3)"
+  },
+  {
+   "t": 1789310416.3419774,
+   "line": "  bgp-endpoint-af:hub/Tunnel3"
+  },
+  {
+   "t": 1789310416.34198,
+   "line": "  bgp-endpoint-af:spoke3/Tunnel3"
+  },
+  {
+   "t": 1789310416.3419821,
+   "line": "  graphql-query updated"
+  },
+  {
+   "t": 1789310416.3804276,
+   "line": "$ ./lab.sh nautobot render"
+  },
+  {
+   "t": 1789310418.5124502,
+   "line": "wrote /home/dcantor/cat8000v-ipsec/nac/data/devices.nac.yaml: 4 devices (+ device_groups.nac.yaml)"
+  },
+  {
+   "t": 1789310418.541898,
+   "line": "$ ./lab.sh nac plan -no-color -input=false -detailed-exitcode -parallelism=1"
+  },
+  {
+   "t": 1789310420.2279181,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Refreshing state... [id=60b7b310ebebcba0799c3fa32dfee84992c86861]"
+  },
+  {
+   "t": 1789310420.2807047,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310420.3379786,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310420.4085002,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310420.4265528,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310420.5130572,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310420.584775,
+   "line": "module.iosxe.iosxe_banner.banner[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310420.6410842,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310420.6539898,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310420.673789,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310420.7024877,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310420.7599413,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310420.8284707,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310420.912696,
+   "line": "module.iosxe.iosxe_service.service[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310420.935649,
+   "line": "module.iosxe.iosxe_service.service[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310420.9634376,
+   "line": "module.iosxe.iosxe_service.service[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310420.9971101,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"hub/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310421.0225701,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke2/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310421.0468538,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke1/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310421.0744002,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke2/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310421.0992553,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke1/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310421.1211653,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"hub/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310421.1424468,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke1/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310421.1744576,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke2/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310421.1915011,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"hub/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310421.2088315,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke2/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310421.2451723,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke1/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310421.2967641,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"hub/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310421.3340445,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310421.4089777,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310421.4717205,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310421.5268466,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"hub/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310421.5514967,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke2/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310421.5791516,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke1/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310421.6202931,
+   "line": "module.iosxe.iosxe_line.line[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310421.6671329,
+   "line": "module.iosxe.iosxe_line.line[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310421.7201457,
+   "line": "module.iosxe.iosxe_line.line[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310421.7747366,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310421.873844,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310421.9640682,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310422.0837934,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310422.1793633,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310422.2764432,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310422.3926568,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=2]"
+  },
+  {
+   "t": 1789310422.5526657,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke1/Tunnel1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=1]"
+  },
+  {
+   "t": 1789310422.6778426,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke2/Tunnel2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=2]"
+  },
+  {
+   "t": 1789310422.8365097,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=1]"
+  },
+  {
+   "t": 1789310422.9543395,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke1/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310422.9861581,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke2/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310423.0135696,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"hub/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310423.0432518,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310423.2804573,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet8\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=8]"
+  },
+  {
+   "t": 1789310423.461893,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310423.6649573,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=4]"
+  },
+  {
+   "t": 1789310423.9223056,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310424.184298,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310424.4176323,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet9\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=9]"
+  },
+  {
+   "t": 1789310424.696402,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet6\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=6]"
+  },
+  {
+   "t": 1789310424.94222,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310425.1587129,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310425.4859445,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet5\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=5]"
+  },
+  {
+   "t": 1789310425.6874657,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet7\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=7]"
+  },
+  {
+   "t": 1789310425.9148116,
+   "line": "module.iosxe.iosxe_logging.logging[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310425.977629,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310426.0379014,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310426.1426318,
+   "line": "module.iosxe.iosxe_system.system[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310427.2327085,
+   "line": "module.iosxe.iosxe_system.system[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310428.3812034,
+   "line": "module.iosxe.iosxe_system.system[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310430.2079394,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310430.302753,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310430.3777223,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310430.5160587,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200]"
+  },
+  {
+   "t": 1789310430.5756698,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201]"
+  },
+  {
+   "t": 1789310430.652164,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202]"
+  },
+  {
+   "t": 1789310430.7405164,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310430.7885976,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310430.8426683,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310430.9262028,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310431.0037348,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310431.0846355,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310431.1853652,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310431.2415695,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310431.2855885,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310431.331494,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789310431.3767812,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789310431.422872,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789310431.4494097,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789310431.4990861,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789310431.526273,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789310431.542473,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789310431.5596657,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789310431.5791895,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310431.5861554,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310431.5944633,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke1/mss_spoke1_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310431.5986786,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke2/mss_spoke2_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310431.8432143,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8432195,
+   "line": "Terraform used the selected providers to generate the following execution"
+  },
+  {
+   "t": 1789310431.8432217,
+   "line": "plan. Resource actions are indicated with the following symbols:"
+  },
+  {
+   "t": 1789310431.843234,
+   "line": "  + create"
+  },
+  {
+   "t": 1789310431.8432348,
+   "line": "  ~ update in-place"
+  },
+  {
+   "t": 1789310431.8432374,
+   "line": "-/+ destroy and then create replacement"
+  },
+  {
+   "t": 1789310431.8432398,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8432412,
+   "line": "Terraform will perform the following actions:"
+  },
+  {
+   "t": 1789310431.8432715,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8432739,
+   "line": "  # module.iosxe.iosxe_aaa.aaa[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8432767,
+   "line": "  + resource \"iosxe_aaa\" \"aaa\" {"
+  },
+  {
+   "t": 1789310431.8432791,
+   "line": "      + device    = \"spoke3\""
+  },
+  {
+   "t": 1789310431.84328,
+   "line": "      + id        = (known after apply)"
+  },
+  {
+   "t": 1789310431.843283,
+   "line": "      + new_model = true"
+  },
+  {
+   "t": 1789310431.8432853,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8434849,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8434868,
+   "line": "  # module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8434887,
+   "line": "  + resource \"iosxe_aaa_authentication\" \"aaa_authentication\" {"
+  },
+  {
+   "t": 1789310431.8434906,
+   "line": "      + device                       = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8434916,
+   "line": "      + dot1x_default_a1_local       = false"
+  },
+  {
+   "t": 1789310431.8434932,
+   "line": "      + dot1x_default_a2_local       = false"
+  },
+  {
+   "t": 1789310431.843494,
+   "line": "      + dot1x_default_a3_local       = false"
+  },
+  {
+   "t": 1789310431.8434954,
+   "line": "      + dot1x_default_a4_local       = false"
+  },
+  {
+   "t": 1789310431.8434973,
+   "line": "      + enable_default_group1_enable = false"
+  },
+  {
+   "t": 1789310431.8434987,
+   "line": "      + enable_default_group1_line   = false"
+  },
+  {
+   "t": 1789310431.843501,
+   "line": "      + enable_default_group1_none   = false"
+  },
+  {
+   "t": 1789310431.8435023,
+   "line": "      + enable_default_group2_enable = false"
+  },
+  {
+   "t": 1789310431.8435035,
+   "line": "      + enable_default_group2_line   = false"
+  },
+  {
+   "t": 1789310431.8435054,
+   "line": "      + enable_default_group2_none   = false"
+  },
+  {
+   "t": 1789310431.8435066,
+   "line": "      + enable_default_group3_enable = false"
+  },
+  {
+   "t": 1789310431.8435085,
+   "line": "      + enable_default_group3_line   = false"
+  },
+  {
+   "t": 1789310431.843511,
+   "line": "      + enable_default_group3_none   = false"
+  },
+  {
+   "t": 1789310431.8435128,
+   "line": "      + enable_default_group4_enable = false"
+  },
+  {
+   "t": 1789310431.843514,
+   "line": "      + enable_default_group4_line   = false"
+  },
+  {
+   "t": 1789310431.8435163,
+   "line": "      + enable_default_group4_none   = false"
+  },
+  {
+   "t": 1789310431.8435187,
+   "line": "      + id                           = (known after apply)"
+  },
+  {
+   "t": 1789310431.8435209,
+   "line": "      + logins                       = ["
+  },
+  {
+   "t": 1789310431.843523,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.843525,
+   "line": "              + a1_enable = false"
+  },
+  {
+   "t": 1789310431.8435283,
+   "line": "              + a1_line   = false"
+  },
+  {
+   "t": 1789310431.8435302,
+   "line": "              + a1_local  = true"
+  },
+  {
+   "t": 1789310431.8435326,
+   "line": "              + a1_none   = false"
+  },
+  {
+   "t": 1789310431.843535,
+   "line": "              + a2_enable = false"
+  },
+  {
+   "t": 1789310431.8435366,
+   "line": "              + a2_line   = false"
+  },
+  {
+   "t": 1789310431.8435376,
+   "line": "              + a2_local  = false"
+  },
+  {
+   "t": 1789310431.8435392,
+   "line": "              + a2_none   = false"
+  },
+  {
+   "t": 1789310431.8435416,
+   "line": "              + a3_enable = false"
+  },
+  {
+   "t": 1789310431.8435435,
+   "line": "              + a3_line   = false"
+  },
+  {
+   "t": 1789310431.843546,
+   "line": "              + a3_local  = false"
+  },
+  {
+   "t": 1789310431.8435483,
+   "line": "              + a3_none   = false"
+  },
+  {
+   "t": 1789310431.8435493,
+   "line": "              + a4_enable = false"
+  },
+  {
+   "t": 1789310431.8435507,
+   "line": "              + a4_line   = false"
+  },
+  {
+   "t": 1789310431.8435516,
+   "line": "              + a4_local  = false"
+  },
+  {
+   "t": 1789310431.843553,
+   "line": "              + a4_none   = false"
+  },
+  {
+   "t": 1789310431.8435552,
+   "line": "              + name      = \"default\""
+  },
+  {
+   "t": 1789310431.8435578,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8435585,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8435602,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8435895,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8435922,
+   "line": "  # module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.843594,
+   "line": "  + resource \"iosxe_aaa_authorization\" \"aaa_authorization\" {"
+  },
+  {
+   "t": 1789310431.843596,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8435974,
+   "line": "      + execs  = ["
+  },
+  {
+   "t": 1789310431.8435993,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8436,
+   "line": "              + a1_if_authenticated = false"
+  },
+  {
+   "t": 1789310431.8436012,
+   "line": "              + a1_local            = true"
+  },
+  {
+   "t": 1789310431.8436034,
+   "line": "              + a1_radius           = false"
+  },
+  {
+   "t": 1789310431.8436046,
+   "line": "              + a1_tacacs           = false"
+  },
+  {
+   "t": 1789310431.8436062,
+   "line": "              + a2_if_authenticated = false"
+  },
+  {
+   "t": 1789310431.843608,
+   "line": "              + a2_local            = false"
+  },
+  {
+   "t": 1789310431.8436093,
+   "line": "              + a2_radius           = false"
+  },
+  {
+   "t": 1789310431.8436117,
+   "line": "              + a2_tacacs           = false"
+  },
+  {
+   "t": 1789310431.8436131,
+   "line": "              + a3_if_authenticated = false"
+  },
+  {
+   "t": 1789310431.8436148,
+   "line": "              + a3_local            = false"
+  },
+  {
+   "t": 1789310431.8436165,
+   "line": "              + a3_radius           = false"
+  },
+  {
+   "t": 1789310431.8436182,
+   "line": "              + a3_tacacs           = false"
+  },
+  {
+   "t": 1789310431.8436198,
+   "line": "              + a4_if_authenticated = false"
+  },
+  {
+   "t": 1789310431.843621,
+   "line": "              + a4_local            = false"
+  },
+  {
+   "t": 1789310431.8436222,
+   "line": "              + a4_radius           = false"
+  },
+  {
+   "t": 1789310431.8436244,
+   "line": "              + a4_tacacs           = false"
+  },
+  {
+   "t": 1789310431.8436265,
+   "line": "              + name                = \"default\""
+  },
+  {
+   "t": 1789310431.8436284,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8436294,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8436308,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.8436315,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8436658,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8436685,
+   "line": "  # module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke3/MGMT-ACCESS\"] will be created"
+  },
+  {
+   "t": 1789310431.8436708,
+   "line": "  + resource \"iosxe_access_list_standard\" \"access_list_standard\" {"
+  },
+  {
+   "t": 1789310431.8436728,
+   "line": "      + device  = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8436756,
+   "line": "      + entries = ["
+  },
+  {
+   "t": 1789310431.8436778,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.84368,
+   "line": "              + remark   = \"OOB management network\""
+  },
+  {
+   "t": 1789310431.8436813,
+   "line": "              + sequence = 10"
+  },
+  {
+   "t": 1789310431.8436823,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.843684,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.843694,
+   "line": "              + permit_any         = false"
+  },
+  {
+   "t": 1789310431.8436959,
+   "line": "              + permit_log         = false"
+  },
+  {
+   "t": 1789310431.843698,
+   "line": "              + permit_prefix      = \"10.2.0.0\""
+  },
+  {
+   "t": 1789310431.8437002,
+   "line": "              + permit_prefix_mask = \"0.0.0.255\""
+  },
+  {
+   "t": 1789310431.843702,
+   "line": "              + sequence           = 20"
+  },
+  {
+   "t": 1789310431.8437045,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8437064,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8437078,
+   "line": "              + deny_any = true"
+  },
+  {
+   "t": 1789310431.8437097,
+   "line": "              + deny_log = true"
+  },
+  {
+   "t": 1789310431.8437111,
+   "line": "              + sequence = 30"
+  },
+  {
+   "t": 1789310431.8437123,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.843714,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8437164,
+   "line": "      + id      = (known after apply)"
+  },
+  {
+   "t": 1789310431.8437188,
+   "line": "      + name    = \"MGMT-ACCESS\""
+  },
+  {
+   "t": 1789310431.8437207,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.843728,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8437297,
+   "line": "  # module.iosxe.iosxe_banner.banner[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8437314,
+   "line": "  + resource \"iosxe_banner\" \"banner\" {"
+  },
+  {
+   "t": 1789310431.8437328,
+   "line": "      + device      = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8437338,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310431.8437357,
+   "line": "      + motd_banner = \"C8000v IPsec VTI lab - managed by Network-as-Code (Terraform).\""
+  },
+  {
+   "t": 1789310431.8437366,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8437414,
+   "line": ""
+  },
+  {
+   "t": 1789310431.843743,
+   "line": "  # module.iosxe.iosxe_bgp.bgp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.843745,
+   "line": "  + resource \"iosxe_bgp\" \"bgp\" {"
+  },
+  {
+   "t": 1789310431.8437474,
+   "line": "      + asn                  = \"65203\""
+  },
+  {
+   "t": 1789310431.8437486,
+   "line": "      + device               = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8437507,
+   "line": "      + id                   = (known after apply)"
+  },
+  {
+   "t": 1789310431.8437521,
+   "line": "      + log_neighbor_changes = true"
+  },
+  {
+   "t": 1789310431.8437529,
+   "line": "      + router_id_ip         = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310431.8437545,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8450882,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845091,
+   "line": "  # module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8450937,
+   "line": "  + resource \"iosxe_bgp_address_family_ipv4\" \"bgp_address_family_ipv4\" {"
+  },
+  {
+   "t": 1789310431.8450959,
+   "line": "      + af_name                    = \"unicast\""
+  },
+  {
+   "t": 1789310431.8450983,
+   "line": "      + asn                        = \"65203\""
+  },
+  {
+   "t": 1789310431.8451004,
+   "line": "      + device                     = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8451016,
+   "line": "      + id                         = (known after apply)"
+  },
+  {
+   "t": 1789310431.845104,
+   "line": "      + ipv4_unicast_networks      = ["
+  },
+  {
+   "t": 1789310431.845106,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8451073,
+   "line": "              + network = \"192.168.13.0\""
+  },
+  {
+   "t": 1789310431.8451092,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8451111,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.845112,
+   "line": "      + ipv4_unicast_networks_mask = ["
+  },
+  {
+   "t": 1789310431.8451135,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8451147,
+   "line": "              + mask    = \"255.255.255.255\""
+  },
+  {
+   "t": 1789310431.845116,
+   "line": "              + network = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310431.845118,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8451202,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8451219,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451235,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8451254,
+   "line": "  # module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.3.2\"] will be created"
+  },
+  {
+   "t": 1789310431.8451278,
+   "line": "  + resource \"iosxe_bgp_ipv4_unicast_neighbor\" \"bgp_ipv4_unicast_neighbor\" {"
+  },
+  {
+   "t": 1789310431.8451288,
+   "line": "      + activate = true"
+  },
+  {
+   "t": 1789310431.8451297,
+   "line": "      + asn      = \"65200\""
+  },
+  {
+   "t": 1789310431.8451312,
+   "line": "      + device   = \"hub\""
+  },
+  {
+   "t": 1789310431.8451326,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310431.8451335,
+   "line": "      + ip       = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310431.845136,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451374,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845138,
+   "line": "  # module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke3/172.17.3.1\"] will be created"
+  },
+  {
+   "t": 1789310431.8451407,
+   "line": "  + resource \"iosxe_bgp_ipv4_unicast_neighbor\" \"bgp_ipv4_unicast_neighbor\" {"
+  },
+  {
+   "t": 1789310431.845143,
+   "line": "      + activate = true"
+  },
+  {
+   "t": 1789310431.8451447,
+   "line": "      + asn      = \"65203\""
+  },
+  {
+   "t": 1789310431.845146,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8451478,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310431.84515,
+   "line": "      + ip       = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310431.8451517,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451533,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8451545,
+   "line": "  # module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.3.2\"] will be created"
+  },
+  {
+   "t": 1789310431.8451564,
+   "line": "  + resource \"iosxe_bgp_neighbor\" \"bgp_neighbor\" {"
+  },
+  {
+   "t": 1789310431.8451579,
+   "line": "      + asn         = \"65200\""
+  },
+  {
+   "t": 1789310431.8451602,
+   "line": "      + description = \"eBGP spoke3 (Tunnel3)\""
+  },
+  {
+   "t": 1789310431.8451624,
+   "line": "      + device      = \"hub\""
+  },
+  {
+   "t": 1789310431.8451636,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310431.845165,
+   "line": "      + ip          = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310431.8451674,
+   "line": "      + remote_as   = \"65203\""
+  },
+  {
+   "t": 1789310431.8451684,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451707,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8451724,
+   "line": "  # module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke3/172.17.3.1\"] will be created"
+  },
+  {
+   "t": 1789310431.8451746,
+   "line": "  + resource \"iosxe_bgp_neighbor\" \"bgp_neighbor\" {"
+  },
+  {
+   "t": 1789310431.8451762,
+   "line": "      + asn         = \"65203\""
+  },
+  {
+   "t": 1789310431.845178,
+   "line": "      + description = \"eBGP hub (Tunnel3)\""
+  },
+  {
+   "t": 1789310431.8451788,
+   "line": "      + device      = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8451805,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310431.8451815,
+   "line": "      + ip          = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310431.8451827,
+   "line": "      + remote_as   = \"65200\""
+  },
+  {
+   "t": 1789310431.8451846,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451855,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8451872,
+   "line": "  # module.iosxe.iosxe_cdp.cdp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.845188,
+   "line": "  + resource \"iosxe_cdp\" \"cdp\" {"
+  },
+  {
+   "t": 1789310431.8451903,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8451927,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.845195,
+   "line": "      + run    = true"
+  },
+  {
+   "t": 1789310431.845197,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8451989,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8452013,
+   "line": "  # module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310431.8452027,
+   "line": "  + resource \"iosxe_cli\" \"cli_0\" {"
+  },
+  {
+   "t": 1789310431.845205,
+   "line": "      + cli    = <<-EOT"
+  },
+  {
+   "t": 1789310431.845206,
+   "line": "            interface Tunnel3"
+  },
+  {
+   "t": 1789310431.8452082,
+   "line": "             ip tcp adjust-mss 1360"
+  },
+  {
+   "t": 1789310431.8452098,
+   "line": "        EOT"
+  },
+  {
+   "t": 1789310431.845212,
+   "line": "      + device = \"hub\""
+  },
+  {
+   "t": 1789310431.8452141,
+   "line": "      + raw    = true"
+  },
+  {
+   "t": 1789310431.845216,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.845217,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8452191,
+   "line": "  # module.iosxe.iosxe_cli.cli_0[\"spoke3/mss_spoke3_tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310431.8452203,
+   "line": "  + resource \"iosxe_cli\" \"cli_0\" {"
+  },
+  {
+   "t": 1789310431.8452213,
+   "line": "      + cli    = <<-EOT"
+  },
+  {
+   "t": 1789310431.8452222,
+   "line": "            interface Tunnel3"
+  },
+  {
+   "t": 1789310431.8452241,
+   "line": "             ip tcp adjust-mss 1360"
+  },
+  {
+   "t": 1789310431.8452249,
+   "line": "        EOT"
+  },
+  {
+   "t": 1789310431.845226,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.845228,
+   "line": "      + raw    = true"
+  },
+  {
+   "t": 1789310431.8452294,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8452313,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845232,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8452332,
+   "line": "  + resource \"iosxe_crypto_ikev2\" \"crypto_ikev2\" {"
+  },
+  {
+   "t": 1789310431.8452346,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8452353,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.8452365,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8452375,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8452382,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke3/VPN-KEYRING\"] will be created"
+  },
+  {
+   "t": 1789310431.8452399,
+   "line": "  + resource \"iosxe_crypto_ikev2_keyring\" \"crypto_ikev2_keyring\" {"
+  },
+  {
+   "t": 1789310431.8452408,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8452418,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.845243,
+   "line": "      + name   = \"VPN-KEYRING\""
+  },
+  {
+   "t": 1789310431.8452446,
+   "line": "      + peers  = ["
+  },
+  {
+   "t": 1789310431.8452456,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8452468,
+   "line": "              + ipv4_address   = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310431.8452485,
+   "line": "              + ipv4_mask      = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310431.8452497,
+   "line": "              + name           = \"ANY\""
+  },
+  {
+   "t": 1789310431.8452508,
+   "line": "              + pre_shared_key = (sensitive value)"
+  },
+  {
+   "t": 1789310431.8452528,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8452537,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8452547,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8452556,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845257,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke3/VPN-POL\"] will be created"
+  },
+  {
+   "t": 1789310431.845258,
+   "line": "  + resource \"iosxe_crypto_ikev2_policy\" \"crypto_ikev2_policy\" {"
+  },
+  {
+   "t": 1789310431.8452587,
+   "line": "      + device    = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8452609,
+   "line": "      + id        = (known after apply)"
+  },
+  {
+   "t": 1789310431.8452628,
+   "line": "      + name      = \"VPN-POL\""
+  },
+  {
+   "t": 1789310431.8452647,
+   "line": "      + proposals = ["
+  },
+  {
+   "t": 1789310431.845266,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8452685,
+   "line": "              + proposals = \"VPN-PROP\""
+  },
+  {
+   "t": 1789310431.8452694,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8452702,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8452718,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8452728,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8452744,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke3/VPN-IKEV2\"] will be created"
+  },
+  {
+   "t": 1789310431.845276,
+   "line": "  + resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789310431.845277,
+   "line": "      + authentication_local_pre_share       = true"
+  },
+  {
+   "t": 1789310431.8452787,
+   "line": "      + authentication_remote_pre_share      = true"
+  },
+  {
+   "t": 1789310431.8452795,
+   "line": "      + device                               = \"spoke3\""
+  },
+  {
+   "t": 1789310431.845282,
+   "line": "      + dpd_interval                         = 20"
+  },
+  {
+   "t": 1789310431.8452833,
+   "line": "      + dpd_query                            = \"on-demand\""
+  },
+  {
+   "t": 1789310431.845285,
+   "line": "      + dpd_retry                            = 3"
+  },
+  {
+   "t": 1789310431.845287,
+   "line": "      + id                                   = (known after apply)"
+  },
+  {
+   "t": 1789310431.845288,
+   "line": "      + keyring_local                        = \"VPN-KEYRING\""
+  },
+  {
+   "t": 1789310431.8452902,
+   "line": "      + match_identity_remote_ipv4_addresses = ["
+  },
+  {
+   "t": 1789310431.8452923,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.845294,
+   "line": "              + address = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310431.8452964,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.845299,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8453007,
+   "line": "      + name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789310431.8453019,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.845303,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845304,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke3/VPN-PROP\"] will be created"
+  },
+  {
+   "t": 1789310431.8453057,
+   "line": "  + resource \"iosxe_crypto_ikev2_proposal\" \"crypto_ikev2_proposal\" {"
+  },
+  {
+   "t": 1789310431.8453064,
+   "line": "      + device                 = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8453074,
+   "line": "      + encryption_aes_cbc_128 = false"
+  },
+  {
+   "t": 1789310431.84531,
+   "line": "      + encryption_aes_cbc_192 = false"
+  },
+  {
+   "t": 1789310431.8453112,
+   "line": "      + encryption_aes_cbc_256 = true"
+  },
+  {
+   "t": 1789310431.8453138,
+   "line": "      + encryption_aes_gcm_128 = false"
+  },
+  {
+   "t": 1789310431.845315,
+   "line": "      + encryption_aes_gcm_256 = false"
+  },
+  {
+   "t": 1789310431.8453174,
+   "line": "      + encryption_en_3des     = false"
+  },
+  {
+   "t": 1789310431.8453183,
+   "line": "      + group_fifteen          = false"
+  },
+  {
+   "t": 1789310431.8453197,
+   "line": "      + group_fourteen         = true"
+  },
+  {
+   "t": 1789310431.845322,
+   "line": "      + group_nineteen         = false"
+  },
+  {
+   "t": 1789310431.8453236,
+   "line": "      + group_one              = false"
+  },
+  {
+   "t": 1789310431.8453257,
+   "line": "      + group_sixteen          = false"
+  },
+  {
+   "t": 1789310431.845327,
+   "line": "      + group_twenty           = false"
+  },
+  {
+   "t": 1789310431.845329,
+   "line": "      + group_twenty_four      = false"
+  },
+  {
+   "t": 1789310431.8453314,
+   "line": "      + group_twenty_one       = false"
+  },
+  {
+   "t": 1789310431.845333,
+   "line": "      + group_two              = false"
+  },
+  {
+   "t": 1789310431.8453352,
+   "line": "      + id                     = (known after apply)"
+  },
+  {
+   "t": 1789310431.8453364,
+   "line": "      + integrity_md5          = false"
+  },
+  {
+   "t": 1789310431.8453386,
+   "line": "      + integrity_sha1         = false"
+  },
+  {
+   "t": 1789310431.8453412,
+   "line": "      + integrity_sha256       = true"
+  },
+  {
+   "t": 1789310431.8453426,
+   "line": "      + integrity_sha384       = false"
+  },
+  {
+   "t": 1789310431.845345,
+   "line": "      + integrity_sha512       = false"
+  },
+  {
+   "t": 1789310431.845346,
+   "line": "      + name                   = \"VPN-PROP\""
+  },
+  {
+   "t": 1789310431.8453474,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8453496,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8453512,
+   "line": "  # module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke3/VPN-IPSEC\"] will be created"
+  },
+  {
+   "t": 1789310431.845353,
+   "line": "  + resource \"iosxe_crypto_ipsec_profile\" \"crypto_ipsec_profile\" {"
+  },
+  {
+   "t": 1789310431.8453546,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8453557,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310431.8453567,
+   "line": "      + name              = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310431.8453584,
+   "line": "      + set_ikev2_profile = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789310431.8453608,
+   "line": "      + set_transform_set = ["
+  },
+  {
+   "t": 1789310431.8453615,
+   "line": "          + \"VPN-TS\","
+  },
+  {
+   "t": 1789310431.845363,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8453646,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8453653,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8453667,
+   "line": "  # module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke3/VPN-TS\"] will be created"
+  },
+  {
+   "t": 1789310431.845368,
+   "line": "  + resource \"iosxe_crypto_ipsec_transform_set\" \"crypto_ipsec_transform_set\" {"
+  },
+  {
+   "t": 1789310431.8453689,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8453712,
+   "line": "      + esp      = \"esp-256-aes\""
+  },
+  {
+   "t": 1789310431.8453727,
+   "line": "      + esp_hmac = \"esp-sha256-hmac\""
+  },
+  {
+   "t": 1789310431.8453736,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310431.845375,
+   "line": "      + name     = \"VPN-TS\""
+  },
+  {
+   "t": 1789310431.845376,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8453772,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8453789,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"] will be updated in-place"
+  },
+  {
+   "t": 1789310431.8453798,
+   "line": "  ~ resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310431.845381,
+   "line": "      + cdp_enable        = true"
+  },
+  {
+   "t": 1789310431.8453822,
+   "line": "      + description       = \"WAN to spoke3 Gi2\""
+  },
+  {
+   "t": 1789310431.8453844,
+   "line": "        id                = \"Cisco-IOS-XE-native:native/interface/GigabitEthernet=4\""
+  },
+  {
+   "t": 1789310431.845386,
+   "line": "      + ipv4_address      = \"100.65.3.1\""
+  },
+  {
+   "t": 1789310431.8453882,
+   "line": "      + ipv4_address_mask = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310431.8453896,
+   "line": "        name              = \"4\""
+  },
+  {
+   "t": 1789310431.8453906,
+   "line": "      ~ shutdown          = true -> false"
+  },
+  {
+   "t": 1789310431.8453922,
+   "line": "        # (2 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789310431.8453944,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8453968,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8453977,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet2\"] will be created"
+  },
+  {
+   "t": 1789310431.8454003,
+   "line": "  + resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310431.8454015,
+   "line": "      + cdp_enable        = true"
+  },
+  {
+   "t": 1789310431.8454041,
+   "line": "      + description       = \"WAN to hub Gi4\""
+  },
+  {
+   "t": 1789310431.8454049,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8454065,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310431.8454084,
+   "line": "      + ipv4_address      = \"100.65.3.2\""
+  },
+  {
+   "t": 1789310431.8454099,
+   "line": "      + ipv4_address_mask = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310431.8454108,
+   "line": "      + name              = \"2\""
+  },
+  {
+   "t": 1789310431.845412,
+   "line": "      + shutdown          = false"
+  },
+  {
+   "t": 1789310431.8454137,
+   "line": "      + type              = \"GigabitEthernet\""
+  },
+  {
+   "t": 1789310431.8454146,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8454158,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845417,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet3\"] will be created"
+  },
+  {
+   "t": 1789310431.8454192,
+   "line": "  + resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310431.8454208,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8454216,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310431.8454232,
+   "line": "      + name     = \"3\""
+  },
+  {
+   "t": 1789310431.8454242,
+   "line": "      + shutdown = true"
+  },
+  {
+   "t": 1789310431.8454254,
+   "line": "      + type     = \"GigabitEthernet\""
+  },
+  {
+   "t": 1789310431.845427,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8454278,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8454292,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback0\"] will be created"
+  },
+  {
+   "t": 1789310431.8454304,
+   "line": "  + resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789310431.8454316,
+   "line": "      + description       = \"Router ID\""
+  },
+  {
+   "t": 1789310431.8454325,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8454342,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310431.845436,
+   "line": "      + ipv4_address      = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310431.845439,
+   "line": "      + ipv4_address_mask = \"255.255.255.255\""
+  },
+  {
+   "t": 1789310431.8454568,
+   "line": "      + name              = 0"
+  },
+  {
+   "t": 1789310431.8454587,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8454611,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8454626,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback10\"] will be created"
+  },
+  {
+   "t": 1789310431.8454635,
+   "line": "  + resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789310431.8454652,
+   "line": "      + description       = \"site LAN\""
+  },
+  {
+   "t": 1789310431.8454661,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8454676,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310431.84547,
+   "line": "      + ipv4_address      = \"192.168.13.1\""
+  },
+  {
+   "t": 1789310431.8454723,
+   "line": "      + ipv4_address_mask = \"255.255.255.0\""
+  },
+  {
+   "t": 1789310431.8454733,
+   "line": "      + name              = 10"
+  },
+  {
+   "t": 1789310431.8454745,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8454762,
+   "line": ""
+  },
+  {
+   "t": 1789310431.845477,
+   "line": "  # module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310431.8454783,
+   "line": "  + resource \"iosxe_interface_tunnel\" \"tunnel\" {"
+  },
+  {
+   "t": 1789310431.8454807,
+   "line": "      + description                     = \"IPsec VTI to spoke3\""
+  },
+  {
+   "t": 1789310431.845483,
+   "line": "      + device                          = \"hub\""
+  },
+  {
+   "t": 1789310431.8454845,
+   "line": "      + id                              = (known after apply)"
+  },
+  {
+   "t": 1789310431.8454854,
+   "line": "      + ip_mtu                          = 1400"
+  },
+  {
+   "t": 1789310431.8454869,
+   "line": "      + ipv4_address                    = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310431.8454878,
+   "line": "      + ipv4_address_mask               = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310431.8454895,
+   "line": "      + name                            = 3"
+  },
+  {
+   "t": 1789310431.8454905,
+   "line": "      + tunnel_destination_ipv4         = \"100.65.3.2\""
+  },
+  {
+   "t": 1789310431.8454916,
+   "line": "      + tunnel_mode_ipsec_ipv4          = true"
+  },
+  {
+   "t": 1789310431.8454928,
+   "line": "      + tunnel_protection_ipsec_profile = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310431.845495,
+   "line": "      + tunnel_source                   = \"GigabitEthernet4\""
+  },
+  {
+   "t": 1789310431.8454967,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8454976,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8454986,
+   "line": "  # module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke3/Tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310431.8455,
+   "line": "  + resource \"iosxe_interface_tunnel\" \"tunnel\" {"
+  },
+  {
+   "t": 1789310431.8455014,
+   "line": "      + description                     = \"IPsec VTI to hub\""
+  },
+  {
+   "t": 1789310431.8455033,
+   "line": "      + device                          = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8455048,
+   "line": "      + id                              = (known after apply)"
+  },
+  {
+   "t": 1789310431.845506,
+   "line": "      + ip_mtu                          = 1400"
+  },
+  {
+   "t": 1789310431.8455071,
+   "line": "      + ipv4_address                    = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310431.8455086,
+   "line": "      + ipv4_address_mask               = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310431.8455093,
+   "line": "      + name                            = 3"
+  },
+  {
+   "t": 1789310431.845511,
+   "line": "      + tunnel_destination_ipv4         = \"100.65.3.1\""
+  },
+  {
+   "t": 1789310431.845513,
+   "line": "      + tunnel_mode_ipsec_ipv4          = true"
+  },
+  {
+   "t": 1789310431.8455145,
+   "line": "      + tunnel_protection_ipsec_profile = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310431.8455155,
+   "line": "      + tunnel_source                   = \"GigabitEthernet2\""
+  },
+  {
+   "t": 1789310431.8455164,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8455193,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8455215,
+   "line": "  # module.iosxe.iosxe_line.line[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8455236,
+   "line": "  + resource \"iosxe_line\" \"line\" {"
+  },
+  {
+   "t": 1789310431.8455265,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8455286,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.845531,
+   "line": "      + vty    = ["
+  },
+  {
+   "t": 1789310431.8455334,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310431.8455348,
+   "line": "              + access_classes      = ["
+  },
+  {
+   "t": 1789310431.8455362,
+   "line": "                  + {"
+  },
+  {
+   "t": 1789310431.8455372,
+   "line": "                      + access_list = \"MGMT-ACCESS\""
+  },
+  {
+   "t": 1789310431.8455386,
+   "line": "                      + direction   = \"in\""
+  },
+  {
+   "t": 1789310431.8455408,
+   "line": "                      + vrf_also    = true"
+  },
+  {
+   "t": 1789310431.8455424,
+   "line": "                    },"
+  },
+  {
+   "t": 1789310431.8455436,
+   "line": "                ]"
+  },
+  {
+   "t": 1789310431.8455448,
+   "line": "              + first               = 0"
+  },
+  {
+   "t": 1789310431.845546,
+   "line": "              + last                = 4"
+  },
+  {
+   "t": 1789310431.8455474,
+   "line": "              + logging_synchronous = true"
+  },
+  {
+   "t": 1789310431.8455486,
+   "line": "              + transport_input     = ["
+  },
+  {
+   "t": 1789310431.8455498,
+   "line": "                  + \"ssh\","
+  },
+  {
+   "t": 1789310431.8455508,
+   "line": "                ]"
+  },
+  {
+   "t": 1789310431.8455522,
+   "line": "            },"
+  },
+  {
+   "t": 1789310431.8455532,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310431.8455546,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.845557,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8455594,
+   "line": "  # module.iosxe.iosxe_lldp.lldp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8455617,
+   "line": "  + resource \"iosxe_lldp\" \"lldp\" {"
+  },
+  {
+   "t": 1789310431.8455641,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310431.845566,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310431.8455684,
+   "line": "      + run    = true"
+  },
+  {
+   "t": 1789310431.8455708,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.845572,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8455746,
+   "line": "  # module.iosxe.iosxe_logging.logging[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8455753,
+   "line": "  + resource \"iosxe_logging\" \"logging\" {"
+  },
+  {
+   "t": 1789310431.8455777,
+   "line": "      + buffered_severity = \"informational\""
+  },
+  {
+   "t": 1789310431.8455791,
+   "line": "      + buffered_size     = 64000"
+  },
+  {
+   "t": 1789310431.8455815,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8455834,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310431.8455849,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.845586,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8455887,
+   "line": "  # module.iosxe.iosxe_service.service[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8455894,
+   "line": "  + resource \"iosxe_service\" \"service\" {"
+  },
+  {
+   "t": 1789310431.845591,
+   "line": "      + device                                = \"spoke3\""
+  },
+  {
+   "t": 1789310431.845592,
+   "line": "      + id                                    = (known after apply)"
+  },
+  {
+   "t": 1789310431.8455935,
+   "line": "      + password_encryption                   = true"
+  },
+  {
+   "t": 1789310431.8455944,
+   "line": "      + tcp_keepalives_in                     = true"
+  },
+  {
+   "t": 1789310431.845597,
+   "line": "      + tcp_keepalives_out                    = true"
+  },
+  {
+   "t": 1789310431.8455982,
+   "line": "      + timestamps_log_datetime               = true"
+  },
+  {
+   "t": 1789310431.8455992,
+   "line": "      + timestamps_log_datetime_localtime     = true"
+  },
+  {
+   "t": 1789310431.8456008,
+   "line": "      + timestamps_log_datetime_msec          = true"
+  },
+  {
+   "t": 1789310431.8456016,
+   "line": "      + timestamps_log_datetime_show_timezone = true"
+  },
+  {
+   "t": 1789310431.845603,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8456042,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8456054,
+   "line": "  # module.iosxe.iosxe_system.system[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310431.8456063,
+   "line": "  + resource \"iosxe_system\" \"system\" {"
+  },
+  {
+   "t": 1789310431.845608,
+   "line": "      + device               = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8456087,
+   "line": "      + hostname             = \"spoke3\""
+  },
+  {
+   "t": 1789310431.8456101,
+   "line": "      + id                   = (known after apply)"
+  },
+  {
+   "t": 1789310431.845611,
+   "line": "      + ip_domain_lookup     = false"
+  },
+  {
+   "t": 1789310431.8456125,
+   "line": "      + ip_domain_name       = \"lab.local\""
+  },
+  {
+   "t": 1789310431.8456137,
+   "line": "      + ip_ssh_time_out      = 60"
+  },
+  {
+   "t": 1789310431.845615,
+   "line": "      + login_on_failure_log = true"
+  },
+  {
+   "t": 1789310431.8456163,
+   "line": "      + login_on_success_log = true"
+  },
+  {
+   "t": 1789310431.845617,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8456187,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8456197,
+   "line": "  # module.iosxe.module.model.local_sensitive_file.model[0] must be replaced"
+  },
+  {
+   "t": 1789310431.845621,
+   "line": "-/+ resource \"local_sensitive_file\" \"model\" {"
+  },
+  {
+   "t": 1789310431.845622,
+   "line": "      ~ content              = (sensitive value) # forces replacement"
+  },
+  {
+   "t": 1789310431.845623,
+   "line": "      ~ content_base64sha256 = \"9eb8bkJAOsQXrhVTiHDq5p2tfNZxdWTkl+GNAzYJj3o=\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.8456242,
+   "line": "      ~ content_base64sha512 = \"vgOzt7CiG0zOk/Vl/J6K26MEBz55PCJgmuYm4xRTdkLQyx7jG/3JiAeiTsVW48i/zLGd+azXUsAp/rxxzeF8uQ==\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.8456268,
+   "line": "      ~ content_md5          = \"0ff48fef9cc546fae8fe2f575f2bb9d3\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.8456285,
+   "line": "      ~ content_sha1         = \"60b7b310ebebcba0799c3fa32dfee84992c86861\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.8456292,
+   "line": "      ~ content_sha256       = \"f5e6fc6e42403ac417ae15538870eae69dad7cd6717564e497e18d0336098f7a\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.8456318,
+   "line": "      ~ content_sha512       = \"be03b3b7b0a21b4cce93f565fc9e8adba304073e793c22609ae626e314537642d0cb1ee31bfdc98807a24ec556e3c8bfccb19df9acd752c029febc71cde17cb9\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.845633,
+   "line": "      ~ id                   = \"60b7b310ebebcba0799c3fa32dfee84992c86861\" -> (known after apply)"
+  },
+  {
+   "t": 1789310431.845634,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789310431.8456364,
+   "line": "    }"
+  },
+  {
+   "t": 1789310431.8456378,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8456392,
+   "line": "Plan: 33 to add, 1 to change, 1 to destroy."
+  },
+  {
+   "t": 1789310431.8456402,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8456428,
+   "line": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+  },
+  {
+   "t": 1789310431.845645,
+   "line": ""
+  },
+  {
+   "t": 1789310431.8456473,
+   "line": "Note: You didn't use the -out option to save this plan, so Terraform can't"
+  },
+  {
+   "t": 1789310431.8456497,
+   "line": "guarantee to take exactly these actions if you run \"terraform apply\" now."
+  },
+  {
+   "t": 1789310431.8629937,
+   "line": "$ ./lab.sh nac apply -auto-approve -no-color -input=false -parallelism=1"
+  },
+  {
+   "t": 1789310433.4998765,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Refreshing state... [id=60b7b310ebebcba0799c3fa32dfee84992c86861]"
+  },
+  {
+   "t": 1789310433.544836,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310433.6508665,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310433.6713886,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310433.7189245,
+   "line": "module.iosxe.iosxe_banner.banner[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310433.7408018,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310433.7615678,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310433.7916265,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310433.8528457,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310433.9146416,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310433.9759672,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"hub/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310434.0118766,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke2/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310434.0520582,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke1/MGMT-ACCESS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310434.1010091,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310434.1176412,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310434.147013,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310434.1877432,
+   "line": "module.iosxe.iosxe_service.service[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310434.2130494,
+   "line": "module.iosxe.iosxe_service.service[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310434.2408621,
+   "line": "module.iosxe.iosxe_service.service[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310434.2654254,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"hub/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310434.2801042,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke1/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310434.29722,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke2/VPN-PROP\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310434.3324265,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke1/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310434.3525865,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"hub/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310434.3907318,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke2/VPN-KEYRING\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310434.4081583,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"hub/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310434.4498947,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke1/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310434.4776409,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke2/VPN-TS\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310434.5074127,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310434.602237,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke1/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310434.694518,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310434.7968261,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke2/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310434.906996,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback10\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310434.9864895,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"hub/Loopback0\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310435.0745707,
+   "line": "module.iosxe.iosxe_line.line[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310435.1280892,
+   "line": "module.iosxe.iosxe_line.line[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310435.195921,
+   "line": "module.iosxe.iosxe_line.line[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310435.2460916,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke1/Tunnel1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=1]"
+  },
+  {
+   "t": 1789310435.370253,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke2/Tunnel2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=2]"
+  },
+  {
+   "t": 1789310435.523814,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=1]"
+  },
+  {
+   "t": 1789310435.6720421,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/Tunnel=2]"
+  },
+  {
+   "t": 1789310435.8034062,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke1/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310435.8324218,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke2/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310435.855882,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"hub/VPN-POL\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310435.888902,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke1/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310435.9520292,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke2/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310436.0163352,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"hub/VPN-IKEV2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310436.0967393,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet5\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=5]"
+  },
+  {
+   "t": 1789310436.3257437,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet9\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=9]"
+  },
+  {
+   "t": 1789310436.5555778,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310436.80288,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310437.038788,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet6\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=6]"
+  },
+  {
+   "t": 1789310437.2738743,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310437.5252945,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet7\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=7]"
+  },
+  {
+   "t": 1789310437.7537355,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke1/GigabitEthernet2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310437.9508746,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet8\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=8]"
+  },
+  {
+   "t": 1789310438.1974587,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=4]"
+  },
+  {
+   "t": 1789310438.4807096,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke2/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310438.8480175,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet3\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310439.0785694,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"hub/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310439.107167,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke2/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310439.1396298,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke1/VPN-IPSEC\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310439.1794891,
+   "line": "module.iosxe.iosxe_system.system[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310440.819034,
+   "line": "module.iosxe.iosxe_system.system[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310442.0353732,
+   "line": "module.iosxe.iosxe_system.system[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310443.423886,
+   "line": "module.iosxe.iosxe_logging.logging[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310443.5199423,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310443.5704033,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310443.633457,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310443.7089307,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310443.7995768,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310443.8939843,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201]"
+  },
+  {
+   "t": 1789310443.95778,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202]"
+  },
+  {
+   "t": 1789310444.0032873,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200]"
+  },
+  {
+   "t": 1789310444.0759506,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310444.1229088,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310444.1689122,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310444.251577,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310444.3710995,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310444.46961,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310444.627874,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310444.7099793,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"hub\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310444.7646794,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310444.8424835,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789310444.8945315,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789310444.9424067,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789310444.998695,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789310445.0668843,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke1/172.17.1.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.1]"
+  },
+  {
+   "t": 1789310445.0840008,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke2/172.17.2.1\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.1]"
+  },
+  {
+   "t": 1789310445.1058962,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.1.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.1.2]"
+  },
+  {
+   "t": 1789310445.1235883,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.2.2\"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.2.2]"
+  },
+  {
+   "t": 1789310445.1441994,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310445.1502542,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310445.1701298,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke1/mss_spoke1_tunnel1\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310445.1760886,
+   "line": "module.iosxe.iosxe_cli.cli_0[\"spoke2/mss_spoke2_tunnel2\"]: Refreshing state..."
+  },
+  {
+   "t": 1789310445.4234335,
+   "line": ""
+  },
+  {
+   "t": 1789310445.423438,
+   "line": "Terraform used the selected providers to generate the following execution"
+  },
+  {
+   "t": 1789310445.423442,
+   "line": "plan. Resource actions are indicated with the following symbols:"
+  },
+  {
+   "t": 1789310445.4234552,
+   "line": "  + create"
+  },
+  {
+   "t": 1789310445.4234576,
+   "line": "  ~ update in-place"
+  },
+  {
+   "t": 1789310445.42346,
+   "line": "-/+ destroy and then create replacement"
+  },
+  {
+   "t": 1789310445.4234614,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4234624,
+   "line": "Terraform will perform the following actions:"
+  },
+  {
+   "t": 1789310445.4234684,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4234695,
+   "line": "  # module.iosxe.iosxe_aaa.aaa[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4234722,
+   "line": "  + resource \"iosxe_aaa\" \"aaa\" {"
+  },
+  {
+   "t": 1789310445.4234734,
+   "line": "      + device    = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4234746,
+   "line": "      + id        = (known after apply)"
+  },
+  {
+   "t": 1789310445.4234757,
+   "line": "      + new_model = true"
+  },
+  {
+   "t": 1789310445.4234781,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4237447,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4237475,
+   "line": "  # module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.42375,
+   "line": "  + resource \"iosxe_aaa_authentication\" \"aaa_authentication\" {"
+  },
+  {
+   "t": 1789310445.4237509,
+   "line": "      + device                       = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4237523,
+   "line": "      + dot1x_default_a1_local       = false"
+  },
+  {
+   "t": 1789310445.4237533,
+   "line": "      + dot1x_default_a2_local       = false"
+  },
+  {
+   "t": 1789310445.4237547,
+   "line": "      + dot1x_default_a3_local       = false"
+  },
+  {
+   "t": 1789310445.4237554,
+   "line": "      + dot1x_default_a4_local       = false"
+  },
+  {
+   "t": 1789310445.423757,
+   "line": "      + enable_default_group1_enable = false"
+  },
+  {
+   "t": 1789310445.423758,
+   "line": "      + enable_default_group1_line   = false"
+  },
+  {
+   "t": 1789310445.4237595,
+   "line": "      + enable_default_group1_none   = false"
+  },
+  {
+   "t": 1789310445.4237616,
+   "line": "      + enable_default_group2_enable = false"
+  },
+  {
+   "t": 1789310445.4237642,
+   "line": "      + enable_default_group2_line   = false"
+  },
+  {
+   "t": 1789310445.423767,
+   "line": "      + enable_default_group2_none   = false"
+  },
+  {
+   "t": 1789310445.4237678,
+   "line": "      + enable_default_group3_enable = false"
+  },
+  {
+   "t": 1789310445.4237702,
+   "line": "      + enable_default_group3_line   = false"
+  },
+  {
+   "t": 1789310445.4237716,
+   "line": "      + enable_default_group3_none   = false"
+  },
+  {
+   "t": 1789310445.4237733,
+   "line": "      + enable_default_group4_enable = false"
+  },
+  {
+   "t": 1789310445.423774,
+   "line": "      + enable_default_group4_line   = false"
+  },
+  {
+   "t": 1789310445.4237754,
+   "line": "      + enable_default_group4_none   = false"
+  },
+  {
+   "t": 1789310445.4237778,
+   "line": "      + id                           = (known after apply)"
+  },
+  {
+   "t": 1789310445.4237802,
+   "line": "      + logins                       = ["
+  },
+  {
+   "t": 1789310445.4237826,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.423785,
+   "line": "              + a1_enable = false"
+  },
+  {
+   "t": 1789310445.423786,
+   "line": "              + a1_line   = false"
+  },
+  {
+   "t": 1789310445.4237883,
+   "line": "              + a1_local  = true"
+  },
+  {
+   "t": 1789310445.4237897,
+   "line": "              + a1_none   = false"
+  },
+  {
+   "t": 1789310445.423791,
+   "line": "              + a2_enable = false"
+  },
+  {
+   "t": 1789310445.423793,
+   "line": "              + a2_line   = false"
+  },
+  {
+   "t": 1789310445.4237957,
+   "line": "              + a2_local  = false"
+  },
+  {
+   "t": 1789310445.423797,
+   "line": "              + a2_none   = false"
+  },
+  {
+   "t": 1789310445.423798,
+   "line": "              + a3_enable = false"
+  },
+  {
+   "t": 1789310445.4237993,
+   "line": "              + a3_line   = false"
+  },
+  {
+   "t": 1789310445.4238017,
+   "line": "              + a3_local  = false"
+  },
+  {
+   "t": 1789310445.423804,
+   "line": "              + a3_none   = false"
+  },
+  {
+   "t": 1789310445.4238064,
+   "line": "              + a4_enable = false"
+  },
+  {
+   "t": 1789310445.4238079,
+   "line": "              + a4_line   = false"
+  },
+  {
+   "t": 1789310445.4238093,
+   "line": "              + a4_local  = false"
+  },
+  {
+   "t": 1789310445.4238102,
+   "line": "              + a4_none   = false"
+  },
+  {
+   "t": 1789310445.4238117,
+   "line": "              + name      = \"default\""
+  },
+  {
+   "t": 1789310445.4238126,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.423815,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4238174,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4238505,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4238527,
+   "line": "  # module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4238539,
+   "line": "  + resource \"iosxe_aaa_authorization\" \"aaa_authorization\" {"
+  },
+  {
+   "t": 1789310445.423856,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4238577,
+   "line": "      + execs  = ["
+  },
+  {
+   "t": 1789310445.4238584,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.42386,
+   "line": "              + a1_if_authenticated = false"
+  },
+  {
+   "t": 1789310445.4238608,
+   "line": "              + a1_local            = true"
+  },
+  {
+   "t": 1789310445.4238622,
+   "line": "              + a1_radius           = false"
+  },
+  {
+   "t": 1789310445.4238646,
+   "line": "              + a1_tacacs           = false"
+  },
+  {
+   "t": 1789310445.423866,
+   "line": "              + a2_if_authenticated = false"
+  },
+  {
+   "t": 1789310445.4238672,
+   "line": "              + a2_local            = false"
+  },
+  {
+   "t": 1789310445.4238684,
+   "line": "              + a2_radius           = false"
+  },
+  {
+   "t": 1789310445.4238694,
+   "line": "              + a2_tacacs           = false"
+  },
+  {
+   "t": 1789310445.4238708,
+   "line": "              + a3_if_authenticated = false"
+  },
+  {
+   "t": 1789310445.4238718,
+   "line": "              + a3_local            = false"
+  },
+  {
+   "t": 1789310445.4238732,
+   "line": "              + a3_radius           = false"
+  },
+  {
+   "t": 1789310445.4238746,
+   "line": "              + a3_tacacs           = false"
+  },
+  {
+   "t": 1789310445.4238756,
+   "line": "              + a4_if_authenticated = false"
+  },
+  {
+   "t": 1789310445.4238765,
+   "line": "              + a4_local            = false"
+  },
+  {
+   "t": 1789310445.423878,
+   "line": "              + a4_radius           = false"
+  },
+  {
+   "t": 1789310445.423879,
+   "line": "              + a4_tacacs           = false"
+  },
+  {
+   "t": 1789310445.4238803,
+   "line": "              + name                = \"default\""
+  },
+  {
+   "t": 1789310445.423882,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4238827,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4238844,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4238865,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.423994,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4239976,
+   "line": "  # module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke3/MGMT-ACCESS\"] will be created"
+  },
+  {
+   "t": 1789310445.424,
+   "line": "  + resource \"iosxe_access_list_standard\" \"access_list_standard\" {"
+  },
+  {
+   "t": 1789310445.4240026,
+   "line": "      + device  = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4240048,
+   "line": "      + entries = ["
+  },
+  {
+   "t": 1789310445.4240065,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4240086,
+   "line": "              + remark   = \"OOB management network\""
+  },
+  {
+   "t": 1789310445.4240103,
+   "line": "              + sequence = 10"
+  },
+  {
+   "t": 1789310445.4240127,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.424014,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4240901,
+   "line": "              + permit_any         = false"
+  },
+  {
+   "t": 1789310445.4240925,
+   "line": "              + permit_log         = false"
+  },
+  {
+   "t": 1789310445.4240935,
+   "line": "              + permit_prefix      = \"10.2.0.0\""
+  },
+  {
+   "t": 1789310445.4240947,
+   "line": "              + permit_prefix_mask = \"0.0.0.255\""
+  },
+  {
+   "t": 1789310445.4240973,
+   "line": "              + sequence           = 20"
+  },
+  {
+   "t": 1789310445.4240985,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4240997,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4241006,
+   "line": "              + deny_any = true"
+  },
+  {
+   "t": 1789310445.4241018,
+   "line": "              + deny_log = true"
+  },
+  {
+   "t": 1789310445.424103,
+   "line": "              + sequence = 30"
+  },
+  {
+   "t": 1789310445.4241045,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4241052,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4241068,
+   "line": "      + id      = (known after apply)"
+  },
+  {
+   "t": 1789310445.4241078,
+   "line": "      + name    = \"MGMT-ACCESS\""
+  },
+  {
+   "t": 1789310445.4241092,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.42412,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4241226,
+   "line": "  # module.iosxe.iosxe_banner.banner[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.424125,
+   "line": "  + resource \"iosxe_banner\" \"banner\" {"
+  },
+  {
+   "t": 1789310445.4241273,
+   "line": "      + device      = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4241295,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310445.4241312,
+   "line": "      + motd_banner = \"C8000v IPsec VTI lab - managed by Network-as-Code (Terraform).\""
+  },
+  {
+   "t": 1789310445.4241333,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.424136,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4241383,
+   "line": "  # module.iosxe.iosxe_bgp.bgp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4241393,
+   "line": "  + resource \"iosxe_bgp\" \"bgp\" {"
+  },
+  {
+   "t": 1789310445.4241416,
+   "line": "      + asn                  = \"65203\""
+  },
+  {
+   "t": 1789310445.424143,
+   "line": "      + device               = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4241455,
+   "line": "      + id                   = (known after apply)"
+  },
+  {
+   "t": 1789310445.4241476,
+   "line": "      + log_neighbor_changes = true"
+  },
+  {
+   "t": 1789310445.42415,
+   "line": "      + router_id_ip         = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310445.4241517,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4241533,
+   "line": ""
+  },
+  {
+   "t": 1789310445.424156,
+   "line": "  # module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4241595,
+   "line": "  + resource \"iosxe_bgp_address_family_ipv4\" \"bgp_address_family_ipv4\" {"
+  },
+  {
+   "t": 1789310445.4241621,
+   "line": "      + af_name                    = \"unicast\""
+  },
+  {
+   "t": 1789310445.4241643,
+   "line": "      + asn                        = \"65203\""
+  },
+  {
+   "t": 1789310445.424166,
+   "line": "      + device                     = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4241679,
+   "line": "      + id                         = (known after apply)"
+  },
+  {
+   "t": 1789310445.4241703,
+   "line": "      + ipv4_unicast_networks      = ["
+  },
+  {
+   "t": 1789310445.4241726,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.424174,
+   "line": "              + network = \"192.168.13.0\""
+  },
+  {
+   "t": 1789310445.4241753,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.424178,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4241793,
+   "line": "      + ipv4_unicast_networks_mask = ["
+  },
+  {
+   "t": 1789310445.424181,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4241824,
+   "line": "              + mask    = \"255.255.255.255\""
+  },
+  {
+   "t": 1789310445.4241848,
+   "line": "              + network = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310445.4241865,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4241874,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4241886,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4241898,
+   "line": ""
+  },
+  {
+   "t": 1789310445.424191,
+   "line": "  # module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.3.2\"] will be created"
+  },
+  {
+   "t": 1789310445.4241924,
+   "line": "  + resource \"iosxe_bgp_ipv4_unicast_neighbor\" \"bgp_ipv4_unicast_neighbor\" {"
+  },
+  {
+   "t": 1789310445.4241936,
+   "line": "      + activate = true"
+  },
+  {
+   "t": 1789310445.4241948,
+   "line": "      + asn      = \"65200\""
+  },
+  {
+   "t": 1789310445.4241958,
+   "line": "      + device   = \"hub\""
+  },
+  {
+   "t": 1789310445.4241984,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310445.4242008,
+   "line": "      + ip       = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310445.4242022,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4242167,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242184,
+   "line": "  # module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke3/172.17.3.1\"] will be created"
+  },
+  {
+   "t": 1789310445.4242206,
+   "line": "  + resource \"iosxe_bgp_ipv4_unicast_neighbor\" \"bgp_ipv4_unicast_neighbor\" {"
+  },
+  {
+   "t": 1789310445.4242222,
+   "line": "      + activate = true"
+  },
+  {
+   "t": 1789310445.424223,
+   "line": "      + asn      = \"65203\""
+  },
+  {
+   "t": 1789310445.4242246,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4242256,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310445.4242268,
+   "line": "      + ip       = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310445.424228,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4242294,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242303,
+   "line": "  # module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.3.2\"] will be created"
+  },
+  {
+   "t": 1789310445.4242318,
+   "line": "  + resource \"iosxe_bgp_neighbor\" \"bgp_neighbor\" {"
+  },
+  {
+   "t": 1789310445.4242327,
+   "line": "      + asn         = \"65200\""
+  },
+  {
+   "t": 1789310445.4242342,
+   "line": "      + description = \"eBGP spoke3 (Tunnel3)\""
+  },
+  {
+   "t": 1789310445.424235,
+   "line": "      + device      = \"hub\""
+  },
+  {
+   "t": 1789310445.424236,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310445.4242375,
+   "line": "      + ip          = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310445.424239,
+   "line": "      + remote_as   = \"65203\""
+  },
+  {
+   "t": 1789310445.4242399,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.424241,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242423,
+   "line": "  # module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke3/172.17.3.1\"] will be created"
+  },
+  {
+   "t": 1789310445.4242437,
+   "line": "  + resource \"iosxe_bgp_neighbor\" \"bgp_neighbor\" {"
+  },
+  {
+   "t": 1789310445.424246,
+   "line": "      + asn         = \"65203\""
+  },
+  {
+   "t": 1789310445.4242482,
+   "line": "      + description = \"eBGP hub (Tunnel3)\""
+  },
+  {
+   "t": 1789310445.4242494,
+   "line": "      + device      = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4242516,
+   "line": "      + id          = (known after apply)"
+  },
+  {
+   "t": 1789310445.4242532,
+   "line": "      + ip          = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310445.4242554,
+   "line": "      + remote_as   = \"65200\""
+  },
+  {
+   "t": 1789310445.424257,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4242594,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242604,
+   "line": "  # module.iosxe.iosxe_cdp.cdp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4242618,
+   "line": "  + resource \"iosxe_cdp\" \"cdp\" {"
+  },
+  {
+   "t": 1789310445.4242628,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4242642,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4242651,
+   "line": "      + run    = true"
+  },
+  {
+   "t": 1789310445.4242666,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4242742,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242766,
+   "line": "  # module.iosxe.iosxe_cli.cli_0[\"hub/mss_hub_tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310445.4242775,
+   "line": "  + resource \"iosxe_cli\" \"cli_0\" {"
+  },
+  {
+   "t": 1789310445.4242787,
+   "line": "      + cli    = <<-EOT"
+  },
+  {
+   "t": 1789310445.4242804,
+   "line": "            interface Tunnel3"
+  },
+  {
+   "t": 1789310445.4242811,
+   "line": "             ip tcp adjust-mss 1360"
+  },
+  {
+   "t": 1789310445.4242826,
+   "line": "        EOT"
+  },
+  {
+   "t": 1789310445.424285,
+   "line": "      + device = \"hub\""
+  },
+  {
+   "t": 1789310445.4242864,
+   "line": "      + raw    = true"
+  },
+  {
+   "t": 1789310445.4242878,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4242887,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4242911,
+   "line": "  # module.iosxe.iosxe_cli.cli_0[\"spoke3/mss_spoke3_tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310445.4242926,
+   "line": "  + resource \"iosxe_cli\" \"cli_0\" {"
+  },
+  {
+   "t": 1789310445.424295,
+   "line": "      + cli    = <<-EOT"
+  },
+  {
+   "t": 1789310445.424296,
+   "line": "            interface Tunnel3"
+  },
+  {
+   "t": 1789310445.4242976,
+   "line": "             ip tcp adjust-mss 1360"
+  },
+  {
+   "t": 1789310445.4242988,
+   "line": "        EOT"
+  },
+  {
+   "t": 1789310445.4242997,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4243026,
+   "line": "      + raw    = true"
+  },
+  {
+   "t": 1789310445.4243035,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.424305,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4243064,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4243088,
+   "line": "  + resource \"iosxe_crypto_ikev2\" \"crypto_ikev2\" {"
+  },
+  {
+   "t": 1789310445.4243095,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.424311,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4243124,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4243186,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4243195,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke3/VPN-KEYRING\"] will be created"
+  },
+  {
+   "t": 1789310445.424321,
+   "line": "  + resource \"iosxe_crypto_ikev2_keyring\" \"crypto_ikev2_keyring\" {"
+  },
+  {
+   "t": 1789310445.424322,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4243233,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4243243,
+   "line": "      + name   = \"VPN-KEYRING\""
+  },
+  {
+   "t": 1789310445.4243257,
+   "line": "      + peers  = ["
+  },
+  {
+   "t": 1789310445.4243271,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.424328,
+   "line": "              + ipv4_address   = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310445.4243295,
+   "line": "              + ipv4_mask      = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310445.4243305,
+   "line": "              + name           = \"ANY\""
+  },
+  {
+   "t": 1789310445.4243314,
+   "line": "              + pre_shared_key = (sensitive value)"
+  },
+  {
+   "t": 1789310445.424333,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4243338,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4243352,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.424341,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4243426,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke3/VPN-POL\"] will be created"
+  },
+  {
+   "t": 1789310445.4243433,
+   "line": "  + resource \"iosxe_crypto_ikev2_policy\" \"crypto_ikev2_policy\" {"
+  },
+  {
+   "t": 1789310445.4243448,
+   "line": "      + device    = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4243472,
+   "line": "      + id        = (known after apply)"
+  },
+  {
+   "t": 1789310445.4243486,
+   "line": "      + name      = \"VPN-POL\""
+  },
+  {
+   "t": 1789310445.4243495,
+   "line": "      + proposals = ["
+  },
+  {
+   "t": 1789310445.424351,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.424352,
+   "line": "              + proposals = \"VPN-PROP\""
+  },
+  {
+   "t": 1789310445.4243543,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4243557,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4243567,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4257114,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4257152,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke3/VPN-IKEV2\"] will be created"
+  },
+  {
+   "t": 1789310445.4257176,
+   "line": "  + resource \"iosxe_crypto_ikev2_profile\" \"crypto_ikev2_profile\" {"
+  },
+  {
+   "t": 1789310445.4257185,
+   "line": "      + authentication_local_pre_share       = true"
+  },
+  {
+   "t": 1789310445.425721,
+   "line": "      + authentication_remote_pre_share      = true"
+  },
+  {
+   "t": 1789310445.425723,
+   "line": "      + device                               = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4257247,
+   "line": "      + dpd_interval                         = 20"
+  },
+  {
+   "t": 1789310445.425727,
+   "line": "      + dpd_query                            = \"on-demand\""
+  },
+  {
+   "t": 1789310445.4257295,
+   "line": "      + dpd_retry                            = 3"
+  },
+  {
+   "t": 1789310445.4257302,
+   "line": "      + id                                   = (known after apply)"
+  },
+  {
+   "t": 1789310445.4257324,
+   "line": "      + keyring_local                        = \"VPN-KEYRING\""
+  },
+  {
+   "t": 1789310445.4257338,
+   "line": "      + match_identity_remote_ipv4_addresses = ["
+  },
+  {
+   "t": 1789310445.4257362,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4257388,
+   "line": "              + address = \"0.0.0.0\""
+  },
+  {
+   "t": 1789310445.425741,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4257433,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4257443,
+   "line": "      + name                                 = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789310445.4257467,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.425749,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4257512,
+   "line": "  # module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke3/VPN-PROP\"] will be created"
+  },
+  {
+   "t": 1789310445.4257538,
+   "line": "  + resource \"iosxe_crypto_ikev2_proposal\" \"crypto_ikev2_proposal\" {"
+  },
+  {
+   "t": 1789310445.425755,
+   "line": "      + device                 = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4257562,
+   "line": "      + encryption_aes_cbc_128 = false"
+  },
+  {
+   "t": 1789310445.4257574,
+   "line": "      + encryption_aes_cbc_192 = false"
+  },
+  {
+   "t": 1789310445.4257584,
+   "line": "      + encryption_aes_cbc_256 = true"
+  },
+  {
+   "t": 1789310445.42576,
+   "line": "      + encryption_aes_gcm_128 = false"
+  },
+  {
+   "t": 1789310445.425761,
+   "line": "      + encryption_aes_gcm_256 = false"
+  },
+  {
+   "t": 1789310445.4257634,
+   "line": "      + encryption_en_3des     = false"
+  },
+  {
+   "t": 1789310445.4257648,
+   "line": "      + group_fifteen          = false"
+  },
+  {
+   "t": 1789310445.4257655,
+   "line": "      + group_fourteen         = true"
+  },
+  {
+   "t": 1789310445.4257672,
+   "line": "      + group_nineteen         = false"
+  },
+  {
+   "t": 1789310445.4257681,
+   "line": "      + group_one              = false"
+  },
+  {
+   "t": 1789310445.4257698,
+   "line": "      + group_sixteen          = false"
+  },
+  {
+   "t": 1789310445.4257705,
+   "line": "      + group_twenty           = false"
+  },
+  {
+   "t": 1789310445.425772,
+   "line": "      + group_twenty_four      = false"
+  },
+  {
+   "t": 1789310445.4257731,
+   "line": "      + group_twenty_one       = false"
+  },
+  {
+   "t": 1789310445.4257743,
+   "line": "      + group_two              = false"
+  },
+  {
+   "t": 1789310445.4257753,
+   "line": "      + id                     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4257767,
+   "line": "      + integrity_md5          = false"
+  },
+  {
+   "t": 1789310445.4257789,
+   "line": "      + integrity_sha1         = false"
+  },
+  {
+   "t": 1789310445.4257805,
+   "line": "      + integrity_sha256       = true"
+  },
+  {
+   "t": 1789310445.4257815,
+   "line": "      + integrity_sha384       = false"
+  },
+  {
+   "t": 1789310445.4257827,
+   "line": "      + integrity_sha512       = false"
+  },
+  {
+   "t": 1789310445.4257843,
+   "line": "      + name                   = \"VPN-PROP\""
+  },
+  {
+   "t": 1789310445.425785,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4257867,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4257877,
+   "line": "  # module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke3/VPN-IPSEC\"] will be created"
+  },
+  {
+   "t": 1789310445.4257898,
+   "line": "  + resource \"iosxe_crypto_ipsec_profile\" \"crypto_ipsec_profile\" {"
+  },
+  {
+   "t": 1789310445.425791,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4257925,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310445.425794,
+   "line": "      + name              = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310445.4257948,
+   "line": "      + set_ikev2_profile = \"VPN-IKEV2\""
+  },
+  {
+   "t": 1789310445.4257963,
+   "line": "      + set_transform_set = ["
+  },
+  {
+   "t": 1789310445.4257972,
+   "line": "          + \"VPN-TS\","
+  },
+  {
+   "t": 1789310445.4257982,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4258008,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.425802,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258046,
+   "line": "  # module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke3/VPN-TS\"] will be created"
+  },
+  {
+   "t": 1789310445.4258053,
+   "line": "  + resource \"iosxe_crypto_ipsec_transform_set\" \"crypto_ipsec_transform_set\" {"
+  },
+  {
+   "t": 1789310445.4258068,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4258082,
+   "line": "      + esp      = \"esp-256-aes\""
+  },
+  {
+   "t": 1789310445.425811,
+   "line": "      + esp_hmac = \"esp-sha256-hmac\""
+  },
+  {
+   "t": 1789310445.4258132,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310445.4258149,
+   "line": "      + name     = \"VPN-TS\""
+  },
+  {
+   "t": 1789310445.4258158,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.425817,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258187,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"] will be updated in-place"
+  },
+  {
+   "t": 1789310445.4258196,
+   "line": "  ~ resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310445.425822,
+   "line": "      + cdp_enable        = true"
+  },
+  {
+   "t": 1789310445.4258242,
+   "line": "      + description       = \"WAN to spoke3 Gi2\""
+  },
+  {
+   "t": 1789310445.4258258,
+   "line": "        id                = \"Cisco-IOS-XE-native:native/interface/GigabitEthernet=4\""
+  },
+  {
+   "t": 1789310445.4258268,
+   "line": "      + ipv4_address      = \"100.65.3.1\""
+  },
+  {
+   "t": 1789310445.4258292,
+   "line": "      + ipv4_address_mask = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310445.4258306,
+   "line": "        name              = \"4\""
+  },
+  {
+   "t": 1789310445.4258318,
+   "line": "      ~ shutdown          = true -> false"
+  },
+  {
+   "t": 1789310445.425833,
+   "line": "        # (2 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789310445.425834,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.425835,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258363,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet2\"] will be created"
+  },
+  {
+   "t": 1789310445.425839,
+   "line": "  + resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310445.4258401,
+   "line": "      + cdp_enable        = true"
+  },
+  {
+   "t": 1789310445.425841,
+   "line": "      + description       = \"WAN to hub Gi4\""
+  },
+  {
+   "t": 1789310445.4258425,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4258435,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310445.4258447,
+   "line": "      + ipv4_address      = \"100.65.3.2\""
+  },
+  {
+   "t": 1789310445.4258459,
+   "line": "      + ipv4_address_mask = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310445.4258473,
+   "line": "      + name              = \"2\""
+  },
+  {
+   "t": 1789310445.4258485,
+   "line": "      + shutdown          = false"
+  },
+  {
+   "t": 1789310445.4258497,
+   "line": "      + type              = \"GigabitEthernet\""
+  },
+  {
+   "t": 1789310445.4258509,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4258518,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258535,
+   "line": "  # module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet3\"] will be created"
+  },
+  {
+   "t": 1789310445.4258556,
+   "line": "  + resource \"iosxe_interface_ethernet\" \"ethernet\" {"
+  },
+  {
+   "t": 1789310445.4258568,
+   "line": "      + device   = \"spoke3\""
+  },
+  {
+   "t": 1789310445.425858,
+   "line": "      + id       = (known after apply)"
+  },
+  {
+   "t": 1789310445.425859,
+   "line": "      + name     = \"3\""
+  },
+  {
+   "t": 1789310445.4258604,
+   "line": "      + shutdown = true"
+  },
+  {
+   "t": 1789310445.425863,
+   "line": "      + type     = \"GigabitEthernet\""
+  },
+  {
+   "t": 1789310445.4258652,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4258661,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258676,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback0\"] will be created"
+  },
+  {
+   "t": 1789310445.4258685,
+   "line": "  + resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789310445.4258702,
+   "line": "      + description       = \"Router ID\""
+  },
+  {
+   "t": 1789310445.425871,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4258723,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310445.4258738,
+   "line": "      + ipv4_address      = \"10.255.1.4\""
+  },
+  {
+   "t": 1789310445.4258747,
+   "line": "      + ipv4_address_mask = \"255.255.255.255\""
+  },
+  {
+   "t": 1789310445.4258761,
+   "line": "      + name              = 0"
+  },
+  {
+   "t": 1789310445.425877,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4258785,
+   "line": ""
+  },
+  {
+   "t": 1789310445.425881,
+   "line": "  # module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback10\"] will be created"
+  },
+  {
+   "t": 1789310445.425882,
+   "line": "  + resource \"iosxe_interface_loopback\" \"loopback\" {"
+  },
+  {
+   "t": 1789310445.425883,
+   "line": "      + description       = \"site LAN\""
+  },
+  {
+   "t": 1789310445.4258847,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310445.425886,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310445.4258869,
+   "line": "      + ipv4_address      = \"192.168.13.1\""
+  },
+  {
+   "t": 1789310445.425888,
+   "line": "      + ipv4_address_mask = \"255.255.255.0\""
+  },
+  {
+   "t": 1789310445.4258893,
+   "line": "      + name              = 10"
+  },
+  {
+   "t": 1789310445.425891,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4258916,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4258943,
+   "line": "  # module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310445.4258957,
+   "line": "  + resource \"iosxe_interface_tunnel\" \"tunnel\" {"
+  },
+  {
+   "t": 1789310445.425897,
+   "line": "      + description                     = \"IPsec VTI to spoke3\""
+  },
+  {
+   "t": 1789310445.425898,
+   "line": "      + device                          = \"hub\""
+  },
+  {
+   "t": 1789310445.4258995,
+   "line": "      + id                              = (known after apply)"
+  },
+  {
+   "t": 1789310445.425902,
+   "line": "      + ip_mtu                          = 1400"
+  },
+  {
+   "t": 1789310445.425904,
+   "line": "      + ipv4_address                    = \"172.17.3.1\""
+  },
+  {
+   "t": 1789310445.4259052,
+   "line": "      + ipv4_address_mask               = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310445.4259067,
+   "line": "      + name                            = 3"
+  },
+  {
+   "t": 1789310445.4259079,
+   "line": "      + tunnel_destination_ipv4         = \"100.65.3.2\""
+  },
+  {
+   "t": 1789310445.42591,
+   "line": "      + tunnel_mode_ipsec_ipv4          = true"
+  },
+  {
+   "t": 1789310445.4259112,
+   "line": "      + tunnel_protection_ipsec_profile = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310445.4259129,
+   "line": "      + tunnel_source                   = \"GigabitEthernet4\""
+  },
+  {
+   "t": 1789310445.425914,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4259157,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4259164,
+   "line": "  # module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke3/Tunnel3\"] will be created"
+  },
+  {
+   "t": 1789310445.4259179,
+   "line": "  + resource \"iosxe_interface_tunnel\" \"tunnel\" {"
+  },
+  {
+   "t": 1789310445.425919,
+   "line": "      + description                     = \"IPsec VTI to hub\""
+  },
+  {
+   "t": 1789310445.4259202,
+   "line": "      + device                          = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4259217,
+   "line": "      + id                              = (known after apply)"
+  },
+  {
+   "t": 1789310445.4259226,
+   "line": "      + ip_mtu                          = 1400"
+  },
+  {
+   "t": 1789310445.425924,
+   "line": "      + ipv4_address                    = \"172.17.3.2\""
+  },
+  {
+   "t": 1789310445.4259257,
+   "line": "      + ipv4_address_mask               = \"255.255.255.252\""
+  },
+  {
+   "t": 1789310445.4259264,
+   "line": "      + name                            = 3"
+  },
+  {
+   "t": 1789310445.4259279,
+   "line": "      + tunnel_destination_ipv4         = \"100.65.3.1\""
+  },
+  {
+   "t": 1789310445.425929,
+   "line": "      + tunnel_mode_ipsec_ipv4          = true"
+  },
+  {
+   "t": 1789310445.4259305,
+   "line": "      + tunnel_protection_ipsec_profile = \"VPN-IPSEC\""
+  },
+  {
+   "t": 1789310445.4259312,
+   "line": "      + tunnel_source                   = \"GigabitEthernet2\""
+  },
+  {
+   "t": 1789310445.4259343,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4259355,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4259372,
+   "line": "  # module.iosxe.iosxe_line.line[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.425938,
+   "line": "  + resource \"iosxe_line\" \"line\" {"
+  },
+  {
+   "t": 1789310445.4259396,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4259412,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.425943,
+   "line": "      + vty    = ["
+  },
+  {
+   "t": 1789310445.4259455,
+   "line": "          + {"
+  },
+  {
+   "t": 1789310445.4259467,
+   "line": "              + access_classes      = ["
+  },
+  {
+   "t": 1789310445.4259489,
+   "line": "                  + {"
+  },
+  {
+   "t": 1789310445.4259503,
+   "line": "                      + access_list = \"MGMT-ACCESS\""
+  },
+  {
+   "t": 1789310445.4259512,
+   "line": "                      + direction   = \"in\""
+  },
+  {
+   "t": 1789310445.4259527,
+   "line": "                      + vrf_also    = true"
+  },
+  {
+   "t": 1789310445.4259539,
+   "line": "                    },"
+  },
+  {
+   "t": 1789310445.425955,
+   "line": "                ]"
+  },
+  {
+   "t": 1789310445.425956,
+   "line": "              + first               = 0"
+  },
+  {
+   "t": 1789310445.4259577,
+   "line": "              + last                = 4"
+  },
+  {
+   "t": 1789310445.4259584,
+   "line": "              + logging_synchronous = true"
+  },
+  {
+   "t": 1789310445.4259598,
+   "line": "              + transport_input     = ["
+  },
+  {
+   "t": 1789310445.425961,
+   "line": "                  + \"ssh\","
+  },
+  {
+   "t": 1789310445.4259624,
+   "line": "                ]"
+  },
+  {
+   "t": 1789310445.4259632,
+   "line": "            },"
+  },
+  {
+   "t": 1789310445.4259648,
+   "line": "        ]"
+  },
+  {
+   "t": 1789310445.4259672,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4259694,
+   "line": ""
+  },
+  {
+   "t": 1789310445.425971,
+   "line": "  # module.iosxe.iosxe_lldp.lldp[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4259732,
+   "line": "  + resource \"iosxe_lldp\" \"lldp\" {"
+  },
+  {
+   "t": 1789310445.4259744,
+   "line": "      + device = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4259756,
+   "line": "      + id     = (known after apply)"
+  },
+  {
+   "t": 1789310445.4259765,
+   "line": "      + run    = true"
+  },
+  {
+   "t": 1789310445.4259791,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4259803,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4259815,
+   "line": "  # module.iosxe.iosxe_logging.logging[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4259827,
+   "line": "  + resource \"iosxe_logging\" \"logging\" {"
+  },
+  {
+   "t": 1789310445.4259837,
+   "line": "      + buffered_severity = \"informational\""
+  },
+  {
+   "t": 1789310445.4259853,
+   "line": "      + buffered_size     = 64000"
+  },
+  {
+   "t": 1789310445.4259875,
+   "line": "      + device            = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4259887,
+   "line": "      + id                = (known after apply)"
+  },
+  {
+   "t": 1789310445.4259894,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.425992,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4259934,
+   "line": "  # module.iosxe.iosxe_service.service[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4259942,
+   "line": "  + resource \"iosxe_service\" \"service\" {"
+  },
+  {
+   "t": 1789310445.4259968,
+   "line": "      + device                                = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4259975,
+   "line": "      + id                                    = (known after apply)"
+  },
+  {
+   "t": 1789310445.4259992,
+   "line": "      + password_encryption                   = true"
+  },
+  {
+   "t": 1789310445.4260004,
+   "line": "      + tcp_keepalives_in                     = true"
+  },
+  {
+   "t": 1789310445.4260013,
+   "line": "      + tcp_keepalives_out                    = true"
+  },
+  {
+   "t": 1789310445.426003,
+   "line": "      + timestamps_log_datetime               = true"
+  },
+  {
+   "t": 1789310445.4260042,
+   "line": "      + timestamps_log_datetime_localtime     = true"
+  },
+  {
+   "t": 1789310445.4260063,
+   "line": "      + timestamps_log_datetime_msec          = true"
+  },
+  {
+   "t": 1789310445.4260075,
+   "line": "      + timestamps_log_datetime_show_timezone = true"
+  },
+  {
+   "t": 1789310445.4260085,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.42601,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4260108,
+   "line": "  # module.iosxe.iosxe_system.system[\"spoke3\"] will be created"
+  },
+  {
+   "t": 1789310445.4260125,
+   "line": "  + resource \"iosxe_system\" \"system\" {"
+  },
+  {
+   "t": 1789310445.4260137,
+   "line": "      + device               = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4260147,
+   "line": "      + hostname             = \"spoke3\""
+  },
+  {
+   "t": 1789310445.4260287,
+   "line": "      + id                   = (known after apply)"
+  },
+  {
+   "t": 1789310445.4260297,
+   "line": "      + ip_domain_lookup     = false"
+  },
+  {
+   "t": 1789310445.426031,
+   "line": "      + ip_domain_name       = \"lab.local\""
+  },
+  {
+   "t": 1789310445.4260323,
+   "line": "      + ip_ssh_time_out      = 60"
+  },
+  {
+   "t": 1789310445.4260335,
+   "line": "      + login_on_failure_log = true"
+  },
+  {
+   "t": 1789310445.4260347,
+   "line": "      + login_on_success_log = true"
+  },
+  {
+   "t": 1789310445.4260356,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4260373,
+   "line": ""
+  },
+  {
+   "t": 1789310445.426038,
+   "line": "  # module.iosxe.module.model.local_sensitive_file.model[0] must be replaced"
+  },
+  {
+   "t": 1789310445.4260395,
+   "line": "-/+ resource \"local_sensitive_file\" \"model\" {"
+  },
+  {
+   "t": 1789310445.4260406,
+   "line": "      ~ content              = (sensitive value) # forces replacement"
+  },
+  {
+   "t": 1789310445.4260418,
+   "line": "      ~ content_base64sha256 = \"9eb8bkJAOsQXrhVTiHDq5p2tfNZxdWTkl+GNAzYJj3o=\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260435,
+   "line": "      ~ content_base64sha512 = \"vgOzt7CiG0zOk/Vl/J6K26MEBz55PCJgmuYm4xRTdkLQyx7jG/3JiAeiTsVW48i/zLGd+azXUsAp/rxxzeF8uQ==\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260445,
+   "line": "      ~ content_md5          = \"0ff48fef9cc546fae8fe2f575f2bb9d3\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260457,
+   "line": "      ~ content_sha1         = \"60b7b310ebebcba0799c3fa32dfee84992c86861\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260466,
+   "line": "      ~ content_sha256       = \"f5e6fc6e42403ac417ae15538870eae69dad7cd6717564e497e18d0336098f7a\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.426049,
+   "line": "      ~ content_sha512       = \"be03b3b7b0a21b4cce93f565fc9e8adba304073e793c22609ae626e314537642d0cb1ee31bfdc98807a24ec556e3c8bfccb19df9acd752c029febc71cde17cb9\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260507,
+   "line": "      ~ id                   = \"60b7b310ebebcba0799c3fa32dfee84992c86861\" -> (known after apply)"
+  },
+  {
+   "t": 1789310445.4260528,
+   "line": "        # (3 unchanged attributes hidden)"
+  },
+  {
+   "t": 1789310445.4260554,
+   "line": "    }"
+  },
+  {
+   "t": 1789310445.4260564,
+   "line": ""
+  },
+  {
+   "t": 1789310445.4260578,
+   "line": "Plan: 33 to add, 1 to change, 1 to destroy."
+  },
+  {
+   "t": 1789310445.6245449,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Destroying... [id=60b7b310ebebcba0799c3fa32dfee84992c86861]"
+  },
+  {
+   "t": 1789310445.6262805,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Destruction complete after 0s"
+  },
+  {
+   "t": 1789310445.922863,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Creating..."
+  },
+  {
+   "t": 1789310445.9330208,
+   "line": "module.iosxe.module.model.local_sensitive_file.model[0]: Creation complete after 0s [id=b6cde0c91b20615871a6582bd61745f442613a09]"
+  },
+  {
+   "t": 1789310445.9924018,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310446.3680983,
+   "line": "module.iosxe.iosxe_cdp.cdp[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/cdp]"
+  },
+  {
+   "t": 1789310446.3926587,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310446.4570386,
+   "line": "module.iosxe.iosxe_crypto_ikev2.crypto_ikev2[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2]"
+  },
+  {
+   "t": 1789310446.491998,
+   "line": "module.iosxe.iosxe_service.service[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310446.9697392,
+   "line": "module.iosxe.iosxe_service.service[\"spoke3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/service]"
+  },
+  {
+   "t": 1789310447.047136,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310447.3290832,
+   "line": "module.iosxe.iosxe_lldp.lldp[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/Cisco-IOS-XE-lldp:lldp]"
+  },
+  {
+   "t": 1789310447.3751054,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310447.594177,
+   "line": "module.iosxe.iosxe_banner.banner[\"spoke3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/banner]"
+  },
+  {
+   "t": 1789310447.6191654,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke3/VPN-PROP\"]: Creating..."
+  },
+  {
+   "t": 1789310448.033773,
+   "line": "module.iosxe.iosxe_crypto_ikev2_proposal.crypto_ikev2_proposal[\"spoke3/VPN-PROP\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/proposal=VPN-PROP]"
+  },
+  {
+   "t": 1789310448.0666816,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke3/MGMT-ACCESS\"]: Creating..."
+  },
+  {
+   "t": 1789310448.4795308,
+   "line": "module.iosxe.iosxe_access_list_standard.access_list_standard[\"spoke3/MGMT-ACCESS\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/ip/access-list/Cisco-IOS-XE-acl:standard=MGMT-ACCESS]"
+  },
+  {
+   "t": 1789310448.5075026,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke3/VPN-TS\"]: Creating..."
+  },
+  {
+   "t": 1789310448.7606304,
+   "line": "module.iosxe.iosxe_crypto_ipsec_transform_set.crypto_ipsec_transform_set[\"spoke3/VPN-TS\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/transform-set=VPN-TS]"
+  },
+  {
+   "t": 1789310448.7792566,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke3/VPN-KEYRING\"]: Creating..."
+  },
+  {
+   "t": 1789310449.306032,
+   "line": "module.iosxe.iosxe_crypto_ikev2_keyring.crypto_ikev2_keyring[\"spoke3/VPN-KEYRING\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/keyring=VPN-KEYRING]"
+  },
+  {
+   "t": 1789310449.3292022,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke3/VPN-POL\"]: Creating..."
+  },
+  {
+   "t": 1789310450.6464303,
+   "line": "module.iosxe.iosxe_crypto_ikev2_policy.crypto_ikev2_policy[\"spoke3/VPN-POL\"]: Creation complete after 2s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/policy=VPN-POL]"
+  },
+  {
+   "t": 1789310450.691109,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke3/Tunnel3\"]: Creating..."
+  },
+  {
+   "t": 1789310459.050569,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel3\"]: Creating..."
+  },
+  {
+   "t": 1789310459.7442749,
+   "line": "module.iosxe.iosxe_interface_tunnel.tunnel[\"hub/Tunnel3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/interface/Tunnel=3]"
+  },
+  {
+   "t": 1789310459.786991,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback0\"]: Creating..."
+  },
+  {
+   "t": 1789310460.0988119,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback0\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/interface/Loopback=0]"
+  },
+  {
+   "t": 1789310460.1205602,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback10\"]: Creating..."
+  },
+  {
+   "t": 1789310460.5038867,
+   "line": "module.iosxe.iosxe_interface_loopback.loopback[\"spoke3/Loopback10\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/interface/Loopback=10]"
+  },
+  {
+   "t": 1789310460.5361507,
+   "line": "module.iosxe.iosxe_line.line[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310460.9437652,
+   "line": "module.iosxe.iosxe_line.line[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/line]"
+  },
+  {
+   "t": 1789310460.970347,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke3/VPN-IKEV2\"]: Creating..."
+  },
+  {
+   "t": 1789310462.633093,
+   "line": "module.iosxe.iosxe_crypto_ikev2_profile.crypto_ikev2_profile[\"spoke3/VPN-IKEV2\"]: Creation complete after 2s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ikev2/profile=VPN-IKEV2]"
+  },
+  {
+   "t": 1789310462.7683735,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"]: Modifying... [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=4]"
+  },
+  {
+   "t": 1789310466.053806,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"hub/GigabitEthernet4\"]: Modifications complete after 3s [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=4]"
+  },
+  {
+   "t": 1789310466.1370392,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet3\"]: Creating..."
+  },
+  {
+   "t": 1789310467.2718012,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=3]"
+  },
+  {
+   "t": 1789310467.359909,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet2\"]: Creating..."
+  },
+  {
+   "t": 1789310470.3865187,
+   "line": "module.iosxe.iosxe_interface_ethernet.ethernet[\"spoke3/GigabitEthernet2\"]: Creation complete after 3s [id=Cisco-IOS-XE-native:native/interface/GigabitEthernet=2]"
+  },
+  {
+   "t": 1789310470.4151452,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke3/VPN-IPSEC\"]: Creating..."
+  },
+  {
+   "t": 1789310470.6317527,
+   "line": "module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile[\"spoke3/VPN-IPSEC\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/crypto/Cisco-IOS-XE-crypto:ipsec/profile=VPN-IPSEC]"
+  },
+  {
+   "t": 1789310470.6503325,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310470.762562,
+   "line": "module.iosxe.iosxe_aaa.aaa[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/aaa]"
+  },
+  {
+   "t": 1789310470.8965983,
+   "line": "module.iosxe.iosxe_system.system[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310471.1484985,
+   "line": "module.iosxe.iosxe_system.system[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native]"
+  },
+  {
+   "t": 1789310471.2034388,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310471.3876987,
+   "line": "module.iosxe.iosxe_logging.logging[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/logging]"
+  },
+  {
+   "t": 1789310471.422941,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310473.242801,
+   "line": "module.iosxe.iosxe_aaa_authentication.aaa_authentication[\"spoke3\"]: Creation complete after 2s [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authentication]"
+  },
+  {
+   "t": 1789310473.272082,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310474.1533628,
+   "line": "module.iosxe.iosxe_aaa_authorization.aaa_authorization[\"spoke3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/aaa/Cisco-IOS-XE-aaa:authorization]"
+  },
+  {
+   "t": 1789310474.1753204,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310474.7781756,
+   "line": "module.iosxe.iosxe_bgp.bgp[\"spoke3\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203]"
+  },
+  {
+   "t": 1789310474.8159971,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke3\"]: Creating..."
+  },
+  {
+   "t": 1789310475.227881,
+   "line": "module.iosxe.iosxe_bgp_address_family_ipv4.bgp_address_family_ipv4[\"spoke3\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203/address-family/no-vrf/ipv4=unicast]"
+  },
+  {
+   "t": 1789310475.255752,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.3.2\"]: Creating..."
+  },
+  {
+   "t": 1789310475.897981,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"hub/172.17.3.2\"]: Creation complete after 1s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/neighbor=172.17.3.2]"
+  },
+  {
+   "t": 1789310475.9314153,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke3/172.17.3.1\"]: Creating..."
+  },
+  {
+   "t": 1789310476.4487271,
+   "line": "module.iosxe.iosxe_bgp_neighbor.bgp_neighbor[\"spoke3/172.17.3.1\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203/neighbor=172.17.3.1]"
+  },
+  {
+   "t": 1789310476.4672236,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke3/172.17.3.1\"]: Creating..."
+  },
+  {
+   "t": 1789310477.7981954,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"spoke3/172.17.3.1\"]: Creation complete after 2s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.3.1]"
+  },
+  {
+   "t": 1789310477.825845,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.3.2\"]: Creating..."
+  },
+  {
+   "t": 1789310477.965406,
+   "line": "module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor[\"hub/172.17.3.2\"]: Creation complete after 0s [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65200/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.3.2]"
+  },
+  {
+   "t": 1789310478.0571914,
+   "line": ""
+  },
+  {
+   "t": 1789310478.0571976,
+   "line": "Error: Client Error"
+  },
+  {
+   "t": 1789310478.0572047,
+   "line": ""
+  },
+  {
+   "t": 1789310478.05725,
+   "line": "  with module.iosxe.iosxe_interface_tunnel.tunnel[\"spoke3/Tunnel3\"],"
+  },
+  {
+   "t": 1789310478.057253,
+   "line": "  on .terraform/modules/iosxe/iosxe_interfaces.tf line 2149, in resource \"iosxe_interface_tunnel\" \"tunnel\":"
+  },
+  {
+   "t": 1789310478.0572555,
+   "line": "2149: resource \"iosxe_interface_tunnel\" \"tunnel\" {"
+  },
+  {
+   "t": 1789310478.0572577,
+   "line": ""
+  },
+  {
+   "t": 1789310478.0572588,
+   "line": "Failed to configure object (PATCH,"
+  },
+  {
+   "t": 1789310478.0572615,
+   "line": "Cisco-IOS-XE-native:native/interface/Tunnel), got error: HTTP Request failed:"
+  },
+  {
+   "t": 1789310478.0572639,
+   "line": "StatusCode 400, RESTCONF errors {Error:[{ErrorType:application"
+  },
+  {
+   "t": 1789310478.057266,
+   "line": "ErrorTag:invalid-value ErrorAppTag:"
+  },
+  {
+   "t": 1789310478.0572681,
+   "line": "ErrorPath:/Cisco-IOS-XE-native:native/interface/Tunnel"
+  },
+  {
+   "t": 1789310478.0572698,
+   "line": "ErrorMessage:inconsistent value: Device refused one or more commands"
+  },
+  {
+   "t": 1789310478.057272,
+   "line": "ErrorInfo:}]} {PatchId: GlobalStatus:{Ok:false Errors:{Error:[]}}"
+  },
+  {
+   "t": 1789310478.0572731,
+   "line": "EditStatus:{Edit:[]} Errors:{Error:[]}}"
+  },
+  {
+   "t": 1789310478.0798323,
+   "line": "!! terraform apply failed (rc=1)"
+  }
+ ]
+}

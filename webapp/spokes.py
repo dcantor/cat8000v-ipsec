@@ -157,3 +157,106 @@ def hub_changes(spec):
             "spoke": {"interface": f"GigabitEthernet{spec['spoke_port']}", "wan_ip": f"{wan[1]}/30", "tunnel": f"Tunnel{spec['tunnel_id']}", "tunnel_ip": f"{tun[1]}/30",
                       "tunnel_destination": str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {hub_asn}",
                       "loopbacks": f"Loopback0 {spec['router_id']}/32, Loopback10 {str(list(ipaddress.IPv4Network(spec['lan']).hosts())[0])}/24"}}
+
+
+# ---- removal --------------------------------------------------------------------
+def removal_plan(name):
+    """What removing a spoke entails (also the validation): returns (problems, details)."""
+    I = intent_mod.load(); C = intent_mod.lab_conf("ROLE", "MGMT_IP"); errs = []
+    dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None: errs.append(f"{name} is not in the intent")
+    elif dev["role"] != "spoke": errs.append("only spokes can be removed")
+    if name not in C["ROLE"]: errs.append(f"{name} is not a VM in lab.conf")
+    if errs: return errs, None
+    link = next((l for l in I["links"] if name in (l["a"], l["b"])), None); tun = next((t for t in I["tunnels"] if t["spoke"] == name), None)
+    hub = next(d for d in I["devices"] if d["role"] == "hub")
+    hub_port = (link["a_port"] if link["a"] == hub["name"] else link["b_port"]) if link else None
+    return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "lan": dev["lan"], "router_id": dev["router_id"], "hub": hub["name"],
+                "hub_port": hub_port, "hub_interface": f"GigabitEthernet{hub_port}" if hub_port else None, "wan_prefix": link["prefix"] if link else None,
+                "tunnel_id": tun["id"] if tun else None, "tunnel": f"Tunnel{tun['id']}" if tun else None, "tunnel_prefix": tun["prefix"] if tun else None,
+                "tunnels_after": len(I["tunnels"]) - (1 if tun else 0), "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)}
+
+
+def remove_from_intent(name):
+    I = intent_mod.load()
+    I["devices"] = [d for d in I["devices"] if d["name"] != name]
+    I["links"] = [l for l in I["links"] if name not in (l["a"], l["b"])]
+    I["tunnels"] = [t for t in I["tunnels"] if t["spoke"] != name]
+    return I   # not saved yet: lab.conf must lose the VM first, or validate() complains about the wiring
+
+
+def remove_from_lab_conf(name):
+    p = LAB / "lab.conf"; s = p.read_text(); shutil.copy(p, LAB / "lab.conf.bak")
+    for arr in ("ROLE", "MGMT_IP", "BGP_AS", "LAN", "CONSOLE_PORT", "NODE_IDX"):
+        s = re.sub(rf"(\[{re.escape(name)}\]=\S+)\s*", "", s, count=1)
+    s = re.sub(rf'^\s*"[^"\n]*\b{re.escape(name)}:\d+[^"\n]*"\n', "", s, flags=re.M)      # LINKS
+    s = re.sub(rf'^\s*"\d+ {re.escape(name)} [^"\n]*"\n', "", s, flags=re.M)               # TUNNELS
+    s = re.sub(rf"^(ROUTERS|ALL_NODES)=\((.*?)\)", lambda m: f"{m.group(1)}=({' '.join(x for x in m.group(2).split() if x != name)})", s, flags=re.M)
+    p.write_text(s); subprocess.run(["bash", "-n", str(p)], check=True)
+    assert name not in intent_mod.lab_conf("ROLE")["ROLE"], "lab.conf update did not take"
+
+
+def remove_from_nautobot(name, url, token, prefixes=()):
+    """Delete the spoke's objects: VPN tunnel + endpoints, BGP peering/instance, device (cascades interfaces), its
+    addresses and prefixes, the hub's TunnelN interface + address, the hub WAN port's address; unused AS."""
+    import requests
+    H = {"Authorization": f"Token {token}", "Accept": "application/json"}; done = []
+    def get(path, **params):
+        r = requests.get(f"{url}/api/{path}", params=params, headers=H, timeout=60); r.raise_for_status(); return r.json().get("results", [])
+    def delete(path, what):
+        r = requests.delete(f"{url}/api/{path}", headers=H, timeout=60)
+        if r.status_code not in (204, 404): raise RuntimeError(f"delete {what}: {r.status_code} {r.text[:200]}")
+        if r.status_code == 204: done.append(what)
+    def gql(q):
+        r = requests.post(f"{url}/api/graphql/", json={"query": q}, headers=H, timeout=60); r.raise_for_status(); return r.json()["data"]
+    devs = get("dcim/devices/", name=name)
+    dev = devs[0] if devs else None
+    if dev is None: done.append("device already gone from Nautobot")
+    # BGP first: the peering references the tunnel addresses on both sides (the spoke's routing instance cascades its endpoint)
+    for ri in (get("plugins/bgp/routing-instances/", device=dev["id"]) if dev else []):
+        for ep in get("plugins/bgp/peer-endpoints/", routing_instance=ri["id"]):
+            pid = (ep.get("peering") or {}).get("id")
+            if pid: delete(f"plugins/bgp/peerings/{pid}/", "BGP peering (both endpoints)")
+        delete(f"plugins/bgp/routing-instances/{ri['id']}/", "BGP routing instance")
+    # the VPN tunnel(s) this spoke terminates, its endpoints, and the hub-side tunnel interface + address
+    eps = [] if not dev else gql('{ vpn_tunnel_endpoints(device: ["%s"]) { id endpoint_a_vpn_tunnels { id name endpoint_z { id tunnel_interface { id name device { name } ip_addresses { id } } } } endpoint_z_vpn_tunnels { id name endpoint_a { id tunnel_interface { id name device { name } ip_addresses { id } } } } } }' % name)["vpn_tunnel_endpoints"]
+    for ep in eps:
+        for t in ep["endpoint_a_vpn_tunnels"] + ep["endpoint_z_vpn_tunnels"]:
+            far = t.get("endpoint_z") or t.get("endpoint_a")
+            delete(f"vpn/vpn-tunnels/{t['id']}/", f"VPN tunnel {t['name']}")
+            if far:
+                delete(f"vpn/vpn-tunnel-endpoints/{far['id']}/", "hub tunnel endpoint")
+                ti = far.get("tunnel_interface") or {}
+                for ip in ti.get("ip_addresses") or []: delete(f"ipam/ip-addresses/{ip['id']}/", f"hub tunnel address")
+                if ti.get("id"): delete(f"dcim/interfaces/{ti['id']}/", f"{ti['device']['name']}/{ti['name']}")
+        delete(f"vpn/vpn-tunnel-endpoints/{ep['id']}/", "spoke tunnel endpoint")
+    # the hub's WAN address on the port facing this spoke (the cable goes with the spoke's interface)
+    for itf in (get("dcim/interfaces/", device=name, depth=1) if dev else []):
+        for ip in get("ipam/ip-addresses/", interfaces=itf["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"address {ip['address']}")
+        ci = itf.get("connected_interface") or {}
+        if ci.get("id"):
+            for ip in get("ipam/ip-addresses/", interfaces=ci["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"hub WAN address {ip['address']}")
+    if dev: delete(f"dcim/devices/{dev['id']}/", f"device {name} (interfaces, cable)")
+    # its prefixes (WAN /30, tunnel /30, LAN, loopback /32): every address inside them first, then the prefix
+    for pfx in prefixes:
+        for pf in get("ipam/prefixes/", prefix=pfx):
+            for ip in get("ipam/ip-addresses/", parent=pf["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"address {ip['address']}")   # parent = prefix UUID
+            delete(f"ipam/prefixes/{pf['id']}/", f"prefix {pf['prefix']}")
+    for asn in get("plugins/bgp/autonomous-systems/", q=name):
+        if re.search(rf"\b{re.escape(name)}\b", asn.get("description") or ""): delete(f"plugins/bgp/autonomous-systems/{asn['id']}/", f"AS {asn['asn']}")
+    return done
+
+
+def forget_in_terraform(name, log):
+    """Terraform must not try to talk to a router that no longer exists: drop its resources from the state."""
+    env = {**__import__("os").environ, "PATH": f"{Path.home()}/.local/bin:" + __import__("os").environ.get("PATH", "")}
+    out = subprocess.run(["terraform", "state", "list"], cwd=LAB / "nac", capture_output=True, text=True, env=env, check=True).stdout.split()
+    mine = [r for r in out if f'["{name}/' in r or f'["{name}"]' in r]
+    if mine:
+        subprocess.run(["terraform", "state", "rm", *mine], cwd=LAB / "nac", check=True, capture_output=True, text=True, env=env)
+    log(f"removed {len(mine)} {name} resources from the Terraform state"); return len(mine)
+
+
+def destroy_vm(name, delete_disk=True):
+    subprocess.run([str(LAB / "lab.sh"), "clean" if delete_disk else "down", name], check=True, capture_output=True, text=True)
+    if delete_disk: shutil.rmtree(LAB / "nodes" / name, ignore_errors=True)
