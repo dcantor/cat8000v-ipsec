@@ -121,4 +121,20 @@ q = [im.quantize(colors=256, palette=pal, dither=Image.Dither.NONE) for im in im
 gif = OUT / "portal-demo.gif"; q[0].save(gif, save_all=True, append_images=q[1:], duration=durs, loop=0, optimize=True)
 vids = list((OUT / "video").glob("*.webm"))
 if vids: vids[0].rename(OUT / "portal-demo.webm")
+# MP4 (H.264, full resolution) from the same frames and durations, via ffmpeg's concat demuxer
+import shutil, subprocess, tempfile
+try:
+    import imageio_ffmpeg; ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:
+    ffmpeg = shutil.which("ffmpeg")
+if ffmpeg:
+    tmp = Path(tempfile.mkdtemp(prefix="demo-frames-")); lines = []
+    for i, (f, d) in enumerate(frames):
+        f.save(tmp / f"f{i:04d}.png"); lines += [f"file 'f{i:04d}.png'", f"duration {max(0.08, d):.3f}"]
+    lines.append(f"file 'f{len(frames) - 1:04d}.png'")   # concat demuxer needs the last file repeated
+    (tmp / "list.txt").write_text("\n".join(lines) + "\n")
+    mp4 = OUT / "portal-demo.mp4"
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"), "-vf", "fps=15,format=yuv420p,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                    "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-movflags", "+faststart", str(mp4)], check=True)
+    shutil.rmtree(tmp); print(f"{mp4} ({mp4.stat().st_size / 1e6:.1f} MB)")
 print(f"{gif} ({gif.stat().st_size / 1e6:.1f} MB, {len(q)} frames, {sum(durs) / 1000:.0f}s)" + (f"; {OUT / 'portal-demo.webm'}" if vids else ""))

@@ -39,6 +39,11 @@
       "ipsec_profile": "VPN-IPSEC"
     }
   },
+  "regions": [
+    "East",
+    "Central",
+    "West"
+  ],
   "devices": [
     {
       "name": "east-headend",
@@ -87,11 +92,11 @@
       "router_id": "10.255.1.2",
       "lan": "192.168.12.0/24",
       "comments": "",
-      "psk": "nPqLMT9KlKvTVkwbRkxj9oTe",
       "region": "East",
       "site": "branch-1",
       "site_code": "EA-1",
-      "contact": "noc-east@lab.local"
+      "contact": "noc-east@lab.local",
+      "psk": "nPqLMT9KlKvTVkwbRkxj9oTe"
     },
     {
       "name": "spoke2",
@@ -101,11 +106,11 @@
       "router_id": "10.255.1.3",
       "lan": "192.168.23.0/24",
       "comments": "branch 2 - LAN renumbered via portal",
-      "psk": "7Dqu11eNUIWIx5OAWpA5nPzv",
       "region": "Central",
       "site": "branch-2",
       "site_code": "CE-2",
-      "contact": "noc-central@lab.local"
+      "contact": "noc-central@lab.local",
+      "psk": "7Dqu11eNUIWIx5OAWpA5nPzv"
     },
     {
       "name": "spoke3",
@@ -115,11 +120,11 @@
       "router_id": "10.255.1.4",
       "lan": "192.168.13.0/24",
       "comments": "This is B2B customer #3.  Connection to their California data center.",
-      "psk": "lnytgPFb6IhXRBXRgB5WPCmB",
       "region": "West",
       "site": "branch-3",
       "site_code": "WE-3",
-      "contact": "noc-west@lab.local"
+      "contact": "noc-west@lab.local",
+      "psk": "lnytgPFb6IhXRBXRgB5WPCmB"
     },
     {
       "name": "spoke4",
@@ -129,11 +134,11 @@
       "router_id": "10.255.1.6",
       "lan": "192.168.15.0/24",
       "comments": "",
-      "psk": "TEACJ8LoJ4W47wgG02e0GHHu",
       "region": "Central",
       "site": "branch-4",
       "site_code": "CE-4",
-      "contact": "noc-central@lab.local"
+      "contact": "noc-central@lab.local",
+      "psk": "TEACJ8LoJ4W47wgG02e0GHHu"
     },
     {
       "name": "spoke5",
@@ -143,11 +148,11 @@
       "router_id": "10.255.1.8",
       "lan": "192.168.17.0/24",
       "comments": "",
-      "psk": "fGr8IUqF4m2weOwXXFsDSZaK",
       "region": "West",
       "site": "branch-5",
       "site_code": "WE-5",
-      "contact": "noc-west@lab.local"
+      "contact": "noc-west@lab.local",
+      "psk": "fGr8IUqF4m2weOwXXFsDSZaK"
     }
   ],
   "links": [
@@ -246,21 +251,21 @@
   "tunnels": [
     {
       "id": 1,
+      "hub": "east-headend",
       "spoke": "spoke1",
-      "prefix": "172.17.1.0/30",
-      "hub": "east-headend"
+      "prefix": "172.17.1.0/30"
     },
     {
       "id": 2,
+      "hub": "east-headend",
       "spoke": "spoke2",
-      "prefix": "172.17.2.0/30",
-      "hub": "east-headend"
+      "prefix": "172.17.2.0/30"
     },
     {
       "id": 3,
+      "hub": "east-headend",
       "spoke": "spoke3",
-      "prefix": "172.17.3.0/30",
-      "hub": "east-headend"
+      "prefix": "172.17.3.0/30"
     },
     {
       "id": 4,
@@ -332,10 +337,5 @@
   "domain_name": "lab.local",
   "capacity": {
     "tunnels_per_headend": 50
-  },
-  "regions": [
-    "East",
-    "Central",
-    "West"
-  ]
+  }
 }
