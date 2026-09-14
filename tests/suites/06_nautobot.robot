@@ -103,14 +103,14 @@ Locations form the hierarchy lab site -> region -> branch, with site metadata on
         Should Be Equal    ${br}[cf_site_code]    ${ROUTERS}[${r}][site_code]
         Should Contain    ${{ [x['name'] for x in $br['devices']] }}    ${r}
     END
-    ${regions}=    Nautobot Graphql    { locations(location_type:"Region") { name } }
-    Should Be Equal    ${{ sorted(l['name'] for l in $regions['locations']) }}    ${{ sorted($REGIONS) }}
+    ${rg}=    Nautobot Graphql    { locations(location_type:"Region") { name } }
+    Should Be Equal    ${{ sorted([l["name"] for l in $rg["locations"]]) }}    ${{ sorted($REGIONS) }}
 
 Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke
     FOR    ${s}    IN    @{SPOKES}
         ${kr}=    Show    ${s}    show run | section crypto ikev2 keyring
         FOR    ${t}    IN    @{SPOKE_TUNNELS}[${s}]
-            Should Match Regexp    ${kr}    (?s)peer ${t}[hub]\n\s+address ${t}[hub_wan]\n\s+pre-shared-key ${ROUTERS}[${s}][psk]
+            Should Match Regexp    ${kr}    (?s)peer ${t}[hub]\\s+address ${t}[hub_wan]\\s+pre-shared-key ${ROUTERS}[${s}][psk]
         END
         FOR    ${o}    IN    @{SPOKES}
             Continue For Loop If    '${s}' == '${o}'
@@ -120,7 +120,7 @@ Every spoke uses its own pre-shared key on all of its tunnels and each headend k
     FOR    ${h}    IN    @{HUBS}
         ${kr}=    Show    ${h}    show run | section crypto ikev2 keyring
         FOR    ${t}    IN    @{HUB_TUNNELS}[${h}]
-            Should Match Regexp    ${kr}    (?s)peer ${t}[spoke]\n\s+address ${t}[spoke_wan]\n\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]
+            Should Match Regexp    ${kr}    (?s)peer ${t}[spoke]\\s+address ${t}[spoke_wan]\\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]
         END
         Should Not Contain    ${kr}    address 0.0.0.0    msg=${h} still has the wildcard peer
     END

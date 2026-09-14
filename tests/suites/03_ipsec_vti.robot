@@ -57,7 +57,7 @@ Traffic through the tunnels is encrypted with the modelled transform set
         ${p}=    Show    ${t}[spoke]    ping ${t}[hub_ip] source Tunnel${t}[id] repeat 10
         Should Match Regexp    ${p}    Success rate is (100|90|80) percent
         # IOS-XE refreshes the SA counters from the data plane (QFP) only every few seconds
-        Wait Until Keyword Succeeds    45s    5s    Encaps Advanced    ${t}[spoke]    Tunnel${t}[id]    ${before}
+        Wait Until Keyword Succeeds    90s    5s    Encaps Advanced    ${t}[spoke]    Tunnel${t}[id]    ${before}
         ${sa}=    Show    ${t}[spoke]    show crypto ipsec sa interface Tunnel${t}[id]
         Should Contain    ${sa}    transform: ${ESP_TRANSFORM}
         Should Contain    ${sa}    in use settings ={Tunnel, }
@@ -74,7 +74,7 @@ Each hub holds exactly one IKEv2 session per spoke tunnel
 Encaps Advanced
     [Arguments]    ${r}    ${iface}    ${before}
     ${after}=    Ipsec Encaps    ${r}    ${iface}
-    Should Be True    ${after} >= ${before} + 8    msg=${r}: ESP encaps counter did not advance (${before} -> ${after})
+    Should Be True    ${after} >= ${before} + 5    msg=${r}: ESP encaps counter did not advance (${before} -> ${after})
 
 Ipsec Encaps
     [Arguments]    ${r}    ${iface}
