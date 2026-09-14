@@ -2,7 +2,7 @@
 document (lab-intent.json in the lab root).  The document is generated from lab.conf the first time
 (`./lab.sh intent init`) and afterwards edited by the web app; lab.conf stays the truth for what libvirt built
 (VM names, console ports, management addresses, physical wiring of the p2p links)."""
-import ipaddress, json, re, subprocess
+import ipaddress, json, re, secrets, string, subprocess
 from pathlib import Path
 
 LAB = Path(__file__).resolve().parents[1]
@@ -55,7 +55,7 @@ def from_lab_conf():
         "profile": {"name": "VPN-IPSEC", "ike": {"encryption": "AES-256-CBC", "integrity": "SHA256", "dh_group": "14", "lifetime": 86400},
                     "ipsec": {"encryption": "AES-256-CBC", "integrity": "SHA256", "lifetime": 3600},
                     "dpd": {"enabled": True, "interval": 30, "retries": 5}, "ios": dict(IOS_NAMES)},
-        "psk": "cisco123",
+        "regions": list(DEFAULT_REGIONS),
         "devices": devices, "links": links, "tunnels": tunnels,
         "oob": {"vrf": "Mgmt-vrf", "gateway": "10.2.0.1", "acl": "MGMT-ACCESS", "prefix": "10.2.0.0/24"},
         "domain_name": "lab.local",
@@ -63,13 +63,42 @@ def from_lab_conf():
     }
 
 
+DEFAULT_REGIONS = ["East", "Central", "West"]
+
+
+def new_psk(n=24):
+    return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(n))
+
+
+def upgrade(I):
+    """Bring older documents up to the current shape (multi-hub tunnels, per-spoke PSKs, region/branch per device)."""
+    hubs = [d["name"] for d in I.get("devices", []) if d.get("role") == "hub"]
+    for t in I.get("tunnels", []):
+        t.setdefault("hub", hubs[0] if hubs else None)
+    I.setdefault("regions", list(DEFAULT_REGIONS))
+    for i, d in enumerate(I.get("devices", [])):
+        if d.get("role") == "spoke" and not d.get("psk"): d["psk"] = I.get("psk") or new_psk()   # legacy shared key, else a fresh one
+        d.setdefault("region", I["regions"][i % len(I["regions"])])
+        d.setdefault("site", f"{d['name']}-site" if d.get("role") == "hub" else f"branch-{re.sub(r'[^0-9]', '', d['name']) or i}")
+        d.setdefault("site_code", (I.get("site") or {}).get("site_code", "")); d.setdefault("contact", (I.get("site") or {}).get("contact", ""))
+    I.pop("psk", None)
+    return I
+
+
 def load(path=None):
     p = Path(path) if path else INTENT_FILE
-    I = json.loads(p.read_text()) if p.exists() else from_lab_conf()
-    hubs = [d["name"] for d in I.get("devices", []) if d.get("role") == "hub"]
-    for t in I.get("tunnels", []):   # documents written before multi-hub support carry no hub on the tunnel
-        t.setdefault("hub", hubs[0] if hubs else None)
-    return I
+    return upgrade(json.loads(p.read_text()) if p.exists() else from_lab_conf())
+
+
+def region_distance(I, a, b):
+    """How far apart two regions are (their distance in the ordered regions list)."""
+    r = I.get("regions") or DEFAULT_REGIONS
+    return abs(r.index(a) - r.index(b)) if a in r and b in r else len(r)
+
+
+def nearest_hubs(I, region, n=2):
+    hubs = [d for d in I["devices"] if d["role"] == "hub"]
+    return [h["name"] for h in sorted(hubs, key=lambda h: (region_distance(I, region, h.get("region")), h["name"]))[:n]]
 
 
 def save(intent, path=None):
@@ -148,7 +177,15 @@ def validate(intent):
     if (pr.get("ipsec") or {}).get("integrity") not in INT: errs.append("IPsec integrity not supported")
     dpd = pr.get("dpd") or {}
     if dpd.get("enabled") and not (10 <= int(dpd.get("interval") or 0) <= 3600 and 2 <= int(dpd.get("retries") or 0) <= 60): errs.append("DPD interval 10-3600 s, retries 2-60")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", intent.get("psk") or ""): errs.append("pre-shared key: 8-64 characters, letters/digits/_.-")
+    regions = intent.get("regions") or []
+    if not regions: errs.append("at least one region is required")
+    sites = {}
+    for d in devs:
+        if d.get("role") == "spoke" and not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", d.get("psk") or ""): errs.append(f"{d.get('name')}: pre-shared key must be 8-64 characters, letters/digits/_.-")
+        if d.get("region") not in regions: errs.append(f"{d.get('name')}: region {d.get('region')!r} is not one of {regions}")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}", d.get("site") or ""): errs.append(f"{d.get('name')}: site name missing or invalid")
+        if d.get("site") in sites and sites[d["site"]] != d.get("region"): errs.append(f"site {d['site']} is placed in two regions")
+        sites[d.get("site")] = d.get("region")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", (intent.get("vpn") or {}).get("name", "")): errs.append("VPN name: letters/digits/_-")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", pr.get("name", "")): errs.append("profile name: letters/digits/_-")
     return errs

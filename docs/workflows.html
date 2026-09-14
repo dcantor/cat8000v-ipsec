@@ -1,0 +1,545 @@
+<!doctype html><html><head><meta charset="utf-8"><title>VPN Provisioning Portal — Workflows, Data Flows and Decision Trees</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm } @page land { size: A4 landscape; margin: 12mm 14mm }
+  .landscape { page: land; page-break-before: always; page-break-after: always }
+  .landscape .mermaid svg { max-height: 175mm }
+  body { font: 10.5pt/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c2430; margin: 0 }
+  h1 { font-size: 26pt; margin: 0 0 4pt } h2 { font-size: 16pt; margin: 22pt 0 8pt; padding-bottom: 3pt; border-bottom: 2px solid #0b62d6; page-break-after: avoid }
+  h3 { font-size: 12.5pt; margin: 14pt 0 6pt; page-break-after: avoid } h4 { font-size: 11pt; margin: 10pt 0 4pt }
+  .sub { color: #6b7684; font-size: 11pt } .toc { columns: 2; font-size: 10pt } .toc li { margin: 2pt 0 }
+  table { border-collapse: collapse; width: 100%; font-size: 9.2pt; margin: 6pt 0 10pt; page-break-inside: auto } tr { page-break-inside: avoid }
+  th, td { border: 1px solid #d7dde5; padding: 4pt 6pt; vertical-align: top; text-align: left } th { background: #eef2f7 }
+  code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 8.8pt; background: #f3f5f8; padding: 0 3px; border-radius: 3px }
+  pre.mermaid { page-break-inside: avoid; margin: 6pt 0 10pt; text-align: center } .mermaid svg { max-width: 100%; max-height: 240mm; height: auto; width: auto }
+  .cols pre.mermaid { margin: 4pt 0 } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8pt } .cols3 .mermaid svg, .cols .mermaid svg { max-height: 200mm }
+  .box { border: 1px solid #d7dde5; border-left: 4px solid #0b62d6; padding: 6pt 10pt; margin: 8pt 0; background: #f8fafc; page-break-inside: avoid }
+  .warn { border-left-color: #b26a00; background: #fffbeb } .brk { page-break-before: always }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt } .small { font-size: 9pt } .pill { display: inline-block; padding: 0 6px; border-radius: 8px; background: #e9edf3; font-size: 8.5pt }
+  ol.steps li { margin: 3pt 0 }
+</style></head><body>
+
+<h1>VPN Provisioning Portal</h1>
+<div class="sub">Workflows, system-to-system data flows and decision trees — Catalyst 8000v IPsec VTI + eBGP lab · Nautobot · Cisco Network-as-Code (Terraform) · Robot Framework</div>
+<p class="small">Generated from the codebase in <code>github.com/dcantor/cat8000v-ipsec</code>. Every diagram describes what the code actually does (file and function names are given), not an idealised design.</p>
+
+<h2>Contents</h2>
+<ol class="toc">
+<li>Systems and where the data lives</li><li>Architecture and data flows</li><li>The intent document</li>
+<li>Workflow: Deploy / Dry run</li><li>Workflow: Add a spoke</li><li>Workflow: Add a headend</li><li>Workflow: Remove a spoke</li><li>Workflow: Resume, tests, inventory</li>
+<li>Decision trees: intent validation</li><li>Decision trees: spoke allocation</li><li>Decision trees: the Nautobot seed</li><li>Decision trees: the renderer</li>
+<li>Decision trees: apply, convergence and Golden Config</li><li>Decision trees: bootstrap and VM wiring</li><li>Decision trees: removal</li>
+<li>REST API reference (data in / data out)</li><li>Test coverage map</li><li>File map</li>
+</ol>
+
+<h2>1. Systems and where the data lives</h2>
+<table><tr><th style="width:17%">System</th><th style="width:20%">Runs where</th><th>Holds (system of record for)</th><th style="width:22%">Talks to</th></tr>
+<tr><td><b>VPN Provisioning Portal</b><br><span class="small">FastAPI + single-page UI, <code>webapp/</code></span></td><td>Lab host, <code>systemd --user lab-webapp</code>, port 8090</td><td>Run records (<code>webapp/runs/&lt;id&gt;.json</code> + the intent each run deployed); nothing else — it orchestrates</td><td>Browser (HTTP/JSON), every tool below via <code>./lab.sh</code> subprocesses, Nautobot (REST/GraphQL), headends (SSH, for the inventory)</td></tr>
+<tr><td><b>lab-intent.json</b><br><span class="small"><code>nautobot/intent.py</code></span></td><td>Lab root (git)</td><td><b>The VPN service intent</b>: site/VPN metadata, regions, devices (hostname, mgmt IP, role, AS, router-id, LAN, region, site, site code, contact, <b>per-spoke PSK</b>), links, tunnels, crypto profile, capacity</td><td>Read by seed, renderer (PSKs), tests, portal; written by the portal and the spoke/hub/remove steps</td></tr>
+<tr><td><b>lab.conf</b> + <b>libvirt</b><br><span class="small"><code>lab.sh</code></span></td><td>Lab host, <code>qemu:///system</code></td><td><b>VM facts</b>: node names, node index (MACs, UDP ports), console ports, management IPs, physical wiring (<code>LINKS</code>), tunnel numbers, hub/spoke port counts; domain XML, overlay disks, day-0 ISOs under <code>nodes/</code></td><td>libvirt (virsh), routers' serial consoles (raw TCP, <code>tools/console.py</code>)</td></tr>
+<tr><td><b>Nautobot 3.2</b> (+ bgp-models, golden-config, device-onboarding, Gitea)<br><span class="small">NMS VM 10.0.0.10</span></td><td>Docker Compose on the NMS jumphost</td><td><b>Source of truth</b>: locations (lab site → Region → Branch), devices, interfaces, cables, prefixes/IPs with roles, core VPN app objects (VPN, tunnels, endpoints, profile, Phase 1/2 policies), BGP AS/routing instances/peerings, config contexts, custom fields, saved GraphQL query, Golden Config settings/compliance; Gitea holds backups, intended configs, Jinja templates</td><td>Routers (SSH for onboarding/backups), seed/renderer/portal (REST + GraphQL), Gitea (git)</td></tr>
+<tr><td><b>Network-as-Code</b><br><span class="small"><code>nac/</code>: module <code>netascode/nac-iosxe</code>, provider <code>CiscoDevNet/iosxe</code> 0.15</span></td><td>Lab host, Terraform CLI</td><td><code>global.nac.yaml</code> (hand-written baseline), <b>generated</b> <code>devices.nac.yaml</code> and <code>device_groups.nac.yaml</code> (PSK variables), Terraform state (<code>terraform.tfstate</code>)</td><td>Routers over RESTCONF (HTTPS 443, YANG native models); a <code>cisco-ia:save-config</code> RPC after apply</td></tr>
+<tr><td><b>Catalyst 8000v routers</b></td><td>libvirt VMs on the lab host</td><td>Running/startup configuration; live IKEv2/IPsec/BGP state</td><td>Each other (UDP-tunnelled p2p links, IPsec VTIs, eBGP), NMS via OOB network 10.2.0.0/24 (Mgmt-vrf)</td></tr>
+<tr><td><b>Robot Framework</b><br><span class="small"><code>tests/</code></span></td><td>Lab host venv</td><td>Results per run under <code>results/&lt;date&gt;_&lt;time&gt;/</code> (report, log, pre/post config backups, diff)</td><td>Routers (SSH via netmiko, RESTCONF), Nautobot (REST/GraphQL), Terraform (plan exit code), renderer (<code>--check</code>), Gitea (raw backups)</td></tr>
+</table>
+
+<div class="box"><b>What is deliberately <u>not</u> in Nautobot:</b> pre-shared keys (one per spoke; they live only in <code>lab-intent.json</code> and are rendered as NAC variables into <code>nac/data/device_groups.nac.yaml</code>) and device credentials (Nautobot secrets group <code>lab-devices</code> resolves them from environment variables on the NMS). <b>What is deliberately not in the intent:</b> anything discovered from the routers (serials, model, platform) — that comes from Nautobot onboarding.</div>
+
+<div class="landscape"><h2>2. Architecture and data flows</h2>
+<pre class="mermaid">
+flowchart LR
+  subgraph OP["Operator"]
+    U["Browser"]
+  end
+  subgraph HOST["Lab host"]
+    P["Portal&lt;br/&gt;webapp/app.py"]
+    I[("lab-intent.json")]
+    LC[("lab.conf · nodes/")]
+    LV["libvirt / KVM"]
+    R["render_nac.py"]
+    N[("nac/data/*.yaml")]
+    TF["Terraform&lt;br/&gt;nac-iosxe module"]
+    RF["Robot Framework"]
+    RES[("results/")]
+  end
+  subgraph NMS["NMS jumphost"]
+    NB[("Nautobot")]
+    GT[("Gitea")]
+  end
+  subgraph RTS["C8000v routers (VMs)"]
+    RT["RESTCONF · SSH · console"]
+  end
+  U -- "JSON" --&gt; P
+  P -- "save" --&gt; I
+  P -- "add / remove node" --&gt; LC
+  LC -- "domain XML, ISO" --&gt; LV
+  LV --- RT
+  P -- "console day-0" --&gt; RT
+  P -- "onboard (job)" --&gt; NB
+  NB -- "SSH discovery" --&gt; RT
+  I -- "seed.py" --&gt; NB
+  NB -- "GraphQL" --&gt; R
+  I -- "PSKs" --&gt; R
+  R --&gt; N
+  N --&gt; TF
+  TF -- "RESTCONF" --&gt; RT
+  NB -- "Golden Config" --&gt; GT
+  NB -. "backup SSH" .-&gt; RT
+  RF -- "SSH / RESTCONF" --&gt; RT
+  RF -- "REST / GraphQL" --&gt; NB
+  RF -- "plan rc · render --check" --&gt; TF
+  RF --&gt; RES
+  P -- "inventory (GraphQL + SSH)" --&gt; NB
+</pre>
+</div>
+<table><tr><th style="width:24%">Edge</th><th style="width:14%">Protocol</th><th>Data passed</th></tr>
+<tr><td>Browser → Portal</td><td>HTTP JSON</td><td>Intent document; SpokeSpec / HubSpec / removal name; run options (golden, test, delete_disk); polling offsets</td></tr>
+<tr><td>Portal → lab.conf / nodes/</td><td>file edits (regex on bash arrays)</td><td>New <code>[name]=</code> entries in ROLE/MGMT_IP/BGP_AS/LAN/CONSOLE_PORT/NODE_IDX, <code>LINKS</code> "hub:port spoke:port prefix", <code>TUNNELS</code> "id hub spoke prefix", ROUTERS/ALL_NODES; day-0 <code>iosxe_config.txt</code> from <code>nodes/_template/</code> (hostname, mgmt IP, gateway substituted)</td></tr>
+<tr><td>lab.sh → libvirt</td><td>virsh (define/start/undefine)</td><td>Domain XML: deterministic UUID (sha1 of the management IP → stable C8000v serial), Gi1 on the OOB bridge, GiN as UDP-socket NICs (pairs anchored on the headend: local <code>22000+idx·100+port</code>, far <code>32000+idx·100+port</code>), serial console TCP port, CVAC ISO</td></tr>
+<tr><td>lab.sh → router console</td><td>raw TCP (<code>tools/console.py</code>)</td><td>Day-0 config (AAA, Mgmt-vrf/Gi1, SSH, NETCONF/RESTCONF, license boot level), RSA key generation, <code>show version</code> (license check) and a reload when needed</td></tr>
+<tr><td>Onboarding → routers</td><td>SSH (netmiko/NAPALM inside Nautobot)</td><td>Hostname, model, serial, platform, interfaces; then <code>onboard.py</code> refreshes serials itself over SSH (the job does not update existing devices)</td></tr>
+<tr><td>seed.py → Nautobot</td><td>REST (pynautobot) + GraphQL reads + two ORM writes via <code>nbshell</code></td><td>Location types/locations, custom fields, roles, devices (matched by primary IP), interfaces (+MAC, enabled), IPs/prefixes (+roles, tags), cables, VPN policies/profile/VPN/tunnels/endpoints, AS/routing instances/peerings, config context, saved GraphQL query</td></tr>
+<tr><td>Nautobot → renderer</td><td>GraphQL (saved query)</td><td>Per device: name, role, primary IP, config context, interfaces (type, enabled, IPs with parent prefix role/tags, connected interface, VPN endpoint → profile/policies, tunnel → far endpoint's source address), BGP routing instances with endpoints and peers</td></tr>
+<tr><td>Renderer → NAC data</td><td>YAML files</td><td><code>devices.nac.yaml</code>: per device system, crypto (proposal/policy/keyring peers/profile/transform set/IPsec profile), ethernets, loopbacks, native tunnels, BGP; CLI templates for <code>ip tcp adjust-mss</code>. <code>device_groups.nac.yaml</code>: group IPSEC_VPN with <code>psk_&lt;spoke&gt;</code> variables</td></tr>
+<tr><td>Terraform → routers</td><td>RESTCONF (HTTPS, YANG <code>Cisco-IOS-XE-native</code>)</td><td>One resource per config object; PATCH on create/update, DELETE on destroy; <code>-parallelism=1</code> to avoid datastore lock races; <code>cisco-ia:save-config</code> RPC per router after apply</td></tr>
+<tr><td>Golden Config → routers / Gitea</td><td>SSH (nornir-netmiko), git</td><td>Backup: running-config → <code>config-backups/&lt;device&gt;.cfg</code>; Intended: Jinja2 <code>c8000v-ipsec.j2</code> rendered from GraphQL (<code>golden-config-lab</code> query) → <code>intended-configs/</code>; Compliance: per-feature diff rows (17 features × N devices)</td></tr>
+<tr><td>Robot → everything</td><td>SSH / RESTCONF / REST / GraphQL / subprocess</td><td>Assertions on live state vs the intent (<code>lab_vars.py</code>), on Nautobot objects, on Terraform drift (exit code), on renderer round-trip, on Golden Config compliance</td></tr>
+<tr><td>Portal inventory → headends</td><td>SSH (netmiko)</td><td><code>show crypto ikev2 sa</code>, <code>show ip interface brief</code>, <code>show interfaces TunnelN</code>, <code>show bgp ipv4 unicast summary</code>, <code>show crypto ipsec sa</code> → per-tunnel health, SA age, BGP state/prefixes, ESP counters, rates</td></tr>
+</table>
+
+<h2 class="brk">3. The intent document</h2>
+<p><code>lab-intent.json</code> is the single input to every workflow. It is created once from <code>lab.conf</code> (<code>./lab.sh intent init</code>) and afterwards only written by the portal (deploy) or by the spoke/hub/remove steps. <code>intent.load()</code> upgrades older documents in place (tunnels gain a <code>hub</code>, spokes gain a <code>psk</code>, devices gain <code>region</code>/<code>site</code>).</p>
+<table><tr><th style="width:18%">Key</th><th>Content</th><th style="width:30%">Consumed by</th></tr>
+<tr><td><code>site</code></td><td>Lab-level location name (read-only), description, site_code, contact</td><td>seed (location + custom fields), tests (<code>NAUTOBOT_LOCATION</code>), inventory scope, Golden Config dynamic group</td></tr>
+<tr><td><code>vpn</code></td><td>VPN name, description, change_ticket, owner</td><td>seed (VPN object + <code>extra_attributes</code>), run records, inventory/CSV</td></tr>
+<tr><td><code>profile</code></td><td>name, <code>ike</code> {encryption, integrity, dh_group, lifetime}, <code>ipsec</code> {encryption, integrity, lifetime}, <code>dpd</code> {enabled, interval, retries}, <code>ios</code> object names</td><td>seed (Phase 1/2 policies, profile, extra_options.ios) → renderer/Golden Config read them back from Nautobot, never from the intent</td></tr>
+<tr><td><code>regions</code></td><td>Ordered list; distance between regions = index difference</td><td>seed (Region locations), wizard (nearest two headends), inventory grouping</td></tr>
+<tr><td><code>devices[]</code></td><td>name, mgmt_ip, role hub|spoke, asn, router_id, lan, comments, region, site, site_code, contact, <b>psk</b> (spokes)</td><td>seed (devices matched by mgmt IP → renamed if needed; loopbacks; AS; branch location), renderer (PSK variables), tests, portal tables</td></tr>
+<tr><td><code>links[]</code></td><td>a (headend), a_port, b (spoke), b_port, prefix /30 — must equal the physical wiring in <code>lab.conf</code></td><td>validation (wiring check), seed (cables, WAN prefixes/IPs, interface enabled/description)</td></tr>
+<tr><td><code>tunnels[]</code></td><td>id (TunnelN both ends), hub, spoke, prefix /30 — one per (hub, spoke)</td><td>seed (TunnelN interfaces, VPN tunnel + endpoints, BGP peering), tests</td></tr>
+<tr><td><code>oob</code>, <code>domain_name</code></td><td>Mgmt-vrf, gateway, ACL name, OOB prefix; domain</td><td>seed (config context) → renderer/Golden Config via <code>config_context</code></td></tr>
+<tr><td><code>capacity</code></td><td>tunnels_per_headend (50)</td><td>validation (per hub), seed (custom field on hubs), inventory bars, wizard</td></tr>
+</table>
+
+<div class="landscape"><h2>4. Workflow: Deploy / Dry run</h2>
+<p>Triggered by <b>Deploy configuration</b> (mode <code>deploy</code>) or <b>Dry run</b> (mode <code>plan</code>) on the Provision page, or <code>POST /api/runs</code>. Steps: <code>validate → save → nautobot → render → plan → apply → golden → test</code> (plan stops after <code>plan</code>).</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant P as Portal (run thread)
+  participant I as lab-intent.json
+  participant S as seed.py
+  participant NB as Nautobot
+  participant R as render_nac.py
+  B-&gt;&gt;P: POST /api/runs {mode, intent, options}
+  P-&gt;&gt;P: intent.validate() → 422 with problems if invalid
+  P--&gt;&gt;B: run id (queued)
+  loop every 2 s
+    B-&gt;&gt;P: GET /api/runs/{id}?since=N
+    P--&gt;&gt;B: steps, new log lines, tests
+  end
+  P-&gt;&gt;I: save intent (+ copy to runs/{id}.intent.json)
+  P-&gt;&gt;S: ./lab.sh nautobot seed
+  S-&gt;&gt;NB: REST get / create / update (idempotent), GraphQL reads
+  S--&gt;&gt;P: seed complete: N changes
+  P-&gt;&gt;R: ./lab.sh nautobot render
+  R-&gt;&gt;NB: POST /api/graphql (saved query)
+  R-&gt;&gt;I: read per-spoke PSKs
+  R--&gt;&gt;P: devices.nac.yaml + device_groups.nac.yaml written
+</pre>
+<p class="small"><b>Phase 2 — plan, apply, verify</b></p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant P as Portal (run thread)
+  participant TF as Terraform
+  participant RT as Routers
+  participant GC as Golden Config jobs
+  participant RF as Robot
+  participant B as Browser
+  P-&gt;&gt;TF: plan -detailed-exitcode
+  TF-&gt;&gt;RT: RESTCONF GET (refresh every resource)
+  TF--&gt;&gt;P: rc 0 no changes · 2 changes · 1 error
+  alt mode = plan (dry run)
+    P--&gt;&gt;B: done, nothing pushed
+  else deploy and rc = 2
+    P-&gt;&gt;TF: apply -target=crypto_ipsec_profile (profiles + dependencies first)
+    P-&gt;&gt;TF: apply (everything)
+    TF-&gt;&gt;RT: RESTCONF PATCH / DELETE, then cisco-ia:save-config RPC
+    P-&gt;&gt;TF: plan again
+    opt rc = 2 (DMI re-sync elided defaults)
+      P-&gt;&gt;TF: apply once more (converge)
+    end
+  end
+  opt options.golden
+    P-&gt;&gt;GC: Backup → Generate Intended → Perform Compliance
+    GC-&gt;&gt;RT: SSH show running-config
+    GC--&gt;&gt;P: compliance rows (all must be compliant)
+  end
+  opt options.test
+    P-&gt;&gt;RF: ./lab.sh test
+    RF-&gt;&gt;RT: SSH / RESTCONF assertions
+    RF--&gt;&gt;P: output.xml → suites / tests
+  end
+  P--&gt;&gt;B: success or failed (+ error), report links
+</pre>
+</div>
+
+<div class="landscape"><h2>5. Workflow: Add a spoke</h2>
+<p>The wizard (3 steps) ends in <code>POST /api/runs {mode: "spoke", spoke: SpokeSpec}</code>. Steps: <code>spoke_validate → spoke_labconf → spoke_vm → spoke_bootstrap → spoke_onboard → spoke_intent → nautobot → render → plan → apply → golden → test</code>.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Browser (wizard)
+  participant P as Portal
+  participant SP as spokes.py
+  participant LC as lab.conf / nodes
+  participant LV as libvirt
+  B-&gt;&gt;P: GET /api/spokes/suggest?region=West
+  P-&gt;&gt;SP: suggest(): hostname, mgmt IP, node idx, console port, router-id, LAN, AS, site, PSK · nearest 2 headends · per-headend link allocation
+  P--&gt;&gt;B: SpokeSpec + context (headends, free ports, capacity)
+  B-&gt;&gt;P: POST /api/spokes/validate {spoke} (each wizard step)
+  P--&gt;&gt;B: problems[] · hub_changes (what each headend and the spoke get)
+  B-&gt;&gt;P: POST /api/runs {mode: spoke, spoke, options}
+  P-&gt;&gt;SP: validate again (server side)
+  P-&gt;&gt;LC: add_to_lab_conf (arrays, LINKS, TUNNELS) · write_day0 from nodes/_template
+  P-&gt;&gt;LV: ./lab.sh up spoke — overlay disk, CVAC ISO, domain XML, start
+</pre>
+<p class="small"><b>Phase 2 — bring the router up and into the model</b></p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant P as Portal
+  participant C as Router console (TCP)
+  participant NB as Nautobot
+  participant I as lab-intent.json
+  P-&gt;&gt;C: ./lab.sh bootstrap spoke — wait for the prompt (≤ 30 min), push day-0 + RSA key
+  P-&gt;&gt;C: show version → license level?
+  alt license level not active
+    P-&gt;&gt;C: write memory · reload · wait again
+  end
+  P-&gt;&gt;C: poll RESTCONF until 200
+  P-&gt;&gt;NB: ./lab.sh nautobot onboard mgmt_ip (job Sync Devices From Network)
+  NB--&gt;&gt;P: device with model, serial, platform, primary IP
+  P-&gt;&gt;I: add_to_intent: device (+ region / site / PSK), one link and one tunnel per headend
+  Note over P,I: then the Deploy pipeline: seed → render → plan → apply (headends + spoke in one apply) → Golden Config → tests
+</pre>
+</div>
+<div class="box">Every step is idempotent so a failed run can be <b>resumed</b>: <code>spoke_labconf</code> skips if the name is already in <code>lab.conf</code>, <code>lab.sh up</code> reports "already running", <code>spoke_intent</code> skips if the device is already in the intent.</div>
+
+<h2 class="brk">6. Workflow: Add a headend</h2>
+<p><code>POST /api/runs {mode: "hub", hub: HubSpec}</code> (from <code>GET /api/hubs/suggest</code>). Same shape as a spoke, with two differences: the new headend gets a link + tunnel to <b>every existing spoke</b> (<code>spokes.hub_links()</code>, each spoke's next free WAN port), and because a link is anchored on the headend's UDP ports, each existing spoke's libvirt definition changes — the run re-defines and reboots each spoke (<code>down / rebuild / up</code>) and waits for them after the headend's bootstrap.</p>
+<pre class="mermaid">
+flowchart TD
+  A["hub_validate: validate identity; hub_links → one link per spoke"] --&gt; B{"every spoke has a free WAN port?"}
+  B -- no --&gt; X["fail: raise SPOKE_PORTS in lab.conf"]
+  B -- yes --&gt; C["hub_labconf: lab.conf + day-0; for each spoke: down → rebuild → up"]
+  C --&gt; D["hub_vm: define + start the headend"]
+  D --&gt; E["hub_bootstrap: console day-0, license reload, RESTCONF; wait for rebooted spokes"]
+  E --&gt; F["hub_onboard: Sync Devices From Network"]
+  F --&gt; G["hub_intent: device + links + tunnels"]
+  G --&gt; H["seed → render → plan → apply → golden → tests"]
+</pre>
+
+<div class="landscape"><h2>7. Workflow: Remove a spoke</h2>
+<p><b>Remove…</b> on a spoke row → <code>GET /api/spokes/{name}/removal</code> (plan dialog) → <code>POST /api/runs {mode: "remove", spoke: {name}}</code>. Steps: <code>rm_validate → rm_down → rm_nautobot → rm_intent → nautobot → render → rm_state → plan → apply → rm_vm → golden → test</code>.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant P as Portal
+  participant LV as libvirt
+  participant NB as Nautobot
+  participant I as lab-intent.json / lab.conf
+  participant TF as Terraform
+  participant RT as Headends
+  P-&gt;&gt;LV: ./lab.sh down spoke (config saved, powered off)
+  P-&gt;&gt;NB: delete BGP peerings + routing instance (they reference tunnel addresses)
+  P-&gt;&gt;NB: delete VPN tunnels, both endpoints, headend TunnelN interfaces + addresses
+  P-&gt;&gt;NB: delete the spoke's addresses and cables, the device (cascades interfaces)
+  P-&gt;&gt;NB: delete every address inside its prefixes, then the prefixes · unused AS
+  P-&gt;&gt;I: remove device/links/tunnels · remove lab.conf entries (regex)
+  P-&gt;&gt;NB: seed (headend ports become unwired/disabled · stale tunnels gone)
+  P-&gt;&gt;TF: render · terraform state rm every resource keyed "spoke/…" (router no longer exists)
+  P-&gt;&gt;TF: plan → apply
+  TF-&gt;&gt;RT: DELETE TunnelN, BGP neighbour, WAN address · PATCH port shutdown
+  P-&gt;&gt;LV: ./lab.sh clean spoke (undefine, delete disk + nodes/spoke) — or down only if keep-disk
+  Note over P,RT: Golden Config + tests as usual</pre>
+</div>
+
+<h2 class="brk">8. Workflow: Resume, tests, inventory</h2>
+<div class="cols">
+<div><h4>Resume</h4><pre class="mermaid">
+flowchart TD
+  A["POST /api/runs/{id}/resume"] --&gt; B{"status failed or interrupted?"}
+  B -- no --&gt; E["409"]
+  B -- yes --&gt; C{"another run active?"}
+  C -- yes --&gt; E2["409"]
+  C -- no --&gt; D["new Run same mode/spec; steps that succeeded are copied as success; execute skips them"]
+  D --&gt; F["first non-success step re-runs; all later steps run"]
+</pre><p class="small">On start-up the portal marks runs found "running" as <b>interrupted</b> (running step → failed, pending → skipped) so they are resumable. <code>webapp/restart.sh</code> refuses to restart while a run is active.</p></div>
+<div><h4>Inventory refresh</h4><pre class="mermaid">
+flowchart TD
+  A["GET /api/vpn-inventory"] --&gt; B{"cache younger than 30 s and not refresh?"}
+  B -- yes --&gt; Z["return cached"]
+  B -- no --&gt; C["GraphQL: vpns → tunnels → endpoints → devices, profile"]
+  C --&gt; D["for each headend in parallel: SSH show commands"]
+  D --&gt; E["join per tunnel on far source IP / tunnel interface / tunnel IP"]
+  E --&gt; F["health: IKE READY ∧ VTI up ∧ BGP Established → up; IKE READY only → degraded; else down"]
+  F --&gt; G["capacity per headend = tunnels / cf_vpn_tunnel_capacity"]
+  G --&gt; Z
+</pre></div>
+</div>
+<h4>Tests (mode <code>test</code>, or the last step of every run)</h4>
+<p><code>tests/run.sh</code> creates <code>results/&lt;date&gt;_&lt;time&gt;/</code>, captures every router's running/startup config (<code>configs/pre-run</code>), runs the six suites, captures again (<code>configs/post-run</code>) and diffs; <code>results/latest</code> points at the newest run. The portal parses <code>output.xml</code> into the per-suite report shown in the UI and serves <code>report.html</code>/<code>log.html</code>/backups under <code>/results/</code>.</p>
+
+<h2 class="brk">9. Decision trees: intent validation (<code>intent.validate</code>)</h2>
+<div class="cols3"><pre class="mermaid">
+flowchart TD
+  A["intent"] --&gt; B{"hostnames unique; letters/digits/hyphen, start with a letter, ≤ 63 chars?"}
+  B --&gt; C{"each device: mgmt_ip and router_id are IPv4, LAN a strict /24, ASN 1..4294967295"}
+  C --&gt; D{"≥ 1 hub-role device?"}
+  D --&gt; E{"router-ids unique · LANs unique"}
+  E --&gt; F{"every VM in lab.conf present by mgmt IP with the same role? no unknown mgmt IPs?"}
+</pre><pre class="mermaid">
+flowchart TD
+  G{"links == physical wiring, translated to the current hostnames?"} --&gt; H{"link prefixes strict /30, none reused"}
+  H --&gt; I{"tunnel ids unique · one tunnel per hub/spoke pair · hub is a hub · spoke is a spoke · a link exists between them"}
+  I --&gt; J{"every spoke has ≥ 1 tunnel"}
+  J --&gt; K{"tunnels per hub ≤ capacity.tunnels_per_headend"}
+  K --&gt; L{"tunnel prefixes strict /30, unused"}
+</pre><pre class="mermaid">
+flowchart TD
+  M{"profile: IKE enc ∈ AES-CBC/GCM set, integrity ∈ SHA1/256/384/512/MD5, DH ∈ 14/19/20/21/24; IPsec likewise; DPD 10..3600 s × 2..60"} --&gt; N{"regions non-empty; each device region ∈ regions; site name valid; a site not in two regions"}
+  N --&gt; O{"spokes: PSK 8..64 chars of letters/digits/_.-"}
+  O --&gt; P{"VPN name and profile name: letters/digits/_-, up to 40 chars"}
+  P --&gt; Z["problems list — every failed check adds one line; empty = valid"]
+</pre></div>
+<p class="small">All checks run; the caller gets the full list. The pipeline refuses to start (HTTP 422) or fails its first step on any problem.</p>
+
+<h2 class="brk">10. Decision trees: spoke allocation (<code>spokes.suggest</code> / <code>validate</code>)</h2>
+<div class="cols"><pre class="mermaid">
+flowchart TD
+  S["suggest(region, hubs)"] --&gt; S1["hostname: first free spokeN"]
+  S1 --&gt; S2["mgmt IP: first free host of the OOB /24 after .10 (skip gateway, NMS)"]
+  S2 --&gt; S3["node idx = max+1 · console port = max+1 · router-id: first free 10.255.1.N · LAN: first free 192.168.N.0/24 from 11 · AS: first free above the lowest AS"]
+  S3 --&gt; S4["site branch-N (unique) · site code REGION2-N · contact noc-region · PSK random 24 chars"]
+  S4 --&gt; S5{"hubs given?"}
+  S5 -- no --&gt; S6["nearest_hubs: headends sorted by region distance, first 2"]
+  S5 -- yes --&gt; S7["keep the given real headends"]
+  S6 --&gt; S8
+  S7 --&gt; S8["per headend: lowest free hub port · lowest spoke port not used in this spec · next tunnel id · first free 100.65.k.0/30 · first free 172.17.k.0/30"]
+</pre><pre class="mermaid">
+flowchart TD
+  V["validate(spec)"] --&gt; V1{"hostname valid and unused? mgmt IP in the OOB /24 and unused? router-id / LAN / AS unused? region ∈ regions? site valid? PSK valid?"}
+  V1 --&gt; V2{"free host memory ≥ RAM + 1 GiB?"}
+  V2 --&gt; V3{"≥ 2 links, one per distinct headend?"}
+  V3 --&gt; V4{"per link: hub port within Gi2..Gi(1+HUB_PORTS) and unwired; spoke port within Gi2..Gi(1+SPOKE_PORTS) and unique; headend below capacity; tunnel id unused; WAN and tunnel /30 strict and unused"}
+  V4 --&gt; OK["problems empty → hub_changes computed for the review step"]
+</pre></div>
+
+<h2 class="brk">11. Decision trees: the Nautobot seed (<code>nautobot/seed.py</code>)</h2>
+<div class="cols"><pre class="mermaid">
+flowchart TD
+  A["load intent · validate · read lab.conf VM facts"] --&gt; B["ensure roles, prefix roles, tag bgp:advertise, custom fields site_code / contact / vpn_tunnel_capacity"]
+  B --&gt; C["location types Region ← Site, Branch ← Region; a Region per intent region; a Branch per device site with site_code + contact"]
+  C --&gt; D["VPN app: Phase 1 policy, Phase 2 policy, profile (extra_options.ios = Cisco names)"]
+  D --&gt; E{"profile ↔ policy assignment present? (GraphQL)"}
+  E -- no --&gt; E1["nbshell: VPNProfile.vpn_phaseN_policies.set — the REST endpoint 500s in 3.2.4"]
+  E -- yes --&gt; F
+  E1 --&gt; F["VPN object: by profile, else by name; name / description / extra_attributes ensured"]
+  F --&gt; G["config context c8000v-ipsec on the lab site (inherited by every branch)"]
+</pre><pre class="mermaid">
+flowchart TD
+  H["for each device: find by primary IP among the lab's devices"] -- missing --&gt; H1["exit: run onboard.py first"]
+  H --&gt; I["ensure name, role, secrets group, platform, location = branch, comments; custom fields contact (+ capacity on hubs)"]
+  I --&gt; J["Gi1: mgmt-only, Mgmt-vrf, MAC · Gi2..Gi(1+ports): wired → description + enabled, else unwired + disabled"]
+  J --&gt; K["Loopback0 = router-id /32 · Loopback10 = LAN .1/24 · both prefixes tagged bgp:advertise"]
+  K --&gt; L["per link: WAN prefix; .1 on the headend end, .2 on the spoke end; cable"]
+  L --&gt; L1{"an end carries a one-ended cable?"}
+  L1 -- yes --&gt; L2["delete it, re-fetch both interfaces"]
+  L1 -- no --&gt; L3["create the cable if neither end is cabled"]
+  L2 --&gt; L3
+</pre><pre class="mermaid">
+flowchart TD
+  M["per tunnel, both ends: delete other TunnelX with the same far-end description; TunnelN (type tunnel) + /30 IP; endpoint (role, source iface + IP, tunnel iface, protected prefixes)"] --&gt; M1{"endpoint protected prefixes differ? (GraphQL)"}
+  M1 -- yes --&gt; M2["direct PATCH (M2M absent from REST reads)"]
+  M1 -- no --&gt; N
+  M2 --&gt; N["VPN tunnel: by vpn + tunnel_id, else by name; A = headend, Z = spoke; encapsulation IPsec-Tunnel"]
+  N --&gt; N1["delete this VPN's tunnels that are not in the intent"]
+</pre><pre class="mermaid">
+flowchart TD
+  O["BGP: AS per device; routing instance (router-id = Loopback0); ipv4_unicast AF"] --&gt; P{"spoke endpoint with the tunnel's source IP, else description 'eBGP hub (' exists?"}
+  P -- yes --&gt; P1["re-point source IPs / AS / descriptions"]
+  P -- no --&gt; P2["create peering + both endpoints + endpoint AFs"]
+  P1 --&gt; Q
+  P2 --&gt; Q["delete IPsec-VTI AS objects no device uses"]
+  Q --&gt; R["saved GraphQL query: location + device names substituted; PATCH if the text differs"]
+  R --&gt; S["print N changes (0 on a re-run)"]
+</pre></div>
+<div class="box"><b>Comparison rule</b> (<code>ensure()</code>): related objects compare by id, choice fields by value, MACs case-insensitively, JSON fields structurally (nested pynautobot Records serialised). Only fields that differ are PATCHed — a re-run reports <b>0 changes</b>.</div>
+
+<h2 class="brk">12. Decision trees: the renderer (<code>nautobot/render_nac.py</code>)</h2>
+<div class="cols"><pre class="mermaid">
+flowchart TD
+  A["fetch the saved query (else the local .graphql)"] --&gt; B["for each device at the location"]
+  B --&gt; C{"interface"}
+  C -- "GigabitEthernet ≠ Gi1, disabled" --&gt; C1["ethernet {id, shutdown: true} — NAC owns the shut state"]
+  C -- "no IP" --&gt; C2["skip"]
+  C -- "GigabitEthernet ≠ Gi1, enabled" --&gt; C3["ethernet {id, description, cdp, shutdown = !enabled, ipv4}"]
+  C -- Loopback --&gt; C4["loopback {id, description, ipv4}; Loopback0 → router-id"]
+  C -- "Tunnel with a VPN endpoint" --&gt; C5["tunnel {N, ipv4, ip_mtu 1400, tunnel_source, tunnel_destination = far endpoint's source IP, mode ipsec ipv4, protection = ios.ipsec_profile} + CLI template 'ip tcp adjust-mss 1360'"]
+  C3 --&gt; D{"IP's parent prefix tagged bgp:advertise?"}
+  C4 --&gt; D
+  D -- "yes, /24 in 192-223" --&gt; D1["network without mask (classful)"]
+  D -- yes --&gt; D2["network + mask"]
+</pre><pre class="mermaid">
+flowchart TD
+  E{"one VPN profile seen on the device?"} -- "none" --&gt; E0["no crypto block"]
+  E -- "&gt;1" --&gt; E1["assert: one profile per router"]
+  E -- yes --&gt; F["crypto: proposal (enc / integrity / group from Phase 1), policy, keyring, profile (match any, pre-share, keyring, DPD if enabled), transform set + IPsec profile (Phase 2)"]
+  F --&gt; G["keyring peers — headend: one per spoke (spoke WAN IP /32, ${psk_spoke}); spoke: one per headend (headend WAN IP, ${psk_self})"]
+  G --&gt; H["BGP: as_number, router_id, log_neighbor_changes; neighbors from enabled endpoints with a peer (remote_as = peer AS); AF neighbors activate; networks sorted /32 first"]
+  H --&gt; I["device: host = primary IP, protocol restconf, device_groups = VPN extra_attributes.nac_device_group"]
+  I --&gt; J["write devices.nac.yaml; device_groups.nac.yaml with psk_&lt;spoke&gt; variables from the intent"]
+  J --&gt; K{"--check?"}
+  K -- yes --&gt; L["diff both files against disk; exit 1 on any difference"]
+</pre></div>
+<p class="small">GraphQL renders single-choice fields as enum names (<code>IPSEC_TUNNEL</code>, <code>IKEV2</code>) but JSON-array choice fields raw (<code>AES-256-CBC</code>); <code>norm()</code> upper-cases and replaces "-" so both forms map to the same Cisco keywords.</p>
+
+<h2 class="brk">13. Decision trees: apply, convergence and Golden Config (<code>app.py do_plan/do_apply/do_golden</code>)</h2>
+<pre class="mermaid">
+flowchart TD
+  A["terraform plan -detailed-exitcode"] --&gt; B{"rc"}
+  B -- 1 --&gt; F["fail run"]
+  B -- 0 --&gt; C{"mode deploy?"}
+  C -- yes --&gt; C1["apply step: nothing to apply"]
+  B -- 2 --&gt; D{"mode plan?"}
+  D -- yes --&gt; D1["done: dry run"]
+  D -- no --&gt; E["apply -target=module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile"]
+  E --&gt; E1{"rc 0?"}
+  E1 -- no --&gt; F
+  E1 -- yes --&gt; G["apply everything, then save-config RPC per router"]
+  G --&gt; G1{"rc 0?"}
+  G1 -- no --&gt; F
+  G1 -- yes --&gt; H["plan again"]
+  H --&gt; H1{"rc 2?"}
+  H1 -- "yes: IOS-XE DMI re-sync elided defaults" --&gt; H2["apply once more; summary += '+1 convergence apply'"]
+  H1 -- no --&gt; I
+  H2 --&gt; I{"options.golden?"}
+  I -- yes --&gt; J["Backup → Intended → Compliance"]
+  J --&gt; J1{"any NON-COMPLIANT row?"}
+  J1 -- yes --&gt; F
+  J1 -- no --&gt; K
+  I -- no --&gt; K{"options.test?"}
+  K -- yes --&gt; L["Robot suite; parse output.xml"]
+  L --&gt; L1{"failed tests?"}
+  L1 -- yes --&gt; F
+  L1 -- no --&gt; OK["success"]
+  K -- no --&gt; OK
+</pre>
+<div class="box warn"><b>Why the crypto-profiles-first apply:</b> the NAC module has no dependency from <code>iosxe_interface_tunnel</code> to <code>iosxe_crypto_ipsec_profile</code>, and IOS-XE refuses a tunnel whose <code>tunnel protection ipsec profile</code> does not exist yet — on a brand-new router the first full apply could push the VTI before its profile. <b>Why the convergence apply:</b> after an interface deletion or a reload IOS-XE re-syncs its YANG datastore and elides default values (transform-set key size, SSH defaults); one re-assert fixes it.</div>
+
+<h2 class="brk">14. Decision trees: bootstrap and VM wiring (<code>lab.sh</code>)</h2>
+<div class="cols">
+<div><pre class="mermaid">
+flowchart TD
+  A["bootstrap node"] --&gt; B["wait for console prompt ≤ 1800 s"]
+  B --&gt; C["push iosxe_config.txt + post-boot.txt over the console"]
+  C --&gt; D{"show version License Level contains network-advantage?"}
+  D -- no --&gt; E["write memory; reload; sleep 60; wait prompt again"]
+  D -- yes --&gt; F
+  E --&gt; F["poll RESTCONF ≤ 10 min"]
+  F --&gt; G{"200?"}
+  G -- yes --&gt; OK["ready"]
+  G -- no --&gt; W["warning: RESTCONF not answering"]
+</pre></div>
+<div><pre class="mermaid">
+flowchart TD
+  A["router_xml node"] --&gt; B["uuid = sha1 of 'cat8000v-ipsec.' + mgmt IP"]
+  B --&gt; C["Gi1: OOB bridge, MAC oui:idx:01"]
+  C --&gt; D{"role"}
+  D -- hub --&gt; E["ports Gi2..Gi(1+HUB_PORTS)"]
+  D -- spoke --&gt; F["ports Gi2..Gi(1+SPOKE_PORTS)"]
+  E --&gt; G{"port wired? which end?"}
+  F --&gt; G
+  G -- "first end or unwired" --&gt; H["listen port_local(self), send port_far(self)"]
+  G -- "second end" --&gt; I["listen port_far(peer), send port_local(peer)"]
+  H --&gt; J["virtio NIC, all offloads off, PCI slot 2+port"]
+  I --&gt; J
+</pre></div>
+</div>
+<p class="small">Because a link's UDP pair is anchored on its first end (always the headend), adding a spoke never changes a headend's domain; adding a headend changes each spoke's definition (its new port's target), hence the spoke reboots in the hub workflow.</p>
+
+<h2 class="brk">15. Decision trees: removal (<code>spokes.removal_plan</code> / <code>remove_from_nautobot</code>)</h2>
+<div class="cols"><pre class="mermaid">
+flowchart TD
+  A["removal_plan(name)"] --&gt; B{"in the intent? role spoke? in lab.conf?"}
+  B -- no --&gt; X["problems → 422 / dialog disabled"]
+  B -- yes --&gt; C["details: per tunnel headend / port / WAN / tunnel prefixes; capacity after"]
+  C --&gt; D["rm_down: lab.sh down (config saved)"]
+  D --&gt; E{"device still in Nautobot?"}
+  E -- no --&gt; E9["note 'already gone'; continue with prefixes / AS"]
+  E -- yes --&gt; E2["BGP peerings + routing instance first (they reference tunnel IPs)"]
+  E2 --&gt; E3["VPN tunnels; far endpoint; headend TunnelN address + interface; own endpoint"]
+  E3 --&gt; E4["own interfaces: addresses, cable, the connected headend WAN address"]
+  E4 --&gt; E5["the device"]
+  E5 --&gt; E9
+  E9 --&gt; E10["per prefix: every address inside it (parent = prefix UUID), then the prefix; the AS by description"]
+</pre><pre class="mermaid">
+flowchart TD
+  F["rm_intent: drop device / links / tunnels; lab.conf entries if present; validate; save"] --&gt; G["seed · render (headend ports → unwired, shutdown)"]
+  G --&gt; H["terraform state rm every 'name/…' and 'name' key (the router is gone: nothing to destroy there)"]
+  H --&gt; I["plan · apply (crypto-first, convergence): headends lose TunnelN, BGP neighbour, WAN address"]
+  I --&gt; J{"delete_disk?"}
+  J -- yes --&gt; J1["lab.sh clean + rm -r nodes/name"]
+  J -- no --&gt; J2["lab.sh down only"]
+  J1 --&gt; K["Golden Config · tests"]
+  J2 --&gt; K
+</pre></div>
+
+<h2 class="brk">16. REST API reference (data in / data out)</h2>
+<p>Interactive documentation with schemas and examples: <code>/docs</code> (Swagger UI) and <code>/redoc</code>; OpenAPI JSON at <code>/openapi.json</code>.</p>
+<table><tr><th style="width:26%">Endpoint</th><th style="width:30%">Input</th><th>Output</th></tr>
+<tr><td><code>GET /api/intent</code></td><td>—</td><td>intent, wiring (physical links), nodes (mgmt IP → VM name/idx/role/console), Nautobot public URL</td></tr>
+<tr><td><code>GET /api/inventory</code></td><td>—</td><td>Nautobot devices at the lab location (name, mgmt IP, serial, model, role, status, URL), VPN URL</td></tr>
+<tr><td><code>POST /api/validate</code></td><td><code>{intent}</code></td><td><code>{problems: []}</code></td></tr>
+<tr><td><code>GET /api/spokes/suggest?hubs=&region=</code></td><td>optional headends, region</td><td>SpokeSpec (all fields) + context (headends with region/distance/usage/free ports, regions, nearest, capacity)</td></tr>
+<tr><td><code>GET /api/hubs/suggest</code></td><td>—</td><td>HubSpec + context (spokes to connect)</td></tr>
+<tr><td><code>POST /api/spokes/validate</code></td><td><code>{spoke: SpokeSpec}</code></td><td><code>{problems, hub_changes: {links: [per headend: interface, wan_ip, tunnel, tunnel_ip, tunnel_destination, bgp_neighbor, spoke{…}, tunnels_after, capacity], loopbacks}}</code></td></tr>
+<tr><td><code>GET /api/spokes/{name}/removal</code></td><td>name</td><td><code>{problems, details: {mgmt_ip, asn, lan, router_id, links[…]}}</code></td></tr>
+<tr><td><code>POST /api/runs</code></td><td><code>{mode, intent | spoke | hub, options{golden,test,delete_disk}}</code></td><td>Run (id, mode, status, steps[name,title,status,started,finished,summary]); 409 if a run is active; 422 with problems</td></tr>
+<tr><td><code>GET /api/runs</code></td><td>—</td><td>last 30 runs without logs (memory + <code>webapp/runs/*.json</code>)</td></tr>
+<tr><td><code>GET /api/runs/{id}?since=N</code></td><td>log offset</td><td>Run + <code>log[{t,line}]</code> from N, <code>log_offset</code>, tests (suites → tests with status/message/elapsed), results_dir, devices, resume_of</td></tr>
+<tr><td><code>POST /api/runs/{id}/resume</code></td><td>—</td><td>new Run with carried-over successes; 404/409</td></tr>
+<tr><td><code>GET /api/vpn-inventory?refresh=&live=</code></td><td>flags</td><td>tunnels (model + live), headends (capacity, used, free, utilisation, live status), devices (role, region, site, mgmt IP, AS, LAN, serial), vpns, summary, generated</td></tr>
+<tr><td><code>GET /api/vpn-inventory.csv</code></td><td>—</td><td>CSV, one row per tunnel (35 columns)</td></tr>
+<tr><td><code>/results/…</code></td><td>path</td><td>static Robot reports, logs, config backups</td></tr>
+</table>
+
+<h2>17. Test coverage map</h2>
+<table><tr><th style="width:22%">Suite</th><th>Proves</th><th style="width:26%">Sources compared</th></tr>
+<tr><td>01 Management</td><td>SSH/RESTCONF reachability, hostname, IOS-XE version, Mgmt-vrf default route, license level, AAA/SSH/VTY hardening, banner</td><td>routers vs intent + NAC baseline</td></tr>
+<tr><td>02 Underlay</td><td>every hub↔spoke p2p link up with the modelled /30s, ping both ways, no spoke↔spoke WAN reachability, CDP neighbour per link, loopbacks</td><td>routers vs intent</td></tr>
+<tr><td>03 IPsec VTI</td><td>tunnel config lines, up/up, IKEv2 SAs READY with the modelled suite, DPD, ESP counters advance (encryption proven), sessions per headend = its tunnels</td><td>routers vs intent</td></tr>
+<tr><td>04 Routing</td><td>eBGP Established headend↔spoke, spokes peer only with their headends, every site learnt, spoke-to-spoke AS path via a headend, LAN reachability, traceroute first hop is a headend</td><td>routers vs intent</td></tr>
+<tr><td>05 NAC compliance</td><td><code>terraform plan</code> exit code 0 (no drift)</td><td>routers vs NAC data</td></tr>
+<tr><td>06 Nautobot</td><td>devices/serials/locations, cables and /30s, VPN app objects and that each router's tunnel destination equals the far endpoint's source address, crypto policies vs routers, BGP model vs live sessions, <code>render --check</code> round-trip, Golden Config backups in Gitea and every compliance row compliant</td><td>Nautobot vs routers vs committed NAC data</td></tr>
+</table>
+
+<h2>18. File map</h2>
+<table><tr><th style="width:34%">Path</th><th>Purpose</th></tr>
+<tr><td><code>lab.conf</code>, <code>lab.sh</code>, <code>tools/console.py</code>, <code>nodes/</code></td><td>VM facts and libvirt controller (up/down/bootstrap/rebuild/clean/rename/status/nac/nautobot/test/webapp), console automation, day-0 template and per-node files</td></tr>
+<tr><td><code>lab-intent.json</code>, <code>nautobot/intent.py</code></td><td>The intent document; load/upgrade/validate/save, wiring & VM facts, region distance, nearest headends, PSK generation</td></tr>
+<tr><td><code>nautobot/onboard.py</code>, <code>seed.py</code>, <code>render_nac.py</code>, <code>golden_config.py</code>, <code>rename_node.py</code>, <code>nac-c8000v-ipsec-model.graphql</code>, <code>golden-config-templates/c8000v-ipsec.j2</code></td><td>Nautobot integration: discovery, intent → objects, objects → NAC data, Golden Config setting/template/jobs, rename tool, the saved query, the Jinja template</td></tr>
+<tr><td><code>nac/main.tf</code>, <code>versions.tf</code>, <code>data/*.nac.yaml</code></td><td>Terraform root: module + provider pins, baseline, generated device model and PSK variables</td></tr>
+<tr><td><code>tests/</code></td><td>Robot suites 01–06, <code>LabLib.py</code> keywords, <code>lab_vars.py</code> (derived from the intent), <code>run.sh</code>, config capture</td></tr>
+<tr><td><code>webapp/app.py</code>, <code>schemas.py</code>, <code>spokes.py</code>, <code>inventory.py</code>, <code>static/index.html</code>, <code>runs/</code>, <code>demo/</code></td><td>Portal API + pipeline runner, OpenAPI models, spoke/headend allocation and removal, inventory collector, UI, run records, demo recorders</td></tr>
+</table>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', themeVariables: { fontSize: '15px' }, flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', nodeSpacing: 30, rankSpacing: 34, wrappingWidth: 230 }, sequence: { useMaxWidth: false, actorMargin: 26, messageMargin: 30, width: 150, wrap: true, messageFontSize: 14, actorFontSize: 14 } });
+  await mermaid.run({ querySelector: 'pre.mermaid' });
+  window.__mermaid_done = true;
+</script>
+</body></html>

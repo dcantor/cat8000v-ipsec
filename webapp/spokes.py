@@ -59,25 +59,32 @@ def suggest_identity(I, C, role):
             "router_id": rid, "lan": str(lan), "asn": asn}
 
 
-def suggest(hubs=None):
-    """Auto-allocated values for the next spoke (all editable in the wizard); `hubs` = names to connect to (default: all)."""
+def suggest(hubs=None, region=None):
+    """Auto-allocated values for the next spoke (all editable in the wizard).
+    `hubs` = headends to connect to; default = the two nearest to `region` (regions are ordered geographically)."""
     f = facts(); C, I = f["C"], f["I"]
-    hub_names = [h["name"] for h in f["hubs"]]; chosen = [h for h in (hubs or hub_names) if h in hub_names]
+    hub_names = [h["name"] for h in f["hubs"]]
+    region = region if region in I["regions"] else I["regions"][0]
+    chosen = [h for h in (hubs or intent_mod.nearest_hubs(I, region, MIN_HEADENDS)) if h in hub_names]
     ident = suggest_identity(I, C, "spoke")
-    return {**ident, "role": "spoke", "comments": "", "site_code": I["site"].get("site_code", ""), "contact": I["site"].get("contact", ""),
-            "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+    n = ident["name"].replace("spoke", "") or "1"; site = f"branch-{n}"
+    while any(d["site"] == site for d in I["devices"]): site += "a"
+    return {**ident, "role": "spoke", "comments": "", "region": region, "site": site, "site_code": f"{region[:2].upper()}-{n}", "contact": f"noc-{region.lower()}@lab.local",
+            "psk": intent_mod.new_psk(), "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
             "links": suggest_links(I, f, ident["name"], chosen),
-            "context": {"hubs": [{"name": h["name"], "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"],
+            "context": {"hubs": [{"name": h["name"], "region": h.get("region"), "distance": intent_mod.region_distance(I, region, h.get("region")),
+                                  "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"],
                                   "ports_free": sorted(set(f["hub_ports"]) - f["ports_used"](h["name"]))} for h in f["hubs"]],
-                        "capacity": f["capacity"], "spoke_ports": list(f["spoke_ports"])}}
+                        "regions": I["regions"], "nearest": intent_mod.nearest_hubs(I, region, MIN_HEADENDS), "capacity": f["capacity"], "spoke_ports": list(f["spoke_ports"])}}
 
 
 def suggest_hub():
     """A new headend: identity only; it gets a link + tunnel to every existing spoke (allocated in add_hub_links)."""
     f = facts(); C, I = f["C"], f["I"]; ident = suggest_identity(I, C, "hub")
-    spokes = [d["name"] for d in I["devices"] if d["role"] == "spoke"]
-    return {**ident, "role": "hub", "comments": "", "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
-            "connect_spokes": spokes, "context": {"spokes": spokes, "capacity": f["capacity"]}}
+    spokes = [d["name"] for d in I["devices"] if d["role"] == "spoke"]; region = I["regions"][0]
+    return {**ident, "role": "hub", "comments": "", "region": region, "site": f"{ident['name']}-hq", "site_code": f"{region[:2].upper()}-HQ", "contact": f"noc-{region.lower()}@lab.local",
+            "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+            "connect_spokes": spokes, "context": {"spokes": spokes, "regions": I["regions"], "capacity": f["capacity"]}}
 
 
 def validate(spec):
@@ -103,6 +110,9 @@ def validate(spec):
     if not (1 <= asn <= 4294967295): errs.append("ASN out of range")
     if asn in {int(d["asn"]) for d in I["devices"]}: errs.append(f"AS {asn} is in use (one AS per site)")
     if not intent_mod.INTENT_FILE.exists(): errs.append("lab-intent.json missing (run ./lab.sh intent init)")
+    if spec.get("region") not in (I.get("regions") or []): errs.append(f"region must be one of {I.get('regions')}")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}", spec.get("site") or ""): errs.append("site name: letters/digits/space/_.-")
+    if spec.get("role", "spoke") == "spoke" and not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", spec.get("psk") or ""): errs.append("pre-shared key: 8-64 characters, letters/digits/_.-")
     avail = int(re.search(r"MemAvailable:\s+(\d+)", Path("/proc/meminfo").read_text())[1]) // 1024
     if avail < int(spec.get("ram_mib") or RAM_MIB) + 1024: errs.append(f"not enough free memory for a {spec.get('ram_mib', RAM_MIB)} MiB VM ({avail} MiB available)")
     if spec.get("role", "spoke") == "spoke":
@@ -183,7 +193,8 @@ def write_day0(spec):
 def add_to_intent(spec):
     I = intent_mod.load()
     I["devices"].append({"name": spec["name"], "mgmt_ip": spec["mgmt_ip"], "role": spec.get("role", "spoke"), "asn": int(spec["asn"]), "router_id": spec["router_id"],
-                         "lan": spec["lan"], "comments": spec.get("comments", "")})
+                         "lan": spec["lan"], "comments": spec.get("comments", ""), "region": spec.get("region"), "site": spec.get("site"),
+                         "site_code": spec.get("site_code", ""), "contact": spec.get("contact", ""), **({"psk": spec["psk"]} if spec.get("role", "spoke") == "spoke" else {})})
     I["devices"].sort(key=lambda d: (d["role"] != "hub", d["name"]))
     for l in spec.get("links") or []:
         I["links"].append({"a": l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})

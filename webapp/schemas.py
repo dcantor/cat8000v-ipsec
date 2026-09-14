@@ -1,0 +1,186 @@
+"""Pydantic models for the portal's REST API (they drive the Swagger page at /docs)."""
+from typing import Any, Literal, Optional
+from pydantic import BaseModel, Field
+
+
+class Site(BaseModel):
+    name: str = Field(..., description="Lab-level location in Nautobot (read-only)", examples=["c8000v-ipsec-lab"])
+    description: str = ""
+    site_code: str = Field("", examples=["LAB-IPSEC"])
+    contact: str = Field("", examples=["noc@lab.local"])
+
+
+class VpnService(BaseModel):
+    name: str = Field(..., examples=["IPSEC_VPN"])
+    description: str = ""
+    change_ticket: str = Field("", examples=["CHG0042002"])
+    owner: str = Field("", examples=["network team"])
+
+
+class IkePolicy(BaseModel):
+    encryption: str = Field("AES-256-CBC", examples=["AES-256-CBC"])
+    integrity: str = Field("SHA256", examples=["SHA256"])
+    dh_group: str = Field("14", examples=["14"])
+    lifetime: int = 86400
+
+
+class IpsecPolicy(BaseModel):
+    encryption: str = "AES-256-CBC"
+    integrity: str = "SHA256"
+    lifetime: int = 3600
+
+
+class Dpd(BaseModel):
+    enabled: bool = True
+    interval: int = 30
+    retries: int = 5
+
+
+class Profile(BaseModel):
+    name: str = Field(..., examples=["VPN-IPSEC"])
+    ike: IkePolicy
+    ipsec: IpsecPolicy
+    dpd: Dpd
+    ios: dict[str, str] = Field(..., description="Cisco object names (ikev2_proposal, ikev2_policy, ikev2_keyring, ikev2_profile, transform_set, ipsec_profile)")
+
+
+class Device(BaseModel):
+    name: str = Field(..., description="hostname / Nautobot device name", examples=["spoke1"])
+    mgmt_ip: str = Field(..., description="management address (fixed by the VM's day-0 config)", examples=["10.2.0.12"])
+    role: Literal["hub", "spoke"]
+    asn: int = Field(..., examples=[65201])
+    router_id: str = Field(..., examples=["10.255.1.2"])
+    lan: str = Field(..., description="site LAN /24 (Loopback10)", examples=["192.168.12.0/24"])
+    comments: str = ""
+    region: Optional[str] = Field(None, examples=["East"])
+    site: Optional[str] = Field(None, description="branch / HQ location in Nautobot", examples=["branch-1"])
+    site_code: str = ""
+    contact: str = ""
+    psk: Optional[str] = Field(None, description="spoke's own pre-shared key (spokes only; never stored in Nautobot)")
+
+
+class Link(BaseModel):
+    a: str = Field(..., description="first end (the headend)"); a_port: int
+    b: str = Field(..., description="second end (the spoke)"); b_port: int
+    prefix: str = Field(..., examples=["100.65.1.0/30"])
+
+
+class Tunnel(BaseModel):
+    id: int = Field(..., description="TunnelN on both routers", examples=[1])
+    hub: str
+    spoke: str
+    prefix: str = Field(..., examples=["172.17.1.0/30"])
+
+
+class Intent(BaseModel):
+    """The whole VPN service intent — what the Provision form edits and every pipeline step reads."""
+    site: Site
+    vpn: VpnService
+    profile: Profile
+    regions: list[str] = Field(..., description="ordered geographically; distance = index difference", examples=[["East", "Central", "West"]])
+    devices: list[Device]
+    links: list[Link]
+    tunnels: list[Tunnel]
+    oob: dict[str, str]
+    domain_name: str = "lab.local"
+    capacity: dict[str, int] = Field(default={"tunnels_per_headend": 50})
+
+
+class RunOptions(BaseModel):
+    golden: bool = Field(True, description="run Golden Config backup/intended/compliance after apply")
+    test: bool = Field(True, description="run the Robot Framework suite at the end")
+    delete_disk: bool = Field(True, description="(remove) delete the VM disk and node directory")
+
+
+class SpokeLink(BaseModel):
+    hub: str = Field(..., examples=["central-headend"])
+    hub_port: int = Field(..., description="headend GigabitEthernet number", examples=[6])
+    spoke_port: int = Field(..., examples=[2])
+    tunnel_id: int = Field(..., examples=[12])
+    wan_prefix: str = Field(..., examples=["100.65.12.0/30"])
+    tunnel_prefix: str = Field(..., examples=["172.17.12.0/30"])
+    spoke: Optional[str] = None
+
+
+class SpokeSpec(BaseModel):
+    """A new spoke: identity, metadata and one link per headend (get a fully suggested one from GET /api/spokes/suggest)."""
+    name: str = Field(..., examples=["spoke6"]); mgmt_ip: str = Field(..., examples=["10.2.0.19"])
+    node_idx: int = Field(..., description="VM index (MACs, UDP ports); from suggest"); console_port: int = Field(..., description="serial console TCP port; from suggest")
+    router_id: str; lan: str; asn: int
+    region: str = Field(..., examples=["West"]); site: str = Field(..., examples=["branch-6"]); site_code: str = ""; contact: str = ""
+    psk: str = Field(..., description="the spoke's own pre-shared key (8-64 chars)")
+    comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
+    role: Literal["spoke"] = "spoke"
+    links: list[SpokeLink] = Field(..., description="at least two headends", min_length=2)
+    spoke_port: Optional[int] = None
+
+
+class HubSpec(BaseModel):
+    """A new headend; it gets a link + tunnel to every spoke listed in connect_spokes."""
+    name: str = Field(..., examples=["north-headend"]); mgmt_ip: str; node_idx: int; console_port: int
+    router_id: str; lan: str; asn: int
+    region: str; site: str; site_code: str = ""; contact: str = ""
+    comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
+    role: Literal["hub"] = "hub"
+    connect_spokes: list[str] = Field(default_factory=list)
+
+
+class RemoveSpec(BaseModel):
+    name: str = Field(..., description="spoke to decommission", examples=["spoke5"])
+
+
+class RunRequest(BaseModel):
+    """Start a pipeline run. Which body fields matter depends on `mode`."""
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove"] = Field(..., description=(
+        "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
+        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`)"))
+    intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
+    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...}")
+    hub: Optional[HubSpec] = None
+    options: RunOptions = RunOptions()
+
+
+class Step(BaseModel):
+    name: str; title: str; status: Literal["pending", "running", "success", "failed", "skipped"]
+    started: Optional[float] = None; finished: Optional[float] = None; summary: str = ""
+
+
+class TestResult(BaseModel):
+    name: str; status: str; message: str = ""; elapsed: Optional[str] = None
+
+
+class TestSuite(BaseModel):
+    name: str; tests: list[TestResult]; passed: int; failed: int
+
+
+class TestReport(BaseModel):
+    suites: list[TestSuite]; total: int; passed: int; failed: int
+
+
+class Run(BaseModel):
+    id: str = Field(..., examples=["2026-09-13_14-40-20-0fa9"])
+    mode: str; status: Literal["queued", "running", "success", "failed", "interrupted"]
+    started: float; finished: Optional[float] = None
+    steps: list[Step]
+    tests: Optional[TestReport] = None
+    results_dir: Optional[str] = Field(None, description="results/<dir>/ holds report.html, log.html and config backups")
+    error: Optional[str] = None
+    options: dict[str, Any] = {}
+    site: Optional[str] = None; vpn: Optional[str] = None; change_ticket: Optional[str] = None
+    devices: list[str] = []
+    spoke: Optional[dict[str, Any]] = None
+    resume_of: Optional[str] = None
+    log: Optional[list[dict[str, Any]]] = Field(None, description="[{t, line}] — only on GET /api/runs/{id}, from `since`")
+    log_offset: Optional[int] = None
+
+
+class Problems(BaseModel):
+    problems: list[str] = Field(..., description="empty when valid")
+
+
+class SpokeValidation(Problems):
+    hub_changes: Optional[dict[str, Any]] = Field(None, description="what each headend and the spoke will get (only when valid)")
+
+
+class RemovalPlan(Problems):
+    details: Optional[dict[str, Any]] = None

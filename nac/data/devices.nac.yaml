@@ -117,10 +117,26 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: spoke5
+              ipv4_address: 100.65.12.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke5}
+            - name: spoke1
+              ipv4_address: 100.65.4.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
+            - name: spoke2
+              ipv4_address: 100.65.5.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
+            - name: spoke3
+              ipv4_address: 100.65.6.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
+            - name: spoke4
+              ipv4_address: 100.65.7.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke4}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -324,10 +340,18 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: spoke1
+              ipv4_address: 100.65.1.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
+            - name: spoke2
+              ipv4_address: 100.65.2.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
+            - name: spoke3
+              ipv4_address: 100.65.3.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -491,10 +515,18 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: east-headend
+              ipv4_address: 100.65.1.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
+            - name: central-headend
+              ipv4_address: 100.65.4.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
+            - name: west-headend
+              ipv4_address: 100.65.8.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -646,10 +678,18 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: east-headend
+              ipv4_address: 100.65.2.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
+            - name: central-headend
+              ipv4_address: 100.65.5.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
+            - name: west-headend
+              ipv4_address: 100.65.9.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -801,10 +841,18 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: west-headend
+              ipv4_address: 100.65.10.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
+            - name: east-headend
+              ipv4_address: 100.65.3.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
+            - name: central-headend
+              ipv4_address: 100.65.6.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -955,10 +1003,14 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: west-headend
+              ipv4_address: 100.65.11.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke4}
+            - name: central-headend
+              ipv4_address: 100.65.7.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke4}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -1089,10 +1141,14 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: central-headend
+              ipv4_address: 100.65.12.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke5}
+            - name: west-headend
+              ipv4_address: 100.65.13.1
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke5}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:
@@ -1226,10 +1282,26 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: ANY
-              ipv4_address: 0.0.0.0
-              ipv4_mask: 0.0.0.0
-              pre_shared_key: ${vpn_psk}
+            - name: spoke3
+              ipv4_address: 100.65.10.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
+            - name: spoke4
+              ipv4_address: 100.65.11.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke4}
+            - name: spoke5
+              ipv4_address: 100.65.13.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke5}
+            - name: spoke1
+              ipv4_address: 100.65.8.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke1}
+            - name: spoke2
+              ipv4_address: 100.65.9.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
           profiles:
           - name: VPN-IKEV2
             match_identity_remote_ipv4_addresses:

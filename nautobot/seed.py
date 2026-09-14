@@ -82,6 +82,19 @@ if "vpn_tunnel_capacity" not in cf:   # the headend constraint: how many tunnels
 CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 ensure(site, description=I["site"]["description"]); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
 
+# site hierarchy: lab site -> Region -> Branch (one location per branch/HQ; site_code + contact live on the branch)
+lt_site = nb.dcim.location_types.get(name="Site")
+lt_region = get_or_create(nb.dcim.location_types, {"name": "Region"}, parent=lt_site.id, content_types=["dcim.device", "ipam.prefix"], description="ordered geographically (lab-intent.json regions)")
+lt_branch = get_or_create(nb.dcim.location_types, {"name": "Branch"}, parent=lt_region.id, content_types=["dcim.device", "ipam.prefix"], description="one location per branch office / headend site")
+regions, branches = {}, {}
+for i, name in enumerate(I["regions"]):
+    regions[name] = get_or_create(nb.dcim.locations, {"name": name}, location_type=lt_region.id, parent=site.id, status=active.id)
+    ensure(regions[name], parent=site.id, description=f"region #{i + 1} of {len(I['regions'])}")
+for d in I["devices"]:
+    br = branches.get(d["site"]) or get_or_create(nb.dcim.locations, {"name": d["site"]}, location_type=lt_branch.id, parent=regions[d["region"]].id, status=active.id)
+    ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}")
+    ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", "")); branches[d["site"]] = br
+
 # VPN model: Nautobot's core "vpn" app (3.2+). Phase 1 / Phase 2 policies -> profile -> VPN -> tunnels with
 # hub/spoke endpoints (source interface + address, tunnel interface, protected prefixes). Cisco object names live
 # in the profile's extra_options; the PSK stays out of Nautobot (NAC group variable vpn_psk).
@@ -164,8 +177,8 @@ by_mgmt = {x["primary_ip4"]["address"].split("/")[0]: x["id"] for x in requests.
 for r in ROUTERS:
     d = DEV[r]
     dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
-    ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""))
-    ensure_cf(dev, contact=I["site"]["contact"], **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))   # every hub is a headend
+    ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""), location=branches[d["site"]].id)
+    ensure_cf(dev, contact=d.get("contact", ""), **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))   # every hub is a headend
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
     idx = NODES[d["mgmt_ip"]]["idx"]

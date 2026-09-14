@@ -14,9 +14,9 @@ QUERY = """
       vpn_phase2_policies { name encryption_algorithm integrity_algorithm lifetime } }
     vpn_tunnels {
       id name tunnel_id description encapsulation status { name } last_updated
-      endpoint_a { id role { name } device { id name primary_ip4 { address } location { name } cf_vpn_tunnel_capacity }
+      endpoint_a { id role { name } device { id name primary_ip4 { address } location { name parent { name } } cf_vpn_tunnel_capacity }
                    source_interface { name } source_ipaddress { address } tunnel_interface { name ip_addresses { address } } protected_prefixes { prefix } }
-      endpoint_z { id role { name } device { id name primary_ip4 { address } location { name } cf_vpn_tunnel_capacity }
+      endpoint_z { id role { name } device { id name primary_ip4 { address } location { name parent { name } } cf_vpn_tunnel_capacity }
                    source_interface { name } source_ipaddress { address } tunnel_interface { name ip_addresses { address } } protected_prefixes { prefix } }
     }
   }
@@ -31,7 +31,7 @@ class Inventory:
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
         """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
-        q = """{ devices(role: ["vpn-hub", "vpn-spoke"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name }
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } }
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
                  interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
         import sys; from pathlib import Path
@@ -42,7 +42,8 @@ class Inventory:
         for d in r.json()["data"]["devices"]:
             ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
             out.append({"name": d["name"], "role": "hub" if d["role"]["name"] == "vpn-hub" else "spoke", "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
-                        "site": (d["location"] or {}).get("name"), "serial": d["serial"], "asn": (ri.get("autonomous_system") or {}).get("asn"),
+                        "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
+                        "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"], "asn": (ri.get("autonomous_system") or {}).get("asn"),
                         "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
                         "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
         return sorted(out, key=lambda d: (d["role"] != "hub", d["name"]))
@@ -59,7 +60,7 @@ class Inventory:
                 # the headend is the endpoint with role "hub" (falls back to A)
                 hub, spoke = (a, z) if (a.get("role") or {}).get("name") != "spoke" else (z, a)
                 hd = hub.get("device") or {}; hname = hd.get("name") or "?"
-                headends.setdefault(hname, {"name": hname, "location": (hd.get("location") or {}).get("name"), "mgmt_ip": (hd.get("primary_ip4") or {}).get("address", "").split("/")[0],
+                headends.setdefault(hname, {"name": hname, "location": (hd.get("location") or {}).get("name"), "region": ((hd.get("location") or {}).get("parent") or {}).get("name"), "mgmt_ip": (hd.get("primary_ip4") or {}).get("address", "").split("/")[0],
                                             "capacity": hd.get("cf_vpn_tunnel_capacity") or DEFAULT_CAPACITY, "tunnels": 0, "url": f"{self.public_url}/dcim/devices/{hd.get('id')}/"})
                 headends[hname]["tunnels"] += 1
                 tunnels.append({
@@ -74,6 +75,8 @@ class Inventory:
                     "headend_src_ip": (hub.get("source_ipaddress") or {}).get("address", "").split("/")[0],
                     "headend_tunnel_ip": ((hub.get("tunnel_interface") or {}).get("ip_addresses") or [{}])[0].get("address", ""),
                     "spoke": (spoke.get("device") or {}).get("name"), "spoke_site": ((spoke.get("device") or {}).get("location") or {}).get("name"),
+                    "spoke_region": (((spoke.get("device") or {}).get("location") or {}).get("parent") or {}).get("name"),
+                    "headend_region": ((hd.get("location") or {}).get("parent") or {}).get("name"),
                     "spoke_mgmt_ip": ((spoke.get("device") or {}).get("primary_ip4") or {}).get("address", "").split("/")[0],
                     "spoke_if": (spoke.get("tunnel_interface") or {}).get("name"), "spoke_src_if": (spoke.get("source_interface") or {}).get("name"),
                     "spoke_src_ip": (spoke.get("source_ipaddress") or {}).get("address", "").split("/")[0],
@@ -161,7 +164,7 @@ class Inventory:
 
 
 CSV_COLUMNS = [("name", "tunnel"), ("tunnel_id", "tunnel_id"), ("vpn", "vpn"), ("model_status", "model_status"), ("headend", "headend"), ("headend_if", "headend_interface"),
-               ("headend_src_ip", "headend_wan_ip"), ("headend_tunnel_ip", "headend_tunnel_ip"), ("spoke", "spoke"), ("spoke_site", "spoke_site"), ("spoke_if", "spoke_interface"),
+               ("headend_src_ip", "headend_wan_ip"), ("headend_tunnel_ip", "headend_tunnel_ip"), ("spoke", "spoke"), ("spoke_region", "spoke_region"), ("spoke_site", "spoke_site"), ("spoke_if", "spoke_interface"),
                ("spoke_src_ip", "spoke_wan_ip"), ("spoke_tunnel_ip", "spoke_tunnel_ip"), ("encapsulation", "encapsulation"), ("profile", "profile"), ("ike", "ike"), ("ipsec", "ipsec"), ("dpd", "dpd"),
                ("protected_prefixes", "protected_prefixes"), ("change_ticket", "change_ticket"), ("owner", "owner"),
                ("live.health", "health"), ("live.ike_status", "ike_sa"), ("live.ike_active_s", "ike_sa_age_s"), ("live.line_protocol", "line_protocol"), ("live.bgp_state", "bgp_state_or_prefixes"),

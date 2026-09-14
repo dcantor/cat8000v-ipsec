@@ -12,7 +12,7 @@ Routers exist in Nautobot with role, serial, platform and management IP matching
         ${d}=    Nautobot Get    dcim/devices/    name=${r}    depth=1
         Should Be Equal As Integers    ${d}[count]    1
         ${dev}=    Set Variable    ${d}[results][0]
-        Should Be Equal    ${dev}[location][name]    ${NAUTOBOT_LOCATION}
+        Should Be Equal    ${dev}[location][name]    ${ROUTERS}[${r}][site]    msg=${r} must live at its branch/HQ location
         Should Be Equal    ${dev}[role][name]    vpn-${ROUTERS}[${r}][role]
         Should Be Equal    ${dev}[device_type][model]    C8000V
         Should Be Equal    ${dev}[platform][name]    cisco_xe
@@ -91,6 +91,38 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spok
         Should Be Equal    ${i}[cf_tunnel_mode]    ${None}
         Should Be Equal    ${i}[cf_tunnel_ipsec_profile]    ${None}
         Should Be Equal    ${i}[rel_tunnel_source_source]    ${None}
+    END
+
+Locations form the hierarchy lab site -> region -> branch, with site metadata on the branch
+    ${d}=    Nautobot Graphql    { locations(location_type:"Branch") { name cf_site_code cf_contact parent { name location_type { name } parent { name } } devices { name } } }
+    FOR    ${r}    IN    @{ROUTER_NAMES}
+        ${br}=    Evaluate    [l for l in $d['locations'] if l['name'] == $ROUTERS[$r]['site']][0]
+        Should Be Equal    ${br}[parent][name]    ${ROUTERS}[${r}][region]
+        Should Be Equal    ${br}[parent][location_type][name]    Region
+        Should Be Equal    ${br}[parent][parent][name]    ${NAUTOBOT_LOCATION}
+        Should Be Equal    ${br}[cf_site_code]    ${ROUTERS}[${r}][site_code]
+        Should Contain    ${{ [x['name'] for x in $br['devices']] }}    ${r}
+    END
+    ${regions}=    Nautobot Graphql    { locations(location_type:"Region") { name } }
+    Should Be Equal    ${{ sorted(l['name'] for l in $regions['locations']) }}    ${{ sorted($REGIONS) }}
+
+Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke
+    FOR    ${s}    IN    @{SPOKES}
+        ${kr}=    Show    ${s}    show run | section crypto ikev2 keyring
+        FOR    ${t}    IN    @{SPOKE_TUNNELS}[${s}]
+            Should Match Regexp    ${kr}    (?s)peer ${t}[hub]\n\s+address ${t}[hub_wan]\n\s+pre-shared-key ${ROUTERS}[${s}][psk]
+        END
+        FOR    ${o}    IN    @{SPOKES}
+            Continue For Loop If    '${s}' == '${o}'
+            Should Not Contain    ${kr}    ${ROUTERS}[${o}][psk]    msg=${s} must not know ${o}'s key
+        END
+    END
+    FOR    ${h}    IN    @{HUBS}
+        ${kr}=    Show    ${h}    show run | section crypto ikev2 keyring
+        FOR    ${t}    IN    @{HUB_TUNNELS}[${h}]
+            Should Match Regexp    ${kr}    (?s)peer ${t}[spoke]\n\s+address ${t}[spoke_wan]\n\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]
+        END
+        Should Not Contain    ${kr}    address 0.0.0.0    msg=${h} still has the wildcard peer
     END
 
 The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers

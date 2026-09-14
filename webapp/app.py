@@ -15,7 +15,9 @@ import json, os, re, subprocess, sys, threading, time, uuid, xml.etree.ElementTr
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Path as PathParam
+from fastapi.openapi.docs import get_swagger_ui_html
+import schemas as S
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import requests
@@ -40,7 +42,16 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "render": "Render NAC data from Nautobot", "plan": "Terraform plan", "apply": "Terraform apply + save config",
                "golden": "Golden Config backup / intended / compliance", "test": "Robot Framework tests"}
 
-app = FastAPI(title="C8000v IPsec VPN portal")
+TAGS = [{"name": "intent", "description": "The VPN service intent (what the Provision form edits) and what Nautobot knows about the routers."},
+        {"name": "provisioning", "description": "Suggest / validate a new spoke or headend, plan a removal."},
+        {"name": "runs", "description": "Pipeline runs: deploy, dry run, tests, provision a spoke or headend, decommission a spoke; status, log and test report."},
+        {"name": "inventory", "description": "Every VPN tunnel: the Nautobot model joined with live IKEv2 / VTI / eBGP / ESP state from the headends, headend capacity, CSV export."}]
+app = FastAPI(title="VPN Provisioning Portal API", version="1.0",
+              description="REST API behind the C8000v IPsec VPN provisioning portal.\n\n"
+                          "Nautobot is the source of truth; every change goes **intent → Nautobot seed → NAC data rendered from Nautobot → Terraform plan/apply → Golden Config → Robot tests**. "
+                          "Runs are asynchronous: `POST /api/runs` returns a run id, poll `GET /api/runs/{id}`.\n\n"
+                          "Portal UI: [/](/) · this page: [/docs](/docs) · ReDoc: [/redoc](/redoc) · OpenAPI JSON: [/openapi.json](/openapi.json)",
+              openapi_tags=TAGS, docs_url="/docs", redoc_url="/redoc")
 runs, runs_lock, worker_lock = {}, threading.Lock(), threading.Lock()
 inventory_svc = None   # created lazily (needs the Nautobot token)
 
@@ -337,20 +348,21 @@ def parse_robot(path):
 
 
 # ---- API -------------------------------------------------------------------
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def index():
     return FileResponse(Path(__file__).resolve().parent / "static" / "index.html", headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/intent")
+@app.get("/api/intent", tags=["intent"], summary="Current intent + wiring facts")
 def get_intent():
+    """The saved `lab-intent.json` plus the physical wiring and VM facts from `lab.conf` (the form cannot change those)."""
     return {"intent": intent_mod.load(), "wiring": intent_mod.wiring(), "nodes": intent_mod.nodes(),
             "intent_file": str(intent_mod.INTENT_FILE), "nautobot_url": NAUTOBOT_PUBLIC_URL}
 
 
-@app.get("/api/inventory")
+@app.get("/api/inventory", tags=["intent"], summary="Routers as Nautobot sees them")
 def inventory():
-    """What Nautobot knows about the location's routers (from onboarding)."""
+    """Devices at the lab location as onboarded into Nautobot (serial, model, role, management IP) and the VPN object's URL."""
     try:
         I = intent_mod.load(); H = {"Authorization": f"Token {nautobot_token()}"}
         r = requests.get(f"{NAUTOBOT_URL}/api/dcim/devices/", params={"location": I["site"]["name"], "depth": 1, "limit": 100}, headers=H, timeout=20); r.raise_for_status()
@@ -371,50 +383,71 @@ def inv():
     return inventory_svc
 
 
-@app.get("/api/vpn-inventory")
-def vpn_inventory(refresh: bool = False, live: bool = True):
-    """Modelled tunnels (Nautobot) + live state from the headends + capacity; cached 30 s, ?refresh=1 to re-collect."""
+@app.get("/api/vpn-inventory", tags=["inventory"], summary="Tunnel inventory with live state and capacity")
+def vpn_inventory(refresh: bool = Query(False, description="re-collect live state now (otherwise cached for 30 s)"), live: bool = Query(True, description="include live state from the headends (SSH)")):
+    """Modelled tunnels from Nautobot's VPN app joined with live IKEv2 SA / VTI / eBGP / ESP state collected from every headend,
+    per-headend capacity (custom field `vpn_tunnel_capacity`), the location's devices (for the topology map) and summary KPIs."""
     try: return inv().get(refresh=refresh, with_live=live)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"inventory unavailable: {e}")
 
 
-@app.get("/api/vpn-inventory.csv")
-def vpn_inventory_csv(refresh: bool = False):
+@app.get("/api/vpn-inventory.csv", tags=["inventory"], summary="Tunnel inventory as CSV", response_class=PlainTextResponse)
+def vpn_inventory_csv(refresh: bool = Query(False)):
+    """One row per tunnel: model fields (headend, spoke, region/site, addresses, profile, ticket) and live fields (health, IKE SA age, BGP, ESP counters, rates)."""
     data = inv().get(refresh=refresh)
     return PlainTextResponse(to_csv(data), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=vpn-inventory-{datetime.now():%Y%m%d-%H%M%S}.csv"})
 
 
-@app.post("/api/validate")
+@app.post("/api/validate", tags=["intent"], summary="Validate an intent", response_model=S.Problems)
 def validate(body: dict):
+    """Shape, addressing, uniqueness, capacity, and that the links match the physical wiring. Body: `{"intent": Intent}`."""
     return {"problems": intent_mod.validate(body.get("intent") or {})}
 
 
-@app.get("/api/spokes/suggest")
-def spoke_suggest(hubs: str = ""):
-    return spokes.suggest([h for h in hubs.split(",") if h] or None)
+@app.get("/api/spokes/suggest", tags=["provisioning"], summary="Suggest a fully allocated new spoke")
+def spoke_suggest(hubs: str = Query("", description="comma-separated headends to connect to (default: the two nearest to the region)"),
+                  region: str = Query("", description="the spoke's region (default: the first region)")):
+    """Hostname, management IP, VM index/console port, router-id, LAN, AS, site/site code/contact, a generated PSK, and per-headend
+    link allocations (hub port, spoke port, WAN /30, tunnel number, tunnel /30). Everything is editable; POST it to `/api/runs` with mode `spoke`."""
+    return spokes.suggest([h for h in hubs.split(",") if h] or None, region or None)
 
 
-@app.get("/api/hubs/suggest")
+@app.get("/api/hubs/suggest", tags=["provisioning"], summary="Suggest a new headend")
 def hub_suggest():
+    """Identity for a new headend; `connect_spokes` lists the spokes it will be linked to (each on its next free WAN port). POST to `/api/runs` with mode `hub`."""
     return spokes.suggest_hub()
 
 
-@app.post("/api/spokes/validate")
+@app.post("/api/spokes/validate", tags=["provisioning"], summary="Validate a spoke spec", response_model=S.SpokeValidation)
 def spoke_validate(body: dict):
+    """Body: `{"spoke": SpokeSpec}`. Checks free hub ports, unused prefixes / tunnel ids / AS, at least two headends, capacity, host memory.
+    When valid, `hub_changes` describes what each headend and the spoke will be configured with."""
     spec = body.get("spoke") or {}
     problems = spokes.validate(spec)
     return {"problems": problems, "hub_changes": spokes.hub_changes(spec) if not problems else None}
 
 
-@app.get("/api/spokes/{name}/removal")
-def spoke_removal(name: str):
+@app.get("/api/spokes/{name}/removal", tags=["provisioning"], summary="Plan a spoke's removal", response_model=S.RemovalPlan)
+def spoke_removal(name: str = PathParam(..., description="spoke hostname", examples=["spoke5"])):
+    """What decommissioning releases (LAN, router-id, WAN/tunnel prefixes) and what each headend loses (port, TunnelN, BGP neighbour), with capacity after."""
     problems, det = spokes.removal_plan(name)
     return {"problems": problems, "details": det}
 
 
-@app.post("/api/runs")
-def start_run(body: dict):
+@app.post("/api/runs", tags=["runs"], summary="Start a pipeline run", response_model=S.Run, response_model_exclude_none=True, status_code=200,
+          responses={409: {"description": "a run is already in progress"}, 422: {"description": "validation problems ({detail: {problems: [...]}})"}})
+def start_run(body: S.RunRequest):
+    """Runs execute one at a time in the background. Modes:
+
+    * **deploy** – `intent` → save → Nautobot seed → render NAC → terraform plan → apply → Golden Config → tests
+    * **plan** – the same, stopping after terraform plan (nothing pushed)
+    * **test** – Robot Framework suite only
+    * **spoke** – `spoke` (a SpokeSpec): register in lab.conf, create + boot the VM, bootstrap, onboard, add to the intent, then the deploy pipeline (hub + spoke in one apply)
+    * **hub** – `hub` (a HubSpec): same for a new headend, linked to every spoke
+    * **remove** – `spoke.name`: power off, Nautobot clean-up, intent/lab.conf, terraform state, apply on the headends, delete the VM, Golden Config, tests
+    """
+    body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
     if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub or remove")
     spoke = None
@@ -443,9 +476,10 @@ def start_run(body: dict):
     return run.to_dict(with_log=False)
 
 
-@app.post("/api/runs/{run_id}/resume")
-def resume_run(run_id: str):
-    """Start a new run that keeps the successful steps of a failed/interrupted run and redoes the rest."""
+@app.post("/api/runs/{run_id}/resume", tags=["runs"], summary="Resume a failed or interrupted run", response_model=S.Run, response_model_exclude_none=True,
+          responses={404: {"description": "no such run"}, 409: {"description": "run not failed/interrupted, or another run is in progress"}})
+def resume_run(run_id: str = PathParam(..., description="id of the failed / interrupted run")):
+    """Starts a new run that keeps the successful steps of the given run and redoes everything from the failed step on."""
     old = runs.get(run_id); d = old.to_dict() if old else (json.loads((RUNS_DIR / f"{run_id}.json").read_text()) if (RUNS_DIR / f"{run_id}.json").exists() else None)
     if d is None: raise HTTPException(404, "no such run")
     if d["status"] not in ("failed", "interrupted"): raise HTTPException(409, f"run is {d['status']}")
@@ -474,7 +508,7 @@ def mark_interrupted():
             d["status"], d["error"], d["finished"] = "interrupted", "interrupted: the portal was restarted", time.time(); f.write_text(json.dumps(d, indent=1))
 
 
-@app.get("/api/runs")
+@app.get("/api/runs", tags=["runs"], summary="Recent runs (newest first, without logs)", response_model=list[S.Run], response_model_exclude_none=True)
 def list_runs():
     items = [r.to_dict(with_log=False) for r in runs.values()]
     seen = {r["id"] for r in items}
@@ -486,8 +520,9 @@ def list_runs():
     return sorted(items, key=lambda r: r["started"], reverse=True)[:30]
 
 
-@app.get("/api/runs/{run_id}")
-def get_run(run_id: str, since: int = 0):
+@app.get("/api/runs/{run_id}", tags=["runs"], summary="Run status, steps, log and test report", response_model=S.Run, response_model_exclude_none=True,
+         responses={404: {"description": "no such run"}})
+def get_run(run_id: str = PathParam(..., description="run id"), since: int = Query(0, description="return log lines from this offset (for incremental polling)")):
     run = runs.get(run_id)
     if run:
         d = run.to_dict(); d["log"] = d["log"][since:]; d["log_offset"] = since; return d

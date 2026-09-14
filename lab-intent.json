@@ -39,7 +39,6 @@
       "ipsec_profile": "VPN-IPSEC"
     }
   },
-  "psk": "cisco123",
   "devices": [
     {
       "name": "east-headend",
@@ -48,7 +47,11 @@
       "asn": 65200,
       "router_id": "10.255.1.1",
       "lan": "192.168.11.0/24",
-      "comments": ""
+      "comments": "",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "EA-HQ",
+      "contact": "noc-east@lab.local"
     },
     {
       "name": "central-headend",
@@ -57,7 +60,11 @@
       "asn": 65204,
       "router_id": "10.255.1.5",
       "lan": "192.168.14.0/24",
-      "comments": ""
+      "comments": "",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "CE-HQ",
+      "contact": "noc-central@lab.local"
     },
     {
       "name": "west-headend",
@@ -66,7 +73,11 @@
       "asn": 65206,
       "router_id": "10.255.1.7",
       "lan": "192.168.16.0/24",
-      "comments": ""
+      "comments": "",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "WE-HQ",
+      "contact": "noc-west@lab.local"
     },
     {
       "name": "spoke1",
@@ -75,7 +86,12 @@
       "asn": 65201,
       "router_id": "10.255.1.2",
       "lan": "192.168.12.0/24",
-      "comments": ""
+      "comments": "",
+      "psk": "nPqLMT9KlKvTVkwbRkxj9oTe",
+      "region": "East",
+      "site": "branch-1",
+      "site_code": "EA-1",
+      "contact": "noc-east@lab.local"
     },
     {
       "name": "spoke2",
@@ -84,7 +100,12 @@
       "asn": 65202,
       "router_id": "10.255.1.3",
       "lan": "192.168.23.0/24",
-      "comments": "branch 2 - LAN renumbered via portal"
+      "comments": "branch 2 - LAN renumbered via portal",
+      "psk": "7Dqu11eNUIWIx5OAWpA5nPzv",
+      "region": "Central",
+      "site": "branch-2",
+      "site_code": "CE-2",
+      "contact": "noc-central@lab.local"
     },
     {
       "name": "spoke3",
@@ -93,7 +114,12 @@
       "asn": 65203,
       "router_id": "10.255.1.4",
       "lan": "192.168.13.0/24",
-      "comments": "This is B2B customer #3.  Connection to their California data center."
+      "comments": "This is B2B customer #3.  Connection to their California data center.",
+      "psk": "lnytgPFb6IhXRBXRgB5WPCmB",
+      "region": "West",
+      "site": "branch-3",
+      "site_code": "WE-3",
+      "contact": "noc-west@lab.local"
     },
     {
       "name": "spoke4",
@@ -102,7 +128,12 @@
       "asn": 65205,
       "router_id": "10.255.1.6",
       "lan": "192.168.15.0/24",
-      "comments": ""
+      "comments": "",
+      "psk": "TEACJ8LoJ4W47wgG02e0GHHu",
+      "region": "Central",
+      "site": "branch-4",
+      "site_code": "CE-4",
+      "contact": "noc-central@lab.local"
     },
     {
       "name": "spoke5",
@@ -111,7 +142,12 @@
       "asn": 65207,
       "router_id": "10.255.1.8",
       "lan": "192.168.17.0/24",
-      "comments": ""
+      "comments": "",
+      "psk": "fGr8IUqF4m2weOwXXFsDSZaK",
+      "region": "West",
+      "site": "branch-5",
+      "site_code": "WE-5",
+      "contact": "noc-west@lab.local"
     }
   ],
   "links": [
@@ -296,5 +332,10 @@
   "domain_name": "lab.local",
   "capacity": {
     "tunnels_per_headend": 50
-  }
+  },
+  "regions": [
+    "East",
+    "Central",
+    "West"
+  ]
 }

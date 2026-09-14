@@ -14,7 +14,9 @@ HUBS = sorted(d["name"] for d in _I["devices"] if d["role"] == "hub")
 HUB = HUBS[0]
 SPOKES = sorted(d["name"] for d in _I["devices"] if d["role"] == "spoke")
 ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
-                       "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1])} for d in _I["devices"]}
+                       "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1]), "region": d.get("region"), "site": d.get("site"),
+                       "site_code": d.get("site_code", ""), "psk": d.get("psk")} for d in _I["devices"]}
+REGIONS = _I.get("regions", [])
 ROUTER_NAMES = list(ROUTERS)
 ROUTER_GQL = ", ".join(f'"{n}"' for n in ROUTER_NAMES)   # for GraphQL device:[...] filters
 

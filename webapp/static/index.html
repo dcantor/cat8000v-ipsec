@@ -72,7 +72,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a></nav>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span></div>
 </header>
 <main>
@@ -90,7 +90,8 @@
 
     <div class="card">
       <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
-      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
+      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th>PSK</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="hint">Each spoke has its own pre-shared key (used on all of its tunnels); headends hold one keyring entry per spoke. Keys live in the intent and the NAC device group, never in Nautobot.</div>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
     </div>
 
@@ -121,7 +122,7 @@
         <div><label>Dead peer detection</label><select id="profile.dpd.enabled"><option value="true">enabled (on-demand)</option><option value="false">disabled</option></select></div>
         <div><label>DPD interval (s)</label><input id="profile.dpd.interval" type="number" min="10" max="3600"></div>
         <div><label>DPD retries</label><input id="profile.dpd.retries" type="number" min="2" max="60"></div>
-        <div><label>Pre-shared key <span class="hint">(stays in NAC data, never in Nautobot)</span></label><input id="psk" type="password" autocomplete="off"></div>
+        <div><label>Pre-shared keys</label><div class="hint" style="padding-top:6px">one per spoke — see the Routers table</div></div>
       </div>
       <details style="margin-top:8px"><summary>Cisco object names</summary>
         <div class="grid g4" style="margin-top:8px">
@@ -187,7 +188,7 @@
   <div class="card">
     <h2>Tunnels <small>model from Nautobot's VPN app · live state from the headend (IKEv2 SA, VTI, eBGP, ESP counters)</small></h2>
     <div class="wide"><table id="inv-tunnels"><thead><tr>
-      <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
+      <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Region / site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
     </tr></thead><tbody></tbody></table></div>
   </div>
 </section>
@@ -201,9 +202,11 @@
       <div class="grid g3">
         <div><label>Hostname</label><input id="sp.name"></div>
         <div><label>Management IP <span class="suggest">suggested</span></label><input id="sp.mgmt_ip"></div>
-        <div><label>Site</label><input id="sp.site" readonly></div>
-        <div><label>Site code</label><input id="sp.site_code" readonly></div>
-        <div><label>Contact</label><input id="sp.contact" readonly></div>
+        <div><label>Region <span class="hint">(picks the nearest headends)</span></label><select id="sp.region"></select></div>
+        <div><label>Site (branch location in Nautobot) <span class="suggest">suggested</span></label><input id="sp.site"></div>
+        <div><label>Site code</label><input id="sp.site_code"></div>
+        <div><label>Contact</label><input id="sp.contact"></div>
+        <div><label>Pre-shared key <span class="suggest">generated</span></label><input id="sp.psk" autocomplete="off"></div>
         <div><label>Change ticket</label><input id="sp.change_ticket"></div>
         <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
         <div style="grid-column:1/-1"><label>Connect to headends <span class="hint">(select at least 2 — every spoke gets redundant headends)</span></label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
@@ -272,8 +275,12 @@ function fill(I) {
   I.devices.forEach((d, i) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input data-dev="${i}" data-k="name" value="${d.name}"></td><td><input readonly value="${d.mgmt_ip}"></td>
-      <td><span class="pill ${d.role}">${d.role}</span></td><td><input data-dev="${i}" data-k="asn" type="number" value="${d.asn}"></td>
+      <td><span class="pill ${d.role}">${d.role}</span></td>
+      <td><select data-dev="${i}" data-k="region">${(I.regions || []).map(r => `<option ${r === d.region ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td>
+      <td><input data-dev="${i}" data-k="site" value="${esc(d.site || '')}" style="min-width:90px"></td>
+      <td><input data-dev="${i}" data-k="asn" type="number" value="${d.asn}"></td>
       <td><input data-dev="${i}" data-k="router_id" value="${d.router_id}"></td><td><input data-dev="${i}" data-k="lan" value="${d.lan}"></td>
+      <td>${d.role === 'spoke' ? `<input data-dev="${i}" data-k="psk" type="password" value="${esc(d.psk || '')}" style="min-width:90px" title="pre-shared key (click to reveal)" onfocus="this.type='text'" onblur="this.type='password'">` : ''}</td>
       <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>
       <td>${d.role === 'spoke' ? `<button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
     tb.appendChild(tr);
@@ -309,7 +316,7 @@ function collect() {
     set(I, el.id, v);
   });
   const names = {};
-  document.querySelectorAll('#devices input[data-dev]').forEach(el => {
+  document.querySelectorAll('#devices input[data-dev], #devices select[data-dev]').forEach(el => {
     const d = I.devices[el.dataset.dev]; const old = d.name;
     d[el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim();
     if (el.dataset.k === 'name') names[base.devices[el.dataset.dev].name] = d.name;
@@ -385,20 +392,30 @@ $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
 // ---- add-spoke wizard -------------------------------------------------------
 let wizStep = 1, wizSpec = null;
-const SP_FIELDS = ['name', 'mgmt_ip', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'site_code', 'contact', 'psk', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
 const LINK_FIELDS = ['hub_port', 'spoke_port', 'wan_prefix', 'tunnel_id', 'tunnel_prefix'];
 async function openWizard() {
   const r = await fetch('/api/spokes/suggest'); if (!r.ok) { alert('cannot suggest a spoke: ' + (await r.text())); return; }
   wizSpec = await r.json();
+  $('sp.region').innerHTML = wizSpec.context.regions.map(r => `<option>${esc(r)}</option>`).join('');
   SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = wizSpec[k] ?? ''; });
-  $('sp.site').value = base.site.name; $('sp.site_code').value = wizSpec.site_code; $('sp.contact').value = wizSpec.contact; $('sp.ram').textContent = wizSpec.ram_mib;
-  $('sp.hubs').innerHTML = wizSpec.context.hubs.map(h => `<label style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:13px"><input type="checkbox" class="sp-hub" value="${esc(h.name)}" checked style="width:auto"> ${esc(h.name)} <span class="hint">(${h.tunnels}/${h.capacity} tunnels, free ports ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'})</span></label>`).join('');
+  $('sp.ram').textContent = wizSpec.ram_mib; renderHubChoices();
   wizStep = 1; showWiz(); $('wiz').hidden = false;
+}
+function renderHubChoices() {
+  const near = wizSpec.context.nearest || [];
+  $('sp.hubs').innerHTML = wizSpec.context.hubs.map(h => `<label style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:13px"><input type="checkbox" class="sp-hub" value="${esc(h.name)}" ${near.includes(h.name) ? 'checked' : ''} style="width:auto"> ${esc(h.name)} <span class="hint">(${esc(h.region || '?')}${near.includes(h.name) ? ', nearest' : ''} · ${h.tunnels}/${h.capacity} tunnels · free ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'})</span></label>`).join('');
+}
+async function regionChanged() {
+  // re-suggest for the chosen region: nearest headends, site code/contact defaults (keeps what the user typed elsewhere)
+  const r = await (await fetch('/api/spokes/suggest?region=' + encodeURIComponent($('sp.region').value))).json();
+  wizSpec.context = r.context; wizSpec.links = r.links; renderHubChoices();
+  $('sp.site_code').value = r.site_code; $('sp.contact').value = r.contact;
 }
 function selectedHubs() { return [...document.querySelectorAll('.sp-hub:checked')].map(c => c.value); }
 async function refreshLinks() {
   // re-suggest link allocations for the chosen hubs (keeps identity fields the user typed)
-  const r = await (await fetch('/api/spokes/suggest?hubs=' + encodeURIComponent(selectedHubs().join(',')))).json();
+  const r = await (await fetch('/api/spokes/suggest?hubs=' + encodeURIComponent(selectedHubs().join(',')) + '&region=' + encodeURIComponent($('sp.region').value))).json();
   wizSpec.links = r.links;
   $('sp.links').innerHTML = r.links.map((l, i) => `<tr><td><span class="pill hub">${esc(l.hub)}</span><div class="hint">free: ${l.hub_ports_free.map(p => 'Gi' + p).join(', ')}</div></td>
     <td><input data-l="${i}" data-k="hub_port" type="number" value="${l.hub_port}"></td><td><input data-l="${i}" data-k="spoke_port" type="number" value="${l.spoke_port}"></td>
@@ -435,6 +452,8 @@ async function wizNext() {
         ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}</dd>`).join('')}
         <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
         <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)})</dd>
+        <dt>Location</dt><dd>${esc(spec.region)} / ${esc(spec.site)} (${esc(spec.site_code || '-')}, ${esc(spec.contact || '-')})</dd>
+        <dt>PSK</dt><dd>unique to this spoke (${spec.psk.length} chars) — added to every headend's keyring</dd>
         <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
       ${h.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)} (coordinated configuration)</h4><dl>
         <dt>WAN</dt><dd>${esc(l.interface)} ${esc(l.wan_ip)} (no shutdown, cdp)</dd><dt>Tunnel</dt><dd>${esc(l.tunnel)} ${esc(l.tunnel_ip)} → dest ${esc(l.tunnel_destination)}, ipsec profile</dd>
@@ -446,7 +465,7 @@ async function wizNext() {
   if (!r.ok) { const e = await r.json(); $('wiz-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
   const run = await r.json(); $('wiz').hidden = true; watch(run.id);
 }
-$('add-spoke').onclick = openWizard; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
+$('add-spoke').onclick = openWizard; $('sp.region').onchange = regionChanged; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
 $('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
 
 // ---- remove-spoke dialog ------------------------------------------------------
@@ -498,14 +517,14 @@ async function loadInventory(refresh) {
   renderTopology(d);
   $('inv-capacity').innerHTML = d.headends.map(h => {
     const pct = h.capacity ? Math.min(100, 100 * h.tunnels / h.capacity) : 0, cls = pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
-    return `<div class="cap"><div style="width:220px"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b><div class="hint">${esc(h.location || '')} · ${esc(h.mgmt_ip || '')}${h.live && h.live.error ? '<div class="msg">live: ' + esc(h.live.error) + '</div>' : ''}</div></div>
+    return `<div class="cap"><div style="width:220px"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b><div class="hint">${esc(h.region || '')} / ${esc(h.location || '')} · ${esc(h.mgmt_ip || '')}${h.live && h.live.error ? '<div class="msg">live: ' + esc(h.live.error) + '</div>' : ''}</div></div>
       <div class="bar"><div class="${cls}" style="width:${pct}%"></div></div>
       <div style="width:260px"><b>${h.tunnels} / ${h.capacity}</b> tunnels (${h.utilisation}% used) · ${h.free} free · ${h.tunnels_up} up</div></div>`; }).join('') || '<div class="hint">no headends</div>';
   $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
     <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
     <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
     <td>${esc(t.vpn)}</td><td>${esc(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
-    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${esc(t.spoke || '')}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_site || '')}</td>
+    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${esc(t.spoke || '')}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_region || '')}<div class="hint">${esc(t.spoke_site || '')}</div></td>
     <td>${esc(t.headend_tunnel_ip)}<div class="hint">${esc(t.spoke_tunnel_ip)}</div></td>
     <td>${esc(t.encapsulation || '')}<div class="hint">${esc(t.profile || '')}: ${esc(t.ike)}, ${esc(t.ipsec)}, DPD ${esc(t.dpd)}</div></td>
     <td class="${l.ike_status === 'READY' ? 'test-pass' : 'test-fail'}">${esc(l.ike_status || '')}</td><td>${age(l.ike_active_s)}</td>
@@ -519,11 +538,15 @@ async function loadInventory(refresh) {
 $('inv-refresh').onclick = () => loadInventory(true);
 
 function renderTopology(d) {
-  const hubs = d.devices.filter(x => x.role === 'hub'), spokes = d.devices.filter(x => x.role === 'spoke');
+  // group by region (in the order the regions appear across the devices, hubs first)
+  const regions = [...new Set(d.devices.map(x => x.region || 'unassigned'))];
+  const byRegion = (list) => [...list].sort((a, b) => regions.indexOf(a.region || 'unassigned') - regions.indexOf(b.region || 'unassigned') || a.name.localeCompare(b.name));
+  const hubs = byRegion(d.devices.filter(x => x.role === 'hub')), spokes = byRegion(d.devices.filter(x => x.role === 'spoke'));
   // node box: four text lines; width from the longest line (≈6.4px per character at 11px, 7.8px at 13px bold)
-  const lines = n => [`${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`, `S/N ${n.serial || '-'}`];
+  const lines = n => [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
   const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
-  const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 40, BOT = 370, H = BOT + NH + 30;
+  const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, BOT = 386, H = BOT + NH + 30;
+  const REGION_COLORS = ['#fff7ed', '#eff6ff', '#f0fdf4', '#fdf4ff', '#f8fafc'];
   const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length) + 60);
   const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
   place(hubs, TOP); place(spokes, BOT);
@@ -547,9 +570,18 @@ function renderTopology(d) {
     return `<a href="${t.url}" target="_blank"><path class="edge ${cls}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(tip)}</title></path>
       <g class="elabel" transform="translate(${lx},${ly})"><rect x="${-(label.length * 6.2 + 12) / 2}" y="-9" width="${label.length * 6.2 + 12}" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
   }).join('');
+  // a tinted band per region behind the spoke row (and the hub row), labelled
+  const bands = [];
+  for (const [row, list, y] of [['hubs', hubs, TOP], ['spokes', spokes, BOT]]) {
+    regions.forEach((r, ri) => {
+      const members = list.filter(n => (n.region || 'unassigned') === r); if (!members.length) return;
+      const xs = members.map(n => pos[n.name].x); const x0 = Math.min(...xs) - 12, x1 = Math.max(...xs) + NW + 12;
+      bands.push(`<rect x="${x0}" y="${y - 24}" width="${x1 - x0}" height="${NH + 34}" rx="10" fill="${REGION_COLORS[ri % REGION_COLORS.length]}" stroke="#e2e8f0"></rect><text x="${x0 + 8}" y="${y - 9}" fill="#64748b" font-size="11" font-weight="600">${esc(r)}</text>`);
+    });
+  }
   $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <text x="12" y="${TOP - 12}" class="sub" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 12}" fill="#6b7684" font-size="11">spokes</text>
-    ${edges}${hubs.map(node).join('')}${spokes.map(node).join('')}</svg>`;
+    <text x="12" y="${TOP - 30}" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 30}" fill="#6b7684" font-size="11">spokes · grouped by region</text>
+    ${bands.join('')}${edges}${hubs.map(node).join('')}${spokes.map(node).join('')}</svg>`;
 }
 
 load(); loadRuns(); showView();
