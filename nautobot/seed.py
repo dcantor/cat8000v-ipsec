@@ -83,6 +83,9 @@ if "vpn_tunnel_capacity" not in cf:   # the headend constraint: how many tunnels
     cf["vpn_tunnel_capacity"] = nb.extras.custom_fields.create(key="vpn_tunnel_capacity", label="VPN tunnel capacity", type="integer", content_types=["dcim.device"],
                                                                grouping="VPN", description="Maximum IPsec tunnels this headend may terminate"); created.append("custom-field:vpn_tunnel_capacity")
 CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
+if "firewall_bandwidth_mbps" not in cf:   # the second headend constraint: the bandwidth of the firewall in front of it
+    cf["firewall_bandwidth_mbps"] = nb.extras.custom_fields.create(key="firewall_bandwidth_mbps", label="Firewall bandwidth (Mbps)", type="integer", content_types=["dcim.device"],
+                                                                   grouping="VPN", description="Throughput the firewall can carry; every tunnel commits bandwidth_per_tunnel_mbps of it"); created.append("custom-field:firewall_bandwidth_mbps")
 ensure(site, description=I["site"]["description"]); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
 
 # site hierarchy: lab site -> Region -> Branch (one location per branch/HQ; site_code + contact live on the branch)
@@ -129,7 +132,8 @@ for key, pol in (("vpn_phase1_policies", p1), ("vpn_phase2_policies", p2)):
                        text=True, check=True, capture_output=True); created.append(f"{prof.name} <- {pol.name} (via nbshell)")
 vpn = nb.vpn.vpns.get(vpn_profile=prof.id) or get_or_create(nb.vpn.vpns, {"name": I["vpn"]["name"]}, service_type="ipsec", status=active.id, vpn_profile=prof.id)
 ensure(vpn, name=I["vpn"]["name"], description=I["vpn"]["description"], service_type="ipsec", status=active.id, vpn_profile=prof.id,
-       extra_attributes={"routing": "eBGP over the tunnel /30s", "nac_device_group": "IPSEC_VPN", "change_ticket": I["vpn"].get("change_ticket", ""), "owner": I["vpn"].get("owner", "")})
+       extra_attributes={"routing": "eBGP over the tunnel /30s", "nac_device_group": "IPSEC_VPN", "change_ticket": I["vpn"].get("change_ticket", ""), "owner": I["vpn"].get("owner", ""),
+                         "bandwidth_per_tunnel_mbps": int((I.get("capacity") or {}).get("bandwidth_per_tunnel_mbps") or 0)})
 
 # clean-up of the interface-based tunnel model this lab used before the core VPN app (custom fields, relationships)
 def drop_legacy_tunnel_model(t):
@@ -216,7 +220,7 @@ if FIREWALLS:
         if dev is None:
             dev = nb.dcim.devices.create(name=f, device_type=dtype.id, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id); created.append(f"device:{f}")
         ensure(dev, name=f, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id, comments=d.get("comments", ""))
-        ensure_cf(dev, contact=DEV[d["hub"]].get("contact", ""))
+        ensure_cf(dev, contact=DEV[d["hub"]].get("contact", ""), firewall_bandwidth_mbps=int(d.get("bandwidth_mbps") or 0))
         idx = NODES[d["mgmt_ip"]]["idx"]
         e0 = ensure_iface(dev, "eth0", "1000base-t", "OOB management", mgmt_only=True, mac=f"{OUI}:{idx:02x}:00")
         ensure_ip(e0, f"{d['mgmt_ip']}/24", primary_of=dev)

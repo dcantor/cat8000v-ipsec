@@ -67,7 +67,7 @@ def from_lab_conf():
         "devices": devices, "links": links, "tunnels": tunnels,
         "oob": {"vrf": "Mgmt-vrf", "gateway": "10.2.0.1", "acl": "MGMT-ACCESS", "prefix": "10.2.0.0/24"},
         "domain_name": "lab.local",
-        "capacity": {"tunnels_per_headend": 50},
+        "capacity": {"tunnels_per_headend": 50, "bandwidth_per_tunnel_mbps": 8},
     }
 
 
@@ -84,6 +84,7 @@ def upgrade(I):
     for t in I.get("tunnels", []):
         t.setdefault("hub", hubs[0] if hubs else None)
     I.setdefault("regions", list(DEFAULT_REGIONS))
+    I.setdefault("capacity", {}); I["capacity"].setdefault("tunnels_per_headend", 50); I["capacity"].setdefault("bandwidth_per_tunnel_mbps", 8)
     hub_of = {d["name"]: d for d in I.get("devices", [])}
     for i, d in enumerate(I.get("devices", [])):
         if d.get("role") == "spoke" and not d.get("psk"): d["psk"] = I.get("psk") or new_psk()   # legacy shared key, else a fresh one
@@ -118,6 +119,25 @@ def wan_path(I, hub, spoke):
     return None, fw
 
 
+def headend_capacity(I, hub):
+    """Both constraints for a headend: tunnel slots and the bandwidth of its firewall (each tunnel commits a fixed share).
+    The aggregate is the binding one — the higher utilisation — and the effective free slots the smaller remainder."""
+    cap = I.get("capacity") or {}; slots = int(cap.get("tunnels_per_headend") or 50); per = int(cap.get("bandwidth_per_tunnel_mbps") or 0)
+    used = sum(1 for t in I.get("tunnels") or [] if t.get("hub") == hub)
+    fw = next((d for d in I["devices"] if d.get("role") == "firewall" and d.get("hub") == hub), None)
+    bw = int(fw.get("bandwidth_mbps") or 0) if fw else None
+    out = {"tunnels": used, "tunnel_capacity": slots, "tunnel_free": max(slots - used, 0), "tunnel_utilisation": round(100 * used / slots, 1) if slots else None,
+           "firewall": fw["name"] if fw else None, "bandwidth_mbps": bw, "bandwidth_per_tunnel_mbps": per, "bandwidth_used_mbps": used * per}
+    if bw and per:
+        out.update({"bandwidth_free_mbps": max(bw - used * per, 0), "bandwidth_utilisation": round(100 * used * per / bw, 1), "bandwidth_tunnel_capacity": bw // per})
+        out["binding"] = "bandwidth" if out["bandwidth_utilisation"] >= out["tunnel_utilisation"] else "tunnels"
+        out["aggregate_utilisation"] = max(out["bandwidth_utilisation"], out["tunnel_utilisation"])
+        out["effective_capacity"] = min(slots, out["bandwidth_tunnel_capacity"]); out["effective_free"] = min(out["tunnel_free"], (bw - used * per) // per if per else out["tunnel_free"])
+    else:
+        out.update({"binding": "tunnels", "aggregate_utilisation": out["tunnel_utilisation"], "effective_capacity": slots, "effective_free": out["tunnel_free"]})
+    return out
+
+
 def region_distance(I, a, b):
     """How far apart two regions are (their distance in the ordered regions list)."""
     r = I.get("regions") or DEFAULT_REGIONS
@@ -146,6 +166,7 @@ def validate(intent):
             try: ipaddress.IPv4Address(d.get("mgmt_ip", ""))
             except ValueError: errs.append(f"{d.get('name')}: mgmt_ip {d.get('mgmt_ip')!r} is not an IPv4 address")
             if d.get("hub") not in {x["name"] for x in devs if x.get("role") == "hub"}: errs.append(f"{d.get('name')}: hub {d.get('hub')!r} is not a headend")
+            if not (1 <= int(d.get("bandwidth_mbps") or 0) <= 100000): errs.append(f"{d.get('name')}: bandwidth_mbps must be 1..100000")
             continue
         for f in ("mgmt_ip", "router_id"):
             try: ipaddress.IPv4Address(d.get(f, ""))
@@ -196,6 +217,9 @@ def validate(intent):
     for h in hubs:
         n = sum(1 for t in tunnels if t.get("hub") == h)
         if n > cap: errs.append(f"headend capacity exceeded on {h}: {n} tunnels > {cap}")
+        hc = headend_capacity(intent, h)
+        if hc.get("bandwidth_mbps") and hc["bandwidth_used_mbps"] > hc["bandwidth_mbps"]:
+            errs.append(f"firewall bandwidth exceeded on {h}: {n} tunnels x {hc['bandwidth_per_tunnel_mbps']} Mbps = {hc['bandwidth_used_mbps']} > {hc['bandwidth_mbps']} Mbps ({hc['firewall']})")
     for t in tunnels:
         if not (1 <= int(t.get("id") or 0) <= 2147483647): errs.append(f"tunnel to {t.get('spoke')}: bad id")
         try:

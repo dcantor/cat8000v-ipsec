@@ -80,6 +80,7 @@ def suggest(hubs=None, region=None):
             "links": suggest_links(I, f, ident["name"], chosen),
             "context": {"hubs": [{"name": h["name"], "region": h.get("region"), "distance": intent_mod.region_distance(I, region, h.get("region")),
                                   "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"], "edge": f["edge_of"](h["name"]),
+                                  "headroom": intent_mod.headend_capacity(I, h["name"]),
                                   "ports_free": sorted(set(f["edge_ports"](h["name"])) - f["ports_used"](f["edge_of"](h["name"])))} for h in f["hubs"]],
                         "regions": I["regions"], "nearest": intent_mod.nearest_hubs(I, region, MIN_HEADENDS), "capacity": f["capacity"], "spoke_ports": list(f["spoke_ports"])}}
 
@@ -142,7 +143,10 @@ def validate_links(links, I, f, name):
         if sp not in f["spoke_ports"]: errs.append(f"{h}: spoke port must be Gi{f['spoke_ports'][0]}..Gi{f['spoke_ports'][-1]}")
         elif sp in sports: errs.append(f"spoke port Gi{sp} used for two hubs")
         sports.add(sp)
-        if sum(1 for t in I["tunnels"] if t["hub"] == h) + 1 > f["capacity"]: errs.append(f"headend capacity exceeded on {h}")
+        hc = intent_mod.headend_capacity(I, h)
+        if hc["tunnels"] + 1 > hc["tunnel_capacity"]: errs.append(f"headend capacity exceeded on {h}")
+        if hc.get("bandwidth_mbps") and hc["bandwidth_used_mbps"] + hc["bandwidth_per_tunnel_mbps"] > hc["bandwidth_mbps"]:
+            errs.append(f"firewall bandwidth exceeded on {h}: {hc['firewall']} carries {hc['bandwidth_used_mbps']} of {hc['bandwidth_mbps']} Mbps, a tunnel needs {hc['bandwidth_per_tunnel_mbps']} Mbps")
         tid = int(l.get("tunnel_id") or 0)
         if tid in tids or not (1 <= tid <= 2147483647): errs.append(f"{h}: tunnel id {tid} in use or out of range")
         tids.add(tid)
@@ -231,7 +235,8 @@ def hub_changes(spec):
                     "spoke": {"interface": f"GigabitEthernet{l['spoke_port']}", "wan_ip": f"{wan[1]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[1]}/30",
                               "tunnel_destination": hub_wan or str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {asn_of.get(l['hub'], '?')}",
                               "route": f"ip route {hub_wan}/32 -> {wan[0]} ({fw})" if fw else None},
-                    "tunnels_after": sum(1 for t in I["tunnels"] if t["hub"] == l["hub"]) + 1, "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)})
+                    "tunnels_after": sum(1 for t in I["tunnels"] if t["hub"] == l["hub"]) + 1, "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50),
+                    "headroom": intent_mod.headend_capacity(I, l["hub"])})
     return {"links": out, "loopbacks": f"Loopback0 {spec['router_id']}/32, Loopback10 {str(list(ipaddress.IPv4Network(spec['lan']).hosts())[0])}/24"}
 
 
@@ -263,7 +268,8 @@ def removal_plan(name):
         link, fw = intent_mod.wan_path(I, t["hub"], name); edge = fw or t["hub"]
         hub_port = (link["a_port"] if link["a"] == edge else link["b_port"]) if link else None
         links.append({"hub": t["hub"], "firewall": fw, "hub_port": hub_port, "hub_interface": (f"{edge} {'eth' if fw else 'GigabitEthernet'}{hub_port}") if hub_port else None, "wan_prefix": link["prefix"] if link else None,
-                      "tunnel_id": t["id"], "tunnel": f"Tunnel{t['id']}", "tunnel_prefix": t["prefix"], "tunnels_after": sum(1 for x in I["tunnels"] if x["hub"] == t["hub"]) - 1, "capacity": cap})
+                      "tunnel_id": t["id"], "tunnel": f"Tunnel{t['id']}", "tunnel_prefix": t["prefix"], "tunnels_after": sum(1 for x in I["tunnels"] if x["hub"] == t["hub"]) - 1, "capacity": cap,
+                      "headroom": intent_mod.headend_capacity(I, t["hub"])})
     return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "lan": dev["lan"], "router_id": dev["router_id"], "links": links}
 
 

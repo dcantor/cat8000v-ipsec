@@ -96,12 +96,17 @@ intent, then runs the pipeline — **headends and the new spoke are configured i
 
 ### Inventory page
 KPIs, a **rendered topology** (headends on top, spokes grouped by region, one line per tunnel coloured
-by live health, tooltips, links into Nautobot), **headend capacity** (50 tunnels per headend, modelled in
-Nautobot as a custom field and enforced at deploy time), and a per-tunnel report joining the Nautobot
-model with live IKEv2 / VTI / eBGP / ESP state collected from the headends; **Export CSV**.
+by live health, tooltips, links into Nautobot), **headend capacity** with two constraints per headend —
+tunnels terminated (50, custom field `vpn_tunnel_capacity` on the hub) and the **bandwidth of the firewall
+in front of it** (custom field `firewall_bandwidth_mbps`: fw-east 40, fw-central 50, fw-west 90 Mbps; every
+tunnel commits `capacity.bandwidth_per_tunnel_mbps` = 8 Mbps) — with an **aggregate** bar showing the tighter
+of the two and the effective free slots (this is what the wizard and the deploy validation check), and a
+per-tunnel report joining the Nautobot model with live IKEv2 / VTI / eBGP / ESP state collected from the
+headends; **Export CSV** (tunnels plus a headend-capacity block).
 
 ![Inventory](docs/screenshots/portal-inventory.png)
 ![Topology](docs/screenshots/portal-topology.png)
+![Headend capacity](docs/screenshots/portal-capacity.png)
 ![Tunnel report](docs/screenshots/portal-tunnels.png)
 
 ### REST API
@@ -125,7 +130,7 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
 | What | Where in Nautobot |
 |---|---|
 | Sites | location hierarchy **lab site → Region (East/Central/West) → Branch** (`east-hq`, `branch-1`…) with `site_code` / `contact` custom fields; regions are ordered so the wizard can pick the nearest headends |
-| Routers | devices discovered by the Device Onboarding app (model, serial, platform, mgmt IP); roles `vpn-hub` / `vpn-spoke`; `vpn_tunnel_capacity` custom field on headends |
+| Routers | devices discovered by the Device Onboarding app (model, serial, platform, mgmt IP); roles `vpn-hub` / `vpn-spoke` / `vpn-firewall`; `vpn_tunnel_capacity` custom field on headends, `firewall_bandwidth_mbps` on firewalls |
 | Physical | interfaces (spoke-facing ports, loopbacks, `TunnelN` of type *tunnel*), **cables** for the p2p WAN links, prefixes with roles (`wan-p2p`, `vpn-tunnel`, `site-lan`, `loopback`), `bgp:advertise` tags |
 | VPN | the **core VPN app**: Phase 1 / Phase 2 policies → profile `VPN-IPSEC` → VPN `IPSEC_VPN` → one **VPN Tunnel per (headend, spoke)** with hub/spoke **endpoints** (source interface + address, tunnel interface, protected prefixes); Cisco object names in the profile's `extra_options` |
 | Routing | nautobot-bgp-models: one AS per site, a routing instance per router, an eBGP peering per tunnel |

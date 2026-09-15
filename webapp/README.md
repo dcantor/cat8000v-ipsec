@@ -63,10 +63,19 @@ session state / prefixes / up-time, ESP encaps/decaps/error counters, interface 
 plus protected prefixes, crypto profile, change ticket and owner. Health = IKE READY + VTI up +
 BGP Established.
 
-**Capacity constraint**: each headend may terminate at most *N* tunnels (default 50). *N* is stored
-in Nautobot as the custom field `vpn_tunnel_capacity` on the hub device (seeded from
-`capacity.tunnels_per_headend` in the intent); the page shows used / free / utilisation per headend
-and the deploy pipeline refuses an intent that exceeds it.
+**Capacity constraints**: two per headend, and the aggregate is the tighter of them.
+
+1. *Tunnels*: each headend may terminate at most *N* tunnels (default 50), stored in Nautobot as the
+   custom field `vpn_tunnel_capacity` on the hub device (seeded from `capacity.tunnels_per_headend`).
+2. *Firewall bandwidth*: the VyOS firewall in front of the headend carries a static `bandwidth_mbps`
+   (intent → custom field `firewall_bandwidth_mbps` on the firewall device; fw-east 40, fw-central 50,
+   fw-west 90). Every tunnel commits `capacity.bandwidth_per_tunnel_mbps` (8, stored in the VPN's
+   `extra_attributes`), so a firewall bounds the headend at `bandwidth_mbps // 8` tunnels.
+
+The page shows three bars per headend (tunnels, firewall bandwidth, aggregate) plus which constraint is
+binding and the effective free slots; the wizard uses the effective number, `spokes.validate` and
+`intent.validate` refuse a spoke that would overrun either constraint. The computation lives in
+`intent.headend_capacity()` and is mirrored by `inventory.py` from the Nautobot data (test 07 checks they agree).
 
 Live data is cached for 30 s; *Refresh live data* re-collects. *Export CSV* downloads the table
 (`GET /api/vpn-inventory.csv`; JSON at `GET /api/vpn-inventory`).

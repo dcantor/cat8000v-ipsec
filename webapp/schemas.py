@@ -84,7 +84,8 @@ class Intent(BaseModel):
     tunnels: list[Tunnel]
     oob: dict[str, str]
     domain_name: str = "lab.local"
-    capacity: dict[str, int] = Field(default={"tunnels_per_headend": 50})
+    capacity: dict[str, int] = Field(default={"tunnels_per_headend": 50, "bandwidth_per_tunnel_mbps": 8},
+                                     description="tunnels_per_headend: slots per headend; bandwidth_per_tunnel_mbps: what every tunnel commits of its headend firewall's bandwidth_mbps")
 
 
 class RunOptions(BaseModel):

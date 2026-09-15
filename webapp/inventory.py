@@ -31,7 +31,7 @@ class Inventory:
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
         """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
-        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } }
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
                  interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
         import sys; from pathlib import Path
@@ -43,7 +43,7 @@ class Inventory:
             ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
             out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
                         "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
-                        "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"], "asn": (ri.get("autonomous_system") or {}).get("asn"),
+                        "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"], "bandwidth_mbps": d.get("cf_firewall_bandwidth_mbps"), "asn": (ri.get("autonomous_system") or {}).get("asn"),
                         "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
                         "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
         # a firewall's headend: the device on the far side of its eth1 (from Nautobot cables)
@@ -90,9 +90,22 @@ class Inventory:
                     "spoke_tunnel_ip": ((spoke.get("tunnel_interface") or {}).get("ip_addresses") or [{}])[0].get("address", ""),
                     "protected_prefixes": [p["prefix"] for p in spoke.get("protected_prefixes") or []],
                     "live": None})
+        devices = self.devices()
+        per = max((int((v["extra_attributes"] or {}).get("bandwidth_per_tunnel_mbps") or 0) for v in data["data"]["vpns"]), default=0)
         for h in headends.values():
             h["free"] = max(h["capacity"] - h["tunnels"], 0); h["utilisation"] = round(100 * h["tunnels"] / h["capacity"], 1) if h["capacity"] else None
-        return {"tunnels": sorted(tunnels, key=lambda x: (x["headend"], int(x["tunnel_id"] or 0))), "headends": sorted(headends.values(), key=lambda h: h["name"]), "devices": self.devices(),
+            # second constraint: the firewall in front of the headend and its bandwidth; each tunnel commits `per` Mbps
+            fw = next((d for d in devices if d["role"] == "firewall" and d.get("hub") == h["name"]), None)
+            bw = int(fw["bandwidth_mbps"] or 0) if fw and fw.get("bandwidth_mbps") else None
+            h.update({"firewall": fw["name"] if fw else None, "bandwidth_mbps": bw, "bandwidth_per_tunnel_mbps": per, "bandwidth_used_mbps": h["tunnels"] * per})
+            if bw and per:
+                h["bandwidth_free_mbps"] = max(bw - h["tunnels"] * per, 0); h["bandwidth_utilisation"] = round(100 * h["tunnels"] * per / bw, 1); h["bandwidth_tunnel_capacity"] = bw // per
+                h["binding"] = "bandwidth" if h["bandwidth_utilisation"] >= (h["utilisation"] or 0) else "tunnels"
+                h["aggregate_utilisation"] = max(h["bandwidth_utilisation"], h["utilisation"] or 0)
+                h["effective_capacity"] = min(h["capacity"], h["bandwidth_tunnel_capacity"]); h["effective_free"] = min(h["free"], (bw - h["tunnels"] * per) // per)
+            else:
+                h.update({"binding": "tunnels", "aggregate_utilisation": h["utilisation"], "effective_capacity": h["capacity"], "effective_free": h["free"]})
+        return {"tunnels": sorted(tunnels, key=lambda x: (x["headend"], int(x["tunnel_id"] or 0))), "headends": sorted(headends.values(), key=lambda h: h["name"]), "devices": devices,
                 "vpns": [{"name": v["name"], "status": (v["status"] or {}).get("name"), "tunnels": len(v["vpn_tunnels"]), "profile": (v["vpn_profile"] or {}).get("name"),
                           "url": f"{self.public_url}/vpn/vpns/{v['id']}/"} for v in data["data"]["vpns"]]}
 
@@ -165,7 +178,9 @@ class Inventory:
             inv["summary"] = {"vpns": len(inv["vpns"]), "tunnels": len(inv["tunnels"]), "headends": len(inv["headends"]),
                               "tunnels_up": sum(1 for t in inv["tunnels"] if (t["live"] or {}).get("health") == "up"),
                               "tunnels_down": sum(1 for t in inv["tunnels"] if (t["live"] or {}).get("health") in ("down", "degraded")),
-                              "capacity": sum(h["capacity"] for h in inv["headends"]), "free": sum(h["free"] for h in inv["headends"])}
+                              "capacity": sum(h["capacity"] for h in inv["headends"]), "free": sum(h["free"] for h in inv["headends"]),
+                              "effective_capacity": sum(h.get("effective_capacity") or 0 for h in inv["headends"]), "effective_free": sum(h.get("effective_free") or 0 for h in inv["headends"]),
+                              "bandwidth_mbps": sum(h.get("bandwidth_mbps") or 0 for h in inv["headends"]), "bandwidth_used_mbps": sum(h.get("bandwidth_used_mbps") or 0 for h in inv["headends"])}
             self._cache = inv
             return inv
 
@@ -189,4 +204,11 @@ def to_csv(inv):
             for k in key.split("."): v = (v or {}).get(k) if isinstance(v, dict) else None
             row.append(" ".join(v) if isinstance(v, list) else ("" if v is None else v))
         w.writerow(row)
+    # headend capacity block: tunnels and firewall bandwidth, and the aggregate (the tighter of the two)
+    w.writerow([]); w.writerow(["headend", "tunnels", "tunnel_capacity", "tunnel_free", "tunnel_utilisation_pct", "firewall", "bandwidth_mbps", "bandwidth_per_tunnel_mbps", "bandwidth_used_mbps",
+                                "bandwidth_free_mbps", "bandwidth_utilisation_pct", "binding_constraint", "aggregate_utilisation_pct", "effective_capacity", "effective_free"])
+    for h in inv["headends"]:
+        w.writerow([h["name"], h["tunnels"], h["capacity"], h["free"], h["utilisation"], h.get("firewall") or "", h.get("bandwidth_mbps") or "", h.get("bandwidth_per_tunnel_mbps") or "",
+                    h.get("bandwidth_used_mbps") or "", h.get("bandwidth_free_mbps", ""), h.get("bandwidth_utilisation", ""), h.get("binding") or "", h.get("aggregate_utilisation", ""),
+                    h.get("effective_capacity", ""), h.get("effective_free", "")])
     return buf.getvalue()

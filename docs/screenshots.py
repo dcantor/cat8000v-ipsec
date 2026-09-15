@@ -30,6 +30,7 @@ with sync_playwright() as pw:
     page.goto(f"{PORTAL}/#inventory"); page.wait_for_function("document.querySelectorAll('#inv-tunnels tbody tr').length > 0", timeout=180000); time.sleep(1.5)
     page.screenshot(path=str(OUT / "portal-inventory.png"))
     page.evaluate("document.getElementById('inv-topo').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-topology.png"))
+    page.evaluate("document.getElementById('inv-capacity').parentElement.scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-capacity.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 560})
     page.evaluate("document.getElementById('inv-tunnels').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-tunnels.png"))
     page.goto(f"{PORTAL}/docs"); time.sleep(3); page.screenshot(path=str(OUT / "portal-swagger.png"))
     # ---- Nautobot ----

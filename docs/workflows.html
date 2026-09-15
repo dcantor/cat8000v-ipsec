@@ -117,7 +117,8 @@ flowchart LR
 <tr><td><code>links[]</code></td><td>a (headend), a_port, b (spoke), b_port, prefix /30 — must equal the physical wiring in <code>lab.conf</code></td><td>validation (wiring check), seed (cables, WAN prefixes/IPs, interface enabled/description)</td></tr>
 <tr><td><code>tunnels[]</code></td><td>id (TunnelN both ends), hub, spoke, prefix /30 — one per (hub, spoke)</td><td>seed (TunnelN interfaces, VPN tunnel + endpoints, BGP peering), tests</td></tr>
 <tr><td><code>oob</code>, <code>domain_name</code></td><td>Mgmt-vrf, gateway, ACL name, OOB prefix; domain</td><td>seed (config context) → renderer/Golden Config via <code>config_context</code></td></tr>
-<tr><td><code>capacity</code></td><td>tunnels_per_headend (50)</td><td>validation (per hub), seed (custom field on hubs), inventory bars, wizard</td></tr>
+<tr><td><code>capacity</code></td><td>tunnels_per_headend (50), bandwidth_per_tunnel_mbps (8)</td><td>validation (per hub: tunnel count and firewall bandwidth), seed (custom field on hubs; VPN extra_attributes), inventory bars (tunnels, firewall bandwidth, aggregate), wizard</td></tr>
+<tr><td><code>devices[].bandwidth_mbps</code> (firewalls)</td><td>static throughput of the firewall in front of a headend</td><td>seed (custom field <code>firewall_bandwidth_mbps</code>), <code>intent.headend_capacity()</code>, inventory, wizard</td></tr>
 </table>
 
 <div class="landscape"><h2>4. Workflow: Deploy / Dry run</h2>
@@ -285,7 +286,7 @@ flowchart TD
   C --&gt; D["for each headend in parallel: SSH show commands"]
   D --&gt; E["join per tunnel on far source IP / tunnel interface / tunnel IP"]
   E --&gt; F["health: IKE READY ∧ VTI up ∧ BGP Established → up; IKE READY only → degraded; else down"]
-  F --&gt; G["capacity per headend = tunnels / cf_vpn_tunnel_capacity"]
+  F --&gt; G["capacity per headend: tunnels / cf_vpn_tunnel_capacity and (tunnels × bandwidth_per_tunnel_mbps) / cf_firewall_bandwidth_mbps of its firewall; aggregate = tighter of the two, effective free slots"]
   G --&gt; Z
 </pre></div>
 </div>
@@ -305,7 +306,7 @@ flowchart TD
   G{"links == physical wiring, translated to the current hostnames?"} --&gt; H{"link prefixes strict /30, none reused"}
   H --&gt; I{"tunnel ids unique · one tunnel per hub/spoke pair · hub is a hub · spoke is a spoke · a link exists between them"}
   I --&gt; J{"every spoke has ≥ 1 tunnel"}
-  J --&gt; K{"tunnels per hub ≤ capacity.tunnels_per_headend"}
+  J --&gt; K{"tunnels per hub ≤ capacity.tunnels_per_headend and tunnels × bandwidth_per_tunnel_mbps ≤ firewall bandwidth_mbps"}
   K --&gt; L{"tunnel prefixes strict /30, unused"}
 </pre><pre class="mermaid">
 flowchart TD

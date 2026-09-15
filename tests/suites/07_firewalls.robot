@@ -51,6 +51,30 @@ Only IKEv2, ESP and ICMP cross the firewall; the tunnels actually carry ESP thro
         Should Match Regexp    ${rules}    (?m)^default\\s+drop
     END
 
+Firewall bandwidth is modelled in Nautobot and bounds the headend capacity together with the tunnel count
+    [Documentation]    Every firewall carries custom field firewall_bandwidth_mbps (from the intent); the VPN records the per-tunnel
+    ...    commitment; the portal's inventory reports both constraints per headend and the aggregate is the tighter of the two.
+    ${vpn}=    Nautobot Get    vpn/vpns/    name=${VPN_NAME}
+    ${per}=    Set Variable    ${vpn}[results][0][extra_attributes][bandwidth_per_tunnel_mbps]
+    Should Be True    ${per} > 0    msg=the VPN must record what each tunnel commits of the firewall bandwidth
+    FOR    ${f}    IN    @{FIREWALLS}
+        ${d}=    Nautobot Get    dcim/devices/    name=${f}
+        Should Be Equal As Integers    ${d}[results][0][custom_fields][firewall_bandwidth_mbps]    ${FIREWALLS}[${f}][bandwidth_mbps]    msg=${f} bandwidth in Nautobot differs from the intent
+    END
+    ${inv}=    Portal Inventory
+    FOR    ${h}    IN    @{HUBS}
+        ${hc}=    Set Variable    ${HEADEND_CAPACITY}[${h}]
+        ${row}=    Evaluate    [x for x in $inv["headends"] if x["name"] == $h][0]
+        Should Be Equal As Integers    ${row}[tunnels]    ${hc}[tunnels]
+        Should Be Equal As Integers    ${row}[bandwidth_mbps]    ${hc}[bandwidth_mbps]
+        Should Be Equal As Integers    ${row}[bandwidth_used_mbps]    ${hc}[bandwidth_used_mbps]
+        Should Be Equal    ${row}[binding]    ${hc}[binding]
+        Should Be Equal As Integers    ${row}[effective_free]    ${hc}[effective_free]
+        ${agg}=    Evaluate    max($row["utilisation"], $row["bandwidth_utilisation"])
+        Should Be Equal As Numbers    ${row}[aggregate_utilisation]    ${agg}    msg=${h}: aggregate must be the tighter of the two constraints
+        Should Be True    ${row}[bandwidth_used_mbps] <= ${row}[bandwidth_mbps]    msg=${h}: tunnels commit more than the firewall carries
+    END
+
 Non-VPN traffic from a spoke to a headend is dropped by the firewall
     ${t}=    Set Variable    ${TUNNEL_LIST}[0]
     ${before}=    Drop Counter    ${t}[firewall]

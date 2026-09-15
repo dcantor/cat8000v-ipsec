@@ -117,6 +117,14 @@ class LabLib:
         return r.returncode
 
     @keyword
+    def portal_inventory(self):
+        """The VPN Provisioning Portal's inventory (model only, no live collection) as parsed JSON."""
+        url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090")
+        r = requests.get(f"{url}/api/vpn-inventory", params={"live": "false"}, timeout=120)
+        logger.info(f"GET {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
+        return r.json()
+
+    @keyword
     def render_nac_check(self):
         url, token = self._nautobot()
         r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_nac.py"), "--check"], capture_output=True, text=True,

@@ -19,7 +19,9 @@ ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["as
 REGIONS = _I.get("regions", [])
 ROUTER_NAMES = list(ROUTERS)
 # VyOS firewalls: one per headend, between the headend (eth1) and its spokes (eth2..)
-FIREWALLS = {d["name"]: {"host": d["mgmt_ip"], "hub": d["hub"], "region": d.get("region"), "site": d.get("site")} for d in _I["devices"] if d["role"] == "firewall"}
+FIREWALLS = {d["name"]: {"host": d["mgmt_ip"], "hub": d["hub"], "region": d.get("region"), "site": d.get("site"), "bandwidth_mbps": int(d.get("bandwidth_mbps") or 0)} for d in _I["devices"] if d["role"] == "firewall"}
+# both headend constraints as the intent computes them (tunnels per headend, firewall bandwidth); the portal must agree
+HEADEND_CAPACITY = {h: intent_mod.headend_capacity(_I, h) for h in HUBS}
 FIREWALL_OF = {v["hub"]: k for k, v in FIREWALLS.items()}
 VYOS_USERNAME = os.environ.get("VYOS_USERNAME", "vyos"); VYOS_PASSWORD = os.environ.get("VYOS_PASSWORD", "vyos")
 ROUTER_GQL = ", ".join(f'"{n}"' for n in ROUTER_NAMES)   # for GraphQL device:[...] filters

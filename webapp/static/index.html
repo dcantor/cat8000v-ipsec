@@ -18,6 +18,10 @@
   .kpi .n { font-size:26px; font-weight:600; line-height:1.1 } .kpi .l { color:var(--muted); font-size:12px }
   .kpi.warn .n { color:var(--warn) } .kpi.bad .n { color:var(--bad) } .kpi.ok .n { color:var(--ok) }
   .cap { display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--line) } .cap .bar { flex:1; margin:0; height:14px } .cap .bar > div.warn { background:var(--warn) }
+  .cap-head { padding:10px 0; border-bottom:1px solid var(--line) } .cap-title { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px }
+  .cap.sub { padding:4px 0; border:0 } .cap-l { width:230px; padding-left:14px; color:var(--muted); font-size:13px } .cap-r { width:360px; font-size:13px }
+  .cap.agg .cap-l, .cap.agg .cap-r { color:var(--ink) } .cap.agg .bar { height:16px; outline:1px solid var(--ink); outline-offset:1px }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:var(--ink) } .pill.warn { background:#fef3c7 } .pill.fail { background:#fee2e2 }
   .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
   .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
   .num { text-align:right; font-variant-numeric:tabular-nums }
@@ -182,7 +186,7 @@
     <div id="inv-topo" style="overflow-x:auto"></div>
   </div>
   <div class="card">
-    <h2>Headend capacity <small>constraint: tunnels terminated per headend (custom field <code>vpn_tunnel_capacity</code> on the hub, checked at deploy time)</small></h2>
+    <h2>Headend capacity <small>two constraints per headend: tunnels terminated (custom field <code>vpn_tunnel_capacity</code> on the hub) and the bandwidth of the firewall in front of it (custom field <code>firewall_bandwidth_mbps</code>; every tunnel commits <span id="inv-per-tunnel">?</span> Mbps). The aggregate is the tighter of the two, and it is what the wizard checks.</small></h2>
     <div id="inv-capacity"></div>
   </div>
   <div class="card">
@@ -404,7 +408,7 @@ async function openWizard() {
 }
 function renderHubChoices() {
   const near = wizSpec.context.nearest || [];
-  $('sp.hubs').innerHTML = wizSpec.context.hubs.map(h => `<label style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:13px"><input type="checkbox" class="sp-hub" value="${esc(h.name)}" ${near.includes(h.name) ? 'checked' : ''} style="width:auto"> ${esc(h.name)} <span class="hint">(${esc(h.region || '?')}${near.includes(h.name) ? ', nearest' : ''} · ${h.tunnels}/${h.capacity} tunnels · free ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'})</span></label>`).join('');
+  $('sp.hubs').innerHTML = wizSpec.context.hubs.map(h => `<label style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:13px"><input type="checkbox" class="sp-hub" value="${esc(h.name)}" ${near.includes(h.name) ? 'checked' : ''} style="width:auto"> ${esc(h.name)} <span class="hint">(${esc(h.region || '?')}${near.includes(h.name) ? ', nearest' : ''} · ${h.tunnels}/${h.capacity} tunnels · ${h.headroom && h.headroom.bandwidth_mbps ? `${esc(h.headroom.firewall)} ${h.headroom.bandwidth_used_mbps}/${h.headroom.bandwidth_mbps} Mbps · ` : ''}<b>${h.headroom ? h.headroom.effective_free : h.capacity - h.tunnels} free</b> · ports ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'})</span></label>`).join('');
 }
 async function regionChanged() {
   // re-suggest for the chosen region: nearest headends, site code/contact defaults (keeps what the user typed elsewhere)
@@ -420,7 +424,8 @@ async function refreshLinks() {
   $('sp.links').innerHTML = r.links.map((l, i) => `<tr><td><span class="pill hub">${esc(l.hub)}</span><div class="hint">${l.edge !== l.hub ? 'via firewall ' + esc(l.edge) + ' · ' : ''}free: ${l.hub_ports_free.map(p => (l.edge !== l.hub ? 'eth' : 'Gi') + p).join(', ')}</div></td>
     <td><input data-l="${i}" data-k="hub_port" type="number" value="${l.hub_port}"></td><td><input data-l="${i}" data-k="spoke_port" type="number" value="${l.spoke_port}"></td>
     <td><input data-l="${i}" data-k="wan_prefix" value="${l.wan_prefix}"></td><td><input data-l="${i}" data-k="tunnel_id" type="number" value="${l.tunnel_id}"></td><td><input data-l="${i}" data-k="tunnel_prefix" value="${l.tunnel_prefix}"></td></tr>`).join('');
-  $('sp.cap').textContent = r.links.map(l => `${l.hub}: ${l.hub_tunnels + 1} of ${wizSpec.context.capacity} tunnels after`).join(' · ');
+  $('sp.cap').textContent = r.links.map(l => { const hc = (wizSpec.context.hubs.find(h => h.name === l.hub) || {}).headroom;
+    return `${l.hub}: ${l.hub_tunnels + 1} of ${wizSpec.context.capacity} tunnels after` + (hc && hc.bandwidth_mbps ? `, ${hc.bandwidth_used_mbps + hc.bandwidth_per_tunnel_mbps} of ${hc.bandwidth_mbps} Mbps on ${hc.firewall} (${hc.effective_free} slot${hc.effective_free === 1 ? '' : 's'} before)` : ''); }).join(' · ');
 }
 function wizCollect() {
   const spec = { ...wizSpec };
@@ -460,7 +465,7 @@ async function wizNext() {
         <dt>Tunnel</dt><dd>${esc(l.tunnel)} ${esc(l.tunnel_ip)} · source ${esc(l.tunnel_source)} → dest ${esc(l.tunnel_destination)}, ipsec profile</dd>
         ${l.hub_route ? `<dt>Route</dt><dd>${esc(l.hub_route)}</dd>` : ''}
         <dt>eBGP</dt><dd>neighbor ${esc(l.bgp_neighbor)}</dd><dt>Nautobot</dt><dd>cable ${esc(l.interface)} ↔ ${esc(l.spoke.interface)}, VPN tunnel ${esc(l.hub)}-${esc(spec.name)}, endpoints, peering</dd>
-        <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after provisioning</dd></dl></div>`).join('')}`;
+        <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after provisioning${l.headroom && l.headroom.bandwidth_mbps ? ` · ${l.headroom.bandwidth_used_mbps + l.headroom.bandwidth_per_tunnel_mbps} / ${l.headroom.bandwidth_mbps} Mbps on ${esc(l.headroom.firewall)} (${l.headroom.effective_free - 1} aggregate slots left)` : ''}</dd></dl></div>`).join('')}`;
     wizStep = 3; showWiz(); return;
   }
   const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'spoke', spoke: spec, options: { golden: $('opt.golden').checked, test: $('opt.test').checked } }) });
@@ -483,7 +488,7 @@ async function openRemove(name) {
     ${d.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)}${l.firewall ? ' + ' + esc(l.firewall) : ''} (coordinated clean-up)</h4><dl>
       <dt>Tunnel</dt><dd>${esc(l.tunnel || '-')} removed (Terraform destroy)${l.firewall ? ', static route removed' : ''}</dd><dt>${l.firewall ? 'Firewall port' : 'WAN'}</dt><dd>${esc(l.hub_interface || '-')} address removed, port disabled and freed</dd>
       <dt>eBGP</dt><dd>neighbour for AS ${esc(d.asn)} removed</dd><dt>Nautobot</dt><dd>VPN tunnel ${esc(l.hub)}-${esc(d.name)}, hub endpoint, cable, peering</dd>
-      <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after removal</dd></dl></div>`).join('')}</div>
+      <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after removal${l.headroom && l.headroom.bandwidth_mbps ? ` · ${l.headroom.bandwidth_used_mbps - l.headroom.bandwidth_per_tunnel_mbps} / ${l.headroom.bandwidth_mbps} Mbps on ${esc(l.headroom.firewall)} (${l.headroom.effective_free + 1} aggregate slots after)` : ''}</dd></dl></div>`).join('')}</div>
     <div class="hint" style="margin-top:10px">Order: power off → Nautobot clean-up → intent/lab.conf → seed/render → forget the spoke in Terraform state → plan/apply on the hub → Golden Config → tests → delete the VM.</div>`;
 }
 $('rm-cancel').onclick = () => { $('rm').hidden = true; };
@@ -514,14 +519,24 @@ async function loadInventory(refresh) {
   $('inv-generated').textContent = 'collected ' + new Date(d.generated * 1000).toLocaleString();
   $('inv-kpis').innerHTML = [
     ['VPN services', s.vpns, ''], ['Tunnels', s.tunnels, ''], ['Tunnels up', s.tunnels_up, s.tunnels_up === s.tunnels ? 'ok' : 'warn'], ['Tunnels down / degraded', s.tunnels_down, s.tunnels_down ? 'bad' : 'ok'],
-    ['Headends', s.headends, ''], ['Total capacity', s.capacity, ''], ['Free tunnel slots', s.free, s.free === 0 ? 'bad' : (s.free <= 5 ? 'warn' : 'ok')]
+    ['Headends', s.headends, ''], ['Tunnel slots', `${s.capacity - s.free} / ${s.capacity}`, ''], ['Firewall bandwidth (Mbps)', `${s.bandwidth_used_mbps} / ${s.bandwidth_mbps}`, s.bandwidth_used_mbps >= s.bandwidth_mbps ? 'bad' : ''],
+    ['Aggregate free slots', s.effective_free, s.effective_free === 0 ? 'bad' : (s.effective_free <= 5 ? 'warn' : 'ok')]
   ].map(([l, n, c]) => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  $('inv-per-tunnel').textContent = (d.headends.find(h => h.bandwidth_per_tunnel_mbps) || {}).bandwidth_per_tunnel_mbps || '?';
   renderTopology(d);
+  const barCls = pct => pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
+  const bar = (label, used, total, unit, pct, note, bold) => `<div class="cap sub${bold ? ' agg' : ''}"><div class="cap-l">${label}</div>
+      <div class="bar"><div class="${barCls(pct)}" style="width:${Math.min(100, pct)}%"></div></div>
+      <div class="cap-r"><b>${used} / ${total}</b> ${unit} (${pct}%)${note ? ' · ' + note : ''}</div></div>`;
   $('inv-capacity').innerHTML = d.headends.map(h => {
-    const pct = h.capacity ? Math.min(100, 100 * h.tunnels / h.capacity) : 0, cls = pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
-    return `<div class="cap"><div style="width:220px"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b><div class="hint">${esc(h.region || '')} / ${esc(h.location || '')} · ${esc(h.mgmt_ip || '')}${h.live && h.live.error ? '<div class="msg">live: ' + esc(h.live.error) + '</div>' : ''}</div></div>
-      <div class="bar"><div class="${cls}" style="width:${pct}%"></div></div>
-      <div style="width:260px"><b>${h.tunnels} / ${h.capacity}</b> tunnels (${h.utilisation}% used) · ${h.free} free · ${h.tunnels_up} up</div></div>`; }).join('') || '<div class="hint">no headends</div>';
+    const bw = h.bandwidth_mbps ? bar(`firewall bandwidth <span class="hint">(${esc(h.firewall)})</span>`, h.bandwidth_used_mbps, h.bandwidth_mbps, 'Mbps', h.bandwidth_utilisation,
+                                    `${h.bandwidth_free_mbps} Mbps free = ${h.bandwidth_tunnel_capacity - h.tunnels} more tunnel${h.bandwidth_tunnel_capacity - h.tunnels === 1 ? '' : 's'} at ${h.bandwidth_per_tunnel_mbps} Mbps each`)
+                                : `<div class="cap sub"><div class="cap-l">firewall bandwidth</div><div class="hint">no firewall with a bandwidth in front of this headend</div></div>`;
+    return `<div class="cap-head"><div class="cap-title"><b><a href="${h.url}" target="_blank">${esc(h.name)}</a></b> <span class="hint">${esc(h.region || '')} / ${esc(h.location || '')} · ${esc(h.mgmt_ip || '')} · ${h.tunnels_up} up${h.live && h.live.error ? ' · <span class="msg">live: ' + esc(h.live.error) + '</span>' : ''}</span>
+        <span class="pill ${barCls(h.aggregate_utilisation)}">binding: ${h.binding}</span></div>
+      ${bar('tunnels', h.tunnels, h.capacity, 'tunnels', h.utilisation, `${h.free} free`)}
+      ${bw}
+      ${bar('aggregate', h.tunnels, h.effective_capacity, 'tunnels', h.aggregate_utilisation, `<b>${h.effective_free}</b> free slot${h.effective_free === 1 ? '' : 's'} once both constraints apply`, true)}</div>`; }).join('') || '<div class="hint">no headends</div>';
   $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
     <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
     <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
@@ -545,7 +560,7 @@ function renderTopology(d) {
   const byRegion = (list) => [...list].sort((a, b) => regions.indexOf(a.region || 'unassigned') - regions.indexOf(b.region || 'unassigned') || a.name.localeCompare(b.name));
   const hubs = byRegion(d.devices.filter(x => x.role === 'hub')), spokes = byRegion(d.devices.filter(x => x.role === 'spoke')), fws = d.devices.filter(x => x.role === 'firewall');
   // node box: four text lines; width from the longest line (≈6.4px per character at 11px, 7.8px at 13px bold)
-  const lines = n => n.role === 'firewall' ? [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · VyOS`, `in front of ${n.hub || '?'}`] : [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
+  const lines = n => n.role === 'firewall' ? [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · VyOS${n.bandwidth_mbps ? ' · ' + n.bandwidth_mbps + ' Mbps' : ''}`, `in front of ${n.hub || '?'}`] : [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
   const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
   const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, MID = fws.length ? 230 : null, BOT = fws.length ? 430 : 386, H = BOT + NH + 30;
   const REGION_COLORS = ['#fff7ed', '#eff6ff', '#f0fdf4', '#fdf4ff', '#f8fafc'];
