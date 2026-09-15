@@ -8,11 +8,11 @@
       name type description enabled mgmt_only
       vrf { name }
       ip_addresses { address parent { role { name } prefix tags { name } } }
-      connected_interface { name device { name } }
+      connected_interface { name device { name role { name } } ip_addresses { address } }
       vpn_tunnel_endpoints_tunnel {
         role { name }
         source_interface { name }
-        source_ipaddress { address }
+        source_ipaddress { address interfaces { name connected_interface { ip_addresses { address } } } }
         protected_prefixes { prefix }
         vpn_profile {
           name keepalive_enabled keepalive_interval keepalive_retries nat_traversal extra_options

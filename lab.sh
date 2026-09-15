@@ -30,7 +30,9 @@ ensure_networks() {
 # ---- point-to-point WAN links (UDP tunnels between VMs) --------------------
 port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }           # UDP port a node's NIC listens on when it anchors a link
 port_far()   { echo $(( UDP_BASE + 10000 + NODE_IDX[$1]*100 + $2 )); }   # ...and the port it sends to (the other end listens there)
-node_ports() { if [[ "${ROLE[$1]}" == "hub" ]]; then seq 2 $((1 + HUB_PORTS)); else seq 2 $((1 + SPOKE_PORTS)); fi; }
+node_ports() { case "${ROLE[$1]}" in hub) seq 2 $((1 + HUB_PORTS));; firewall) seq 1 "$FW_PORTS";; *) seq 2 $((1 + SPOKE_PORTS));; esac; }
+is_fw()      { [[ "${ROLE[$1]}" == "firewall" ]]; }
+port_name()  { if is_fw "$1"; then echo "eth$2"; else echo "GigabitEthernet$2"; fi; }
 mac()        { printf '%s:%02x:%02x' "$MAC_OUI" "${NODE_IDX[$1]}" "$2"; }
 link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
   local me="$1:$2" l a b pfx
@@ -113,7 +115,7 @@ X
     if [[ -n "$peer" ]]; then
       read -r pn pp pfx end <<<"$peer"
       [[ "$end" == "2" ]] && { local="$(port_far "$pn" "$pp")"; remote="$(port_local "$pn" "$pp")"; }
-      echo "    <!-- GigabitEthernet$p: $(wan_ip "$n" "$p") <-> $pn Gi$pp ($pfx) -->"
+      echo "    <!-- GigabitEthernet$p: $(wan_ip "$n" "$p") <-> $pn $(port_name "$pn" "$pp") ($pfx) -->"
     else
       echo "    <!-- GigabitEthernet$p: unwired -->"
     fi
@@ -136,8 +138,78 @@ X
 X
 }
 
+firewall_xml() {   # VyOS: virtio disk, eth0 = OOB mgmt, eth1 = headend side, eth2.. = spokes (same UDP anchoring as routers)
+  local n="$1" d; d="$(node_dir "$n")"
+  cat <<X
+<domain type='kvm'>
+  <name>$n</name>
+  <uuid>$(uuidgen --sha1 --namespace @dns --name "cat8000v-ipsec.${MGMT_IP[$n]}")</uuid>
+  <title>VyOS firewall ($n)</title>
+  <memory unit='MiB'>$VYOS_RAM_MIB</memory>
+  <vcpu placement='static'>$VYOS_VCPU</vcpu>
+  <cpu mode='host-passthrough' check='none'/>
+  <os><type arch='x86_64' machine='pc'>hvm</type><boot dev='hd'/></os>
+  <features><acpi/><apic/></features>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff><on_reboot>restart</on_reboot><on_crash>restart</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='$d/disk.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <!-- eth0: OOB management ${MGMT_IP[$n]} -->
+    <interface type='network'>
+      <mac address='$(mac "$n" 0)'/>
+      <source network='$OOB_NET'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+X
+  local p peer remote local
+  for p in $(node_ports "$n"); do
+    peer="$(link_peer "$n" "$p")"; local="$(port_local "$n" "$p")"; remote="$(port_far "$n" "$p")"
+    if [[ -n "$peer" ]]; then
+      read -r pn pp pfx end <<<"$peer"
+      [[ "$end" == "2" ]] && { local="$(port_far "$pn" "$pp")"; remote="$(port_local "$pn" "$pp")"; }
+      echo "    <!-- eth$p: $(wan_ip "$n" "$p") <-> $pn $(port_name "$pn" "$pp") ($pfx) -->"
+    else
+      echo "    <!-- eth$p: unwired -->"
+    fi
+    cat <<X
+    <interface type='udp'>
+      <mac address='$(mac "$n" "$p")'/>
+      <source address='127.0.0.1' port='$remote'>
+        <local address='127.0.0.1' port='$local'/>
+      </source>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='$(printf '0x%02x' $((3+p)))' function='0x0'/>
+    </interface>
+X
+  done
+  serial_xml "$n"
+  cat <<X
+    <memballoon model='none'/>
+  </devices>
+</domain>
+X
+}
+
 # ---- build ------------------------------------------------------------------
+build_firewall() {
+  local n="$1" d; d="$(node_dir "$n")"
+  [[ -f "$VYOS_IMAGE" ]] || die "VyOS base image not found: $VYOS_IMAGE (see tools/vyos_install.py)"
+  if [[ ! -f "$d/disk.qcow2" ]]; then
+    echo "[$n] creating overlay disk on $(basename "$VYOS_IMAGE")"
+    qemu-img create -q -f qcow2 -b "$VYOS_IMAGE" -F qcow2 "$d/disk.qcow2"
+  fi
+  firewall_xml "$n" > "$d/domain.xml"
+  V define "$d/domain.xml" >/dev/null
+}
+
 build_router() {
+  if is_fw "$1"; then build_firewall "$1"; return; fi
   local n="$1" d; d="$(node_dir "$n")"
   [[ -f "$C8000V_IMAGE" ]] || die "base image not found: $C8000V_IMAGE"
   if [[ ! -f "$d/disk.qcow2" ]]; then
@@ -175,6 +247,7 @@ cmd_up() {
 cmd_down() {
   for n in $(nodes_or_all "$@"); do
     running "$n" || { echo "[$n] not running"; continue; }
+    if is_fw "$n"; then V shutdown "$n" >/dev/null; for _ in $(seq 20); do running "$n" || break; sleep 2; done; running "$n" && V destroy "$n" >/dev/null; echo "[$n] stopped"; continue; fi
     echo "[$n] saving config, then powering off"
     save_config "$n" || echo "[$n] warning: could not save config"
     V destroy "$n" >/dev/null; echo "[$n] stopped"
@@ -205,7 +278,7 @@ cmd_status() {
       "${MGMT_IP[$n]}" "${BGP_AS[$n]}" "${LAN[$n]}" "${CONSOLE_PORT[$n]}"
   done
   echo; echo "WAN links (point-to-point) and IPsec VTI tunnels:"
-  local l a b pfx t; for l in "${LINKS[@]}"; do read -r a b pfx <<<"$l"; echo "  ${a%%:*} Gi${a##*:} $(wan_ip "${a%%:*}" "${a##*:}")  <->  ${b%%:*} Gi${b##*:} $(wan_ip "${b%%:*}" "${b##*:}")   ($pfx)"; done
+  local l a b pfx t; for l in "${LINKS[@]}"; do read -r a b pfx <<<"$l"; echo "  ${a%%:*} $(port_name "${a%%:*}" "${a##*:}") $(wan_ip "${a%%:*}" "${a##*:}")  <->  ${b%%:*} $(port_name "${b%%:*}" "${b##*:}") $(wan_ip "${b%%:*}" "${b##*:}")   ($pfx)"; done
   for t in "${TUNNELS[@]}"; do read -r id hb sp pfx <<<"$t"; echo "  Tunnel$id: $hb <-> $sp  $pfx  (ipsec ipv4, IKEv2 PSK, eBGP)"; done
 }
 
@@ -220,8 +293,20 @@ cmd_ssh() {
   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "admin@${MGMT_IP[$n]}" "$@"
 }
 
+fw_ready() { timeout 8 bash -c "exec 3<>/dev/tcp/${MGMT_IP[$1]}/22" 2>/dev/null; }
+bootstrap_firewall() {   # VyOS day-0 over the serial console: hostname, eth0, ssh, LLDP (nodes/<fw>/vyos_config.txt)
+  local n="$1" d; d="$(node_dir "$n")"
+  echo "[$n] waiting for the VyOS login prompt..."
+  python3 "$LAB_DIR/tools/vyos_console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 600 >/dev/null
+  echo "[$n] applying day-0 config"
+  python3 "$LAB_DIR/tools/vyos_console.py" push 127.0.0.1 "${CONSOLE_PORT[$n]}" "$d/vyos_config.txt" >/dev/null
+  for _ in $(seq 30); do fw_ready "$n" && break; sleep 5; done
+  fw_ready "$n" && echo "[$n] ready: ssh vyos@${MGMT_IP[$n]} (vyos)" || echo "[$n] warning: SSH not answering yet"
+}
+
 cmd_bootstrap() {  # wait for boot, (re)apply day-0, generate SSH keys; then wait for RESTCONF
   for n in $(nodes_or_all "$@"); do
+    if is_fw "$n"; then bootstrap_firewall "$n"; continue; fi
     local d; d="$(node_dir "$n")"
     echo "[$n] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
     python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 1800 >/dev/null
@@ -248,8 +333,9 @@ PY
   done
 }
 
-cmd_wait() {       # block until RESTCONF answers on the given nodes (used after up)
+cmd_wait() {       # block until RESTCONF (routers) / SSH (firewalls) answers on the given nodes (used after up)
   for n in $(nodes_or_all "$@"); do
+    if is_fw "$n"; then for _ in $(seq 60); do fw_ready "$n" && break; sleep 5; done; fw_ready "$n" && echo "[$n] SSH ready" || echo "[$n] SSH NOT ready"; continue; fi
     for _ in $(seq 90); do restconf_ready "$n" && break; sleep 10; done
     restconf_ready "$n" && echo "[$n] RESTCONF ready" || echo "[$n] RESTCONF NOT ready"
   done
@@ -265,7 +351,7 @@ cmd_nac() {        # run terraform in nac/ with router credentials in the enviro
   IOSXE_USERNAME="$user" IOSXE_PASSWORD="$pass" terraform "$@"
   local rc=$?
   if [[ $rc -eq 0 && "${1:-}" == "apply" ]]; then
-    for n in "${ROUTERS[@]}"; do save_config "$n" && echo "[$n] running-config saved to startup-config" || echo "[$n] warning: save failed" >&2; done
+    for n in "${ROUTERS[@]}"; do is_fw "$n" && continue; save_config "$n" && echo "[$n] running-config saved to startup-config" || echo "[$n] warning: save failed" >&2; done
   fi
   return $rc
 }
@@ -283,10 +369,11 @@ cmd_nautobot() {
     onboard) nautobot_py onboard.py "$@" ;;        # discover r1-r3 (Sync Devices From Network)
     seed)    nautobot_py seed.py "$@" ;;           # load the DMVPN intent (idempotent)
     render)  nautobot_py render_nac.py "$@" ;;     # regenerate nac/data/devices.nac.yaml (--check to verify)
+    vyos)    nautobot_py render_vyos.py "$@" ;;      # render + push the VyOS firewalls from Nautobot (--check | --dry-run)
     golden)  GITEA_PASSWORD="$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@10.0.0.10 'grep ^GITEA_PASSWORD /opt/nautobot/.env | cut -d= -f2')" \
              nautobot_py golden_config.py "$@" ;;  # Golden Config scope/template for the routers + backup/intended/compliance
     token)   nautobot_token ;;
-    *) die "usage: lab.sh nautobot {onboard|seed|render [--check]|golden|token}" ;;
+    *) die "usage: lab.sh nautobot {onboard|seed|render [--check]|vyos [--check|--dry-run]|golden|token}" ;;
   esac
 }
 

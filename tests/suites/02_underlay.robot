@@ -1,5 +1,6 @@
 *** Settings ***
-Documentation     WAN underlay: a dedicated point-to-point /30 link from each hub to each of its spokes, CDP adjacency, loopbacks.
+Documentation     WAN underlay: each spoke has a point-to-point /30 link to its headend's firewall, each headend one link to its
+...               firewall; the headend WAN address is reached through the firewall (static routes); LLDP adjacency; loopbacks.
 Resource          ../resources/common.resource
 Suite Teardown    Suite Teardown Close Connections
 
@@ -12,12 +13,16 @@ WAN point-to-point interfaces are up with the modelled addresses
         Should Match Regexp    ${brief}    ${t}[spoke_if]\\s+${t}[spoke_wan]\\s+YES\\s+\\S+\\s+up\\s+up
     END
 
-Each spoke reaches its hub(s) across its own links and nothing else
+Each spoke reaches its headends' WAN addresses through the firewall, and nothing else
     FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${p}=    Show    ${t}[spoke]    ping ${t}[spoke_gw] source ${t}[spoke_if] repeat 3
+        Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${t}[spoke]: firewall side of its link unreachable
         ${p}=    Show    ${t}[spoke]    ping ${t}[hub_wan] source ${t}[spoke_if] repeat 3
-        Should Match Regexp    ${p}    Success rate is (100|66) percent
+        Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${t}[spoke]: ${t}[hub] WAN ${t}[hub_wan] unreachable via ${t}[firewall]
         ${p}=    Show    ${t}[hub]    ping ${t}[spoke_wan] source ${t}[hub_if] repeat 3
         Should Match Regexp    ${p}    Success rate is (100|66) percent
+        ${rt}=    Show    ${t}[spoke]    show ip route ${t}[hub_wan]
+        Should Match Regexp    ${rt}    (?s)Known via "static".*${t}[spoke_gw]    msg=${t}[spoke]: no static route to ${t}[hub] via the firewall
     END
     # the spokes' WAN addresses are not routed anywhere: a spoke must not reach another spoke's WAN directly
     ${a}=    Set Variable    ${SPOKE_TUNNELS}[${SPOKES}[0]][0]
@@ -25,9 +30,9 @@ Each spoke reaches its hub(s) across its own links and nothing else
     ${p}=    Show    ${SPOKES}[0]    ping ${b}[spoke_wan] source ${a}[spoke_if] repeat 2
     Should Contain    ${p}    Success rate is 0 percent
 
-CDP shows the hub on each spoke's WAN port and the spoke on the hub's port
+LLDP shows the firewall on each spoke's WAN port and on the headend's WAN port
     FOR    ${t}    IN    @{TUNNEL_LIST}
-        Wait Until Keyword Succeeds    90s    10s    Cdp Shows Link    ${t}
+        Wait Until Keyword Succeeds    120s    10s    Lldp Shows Link    ${t}
     END
 
 Loopbacks carry the router-id and the site LAN
@@ -38,11 +43,11 @@ Loopbacks carry the router-id and the site LAN
     END
 
 *** Keywords ***
-Cdp Shows Link
+Lldp Shows Link
     [Arguments]    ${t}
-    ${hub_port}=    Replace String    ${t}[hub_if]    GigabitEthernet    Gig${SPACE}
-    ${spoke_port}=    Replace String    ${t}[spoke_if]    GigabitEthernet    Gig${SPACE}
-    ${cdp}=    Show    ${t}[spoke]    show cdp neighbors
-    Should Match Regexp    ${cdp}    ${t}[hub]\\.${DOMAIN_NAME}\\s+${spoke_port}\\s.*${hub_port}
-    ${cdp}=    Show    ${t}[hub]    show cdp neighbors
-    Should Match Regexp    ${cdp}    ${t}[spoke]\\.${DOMAIN_NAME}\\s+${hub_port}\\s.*${spoke_port}
+    ${spoke_port}=    Replace String    ${t}[spoke_if]    GigabitEthernet    Gi
+    ${hub_port}=    Replace String    ${t}[hub_if]    GigabitEthernet    Gi
+    ${l}=    Show    ${t}[spoke]    show lldp neighbors
+    Should Match Regexp    ${l}    (?m)^${t}[firewall]\\S*\\s+${spoke_port}\\s.*${t}[fw_spoke_if]    msg=${t}[spoke] ${t}[spoke_if]: ${t}[firewall] ${t}[fw_spoke_if] not seen
+    ${l}=    Show    ${t}[hub]    show lldp neighbors
+    Should Match Regexp    ${l}    (?m)^${t}[firewall]\\S*\\s+${hub_port}\\s.*${t}[fw_hub_if]    msg=${t}[hub] ${t}[hub_if]: ${t}[firewall] ${t}[fw_hub_if] not seen

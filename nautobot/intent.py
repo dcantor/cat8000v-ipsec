@@ -39,12 +39,20 @@ def scalars(*names):
 
 def from_lab_conf():
     C = lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "LINKS", "TUNNELS", "NODE_IDX")
-    devices = [{"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": C["ROLE"][n], "asn": int(C["BGP_AS"][n]),
-                "router_id": f"10.255.1.{C['NODE_IDX'][n]}", "lan": C["LAN"][n], "comments": ""} for n in sorted(C["ROLE"])]
+    devices = []
+    for n in sorted(C["ROLE"]):
+        if C["ROLE"][n] == "firewall":
+            devices.append({"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": "firewall", "hub": None, "comments": ""})   # hub filled in from the links below
+        else:
+            devices.append({"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": C["ROLE"][n], "asn": int(C["BGP_AS"][n]),
+                            "router_id": f"10.255.1.{C['NODE_IDX'][n]}", "lan": C["LAN"][n], "comments": ""})
     links = []
     for l in C["LINKS"].values():
         a_end, b_end, pfx = l.split(); (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
         links.append({"a": an, "a_port": int(ap), "b": bn, "b_port": int(bp), "prefix": pfx})
+    for d in devices:   # a firewall fronts the headend on its eth1 link
+        if d["role"] == "firewall":
+            d["hub"] = next((l["b"] for l in links if l["a"] == d["name"] and l["a_port"] == 1), None)
     tunnels = []
     for t in C["TUNNELS"].values():   # "id hub spoke prefix" (older 3-field form: the single hub is implied)
         f = t.split(); hub = f[1] if len(f) == 4 else next(n for n in C["ROLE"] if C["ROLE"][n] == "hub")
@@ -76,8 +84,12 @@ def upgrade(I):
     for t in I.get("tunnels", []):
         t.setdefault("hub", hubs[0] if hubs else None)
     I.setdefault("regions", list(DEFAULT_REGIONS))
+    hub_of = {d["name"]: d for d in I.get("devices", [])}
     for i, d in enumerate(I.get("devices", [])):
         if d.get("role") == "spoke" and not d.get("psk"): d["psk"] = I.get("psk") or new_psk()   # legacy shared key, else a fresh one
+        if d.get("role") == "firewall":   # a firewall lives at its headend's site
+            h = hub_of.get(d.get("hub")) or {}
+            d.setdefault("region", h.get("region", I["regions"][0])); d.setdefault("site", h.get("site", f"{d['name']}-site")); continue
         d.setdefault("region", I["regions"][i % len(I["regions"])])
         d.setdefault("site", f"{d['name']}-site" if d.get("role") == "hub" else f"branch-{re.sub(r'[^0-9]', '', d['name']) or i}")
         d.setdefault("site_code", (I.get("site") or {}).get("site_code", "")); d.setdefault("contact", (I.get("site") or {}).get("contact", ""))
@@ -88,6 +100,22 @@ def upgrade(I):
 def load(path=None):
     p = Path(path) if path else INTENT_FILE
     return upgrade(json.loads(p.read_text()) if p.exists() else from_lab_conf())
+
+
+def firewall_of(I, hub):
+    """The firewall fronting a headend (None when the headend is wired directly)."""
+    return next((d["name"] for d in I["devices"] if d.get("role") == "firewall" and d.get("hub") == hub), None)
+
+
+def wan_path(I, hub, spoke):
+    """The link a hub<->spoke tunnel rides on: direct, or via the hub's firewall. Returns (link, via_firewall)."""
+    for l in I.get("links") or []:
+        if {l.get("a"), l.get("b")} == {hub, spoke}: return l, None
+    fw = firewall_of(I, hub)
+    if fw:
+        for l in I.get("links") or []:
+            if {l.get("a"), l.get("b")} == {fw, spoke}: return l, fw
+    return None, fw
 
 
 def region_distance(I, a, b):
@@ -111,8 +139,14 @@ def validate(intent):
     devs = intent.get("devices") or []
     names = [d.get("name", "") for d in devs]
     if len(set(names)) != len(names): errs.append("device hostnames must be unique")
+    routers = [d for d in devs if d.get("role") in ("hub", "spoke")]
     for d in devs:
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{0,62}", d.get("name", "")): errs.append(f"invalid hostname {d.get('name')!r}")
+        if d.get("role") == "firewall":
+            try: ipaddress.IPv4Address(d.get("mgmt_ip", ""))
+            except ValueError: errs.append(f"{d.get('name')}: mgmt_ip {d.get('mgmt_ip')!r} is not an IPv4 address")
+            if d.get("hub") not in {x["name"] for x in devs if x.get("role") == "hub"}: errs.append(f"{d.get('name')}: hub {d.get('hub')!r} is not a headend")
+            continue
         for f in ("mgmt_ip", "router_id"):
             try: ipaddress.IPv4Address(d.get(f, ""))
             except ValueError: errs.append(f"{d.get('name')}: {f} {d.get(f)!r} is not an IPv4 address")
@@ -123,8 +157,10 @@ def validate(intent):
         if not (1 <= int(d.get("asn") or 0) <= 4294967295): errs.append(f"{d.get('name')}: ASN out of range")
     hubs = [d["name"] for d in devs if d.get("role") == "hub"]
     if not hubs: errs.append("at least one hub is required")
-    if len(set(d["router_id"] for d in devs)) != len(devs): errs.append("router-ids must be unique")
-    if len(set(d["lan"] for d in devs)) != len(devs): errs.append("LAN prefixes must be unique")
+    if len(set(d["router_id"] for d in routers)) != len(routers): errs.append("router-ids must be unique")
+    if len(set(d["lan"] for d in routers)) != len(routers): errs.append("LAN prefixes must be unique")
+    fw_hubs = [d.get("hub") for d in devs if d.get("role") == "firewall"]
+    if len(set(fw_hubs)) != len(fw_hubs): errs.append("at most one firewall per headend")
     known = nodes(); by_ip = {d["mgmt_ip"]: d for d in devs}
     for ip, n in known.items():
         if ip not in by_ip: errs.append(f"VM {n['node']} ({ip}) is missing from the devices")
@@ -153,7 +189,7 @@ def validate(intent):
     for t in tunnels:
         if t.get("hub") not in hubs: errs.append(f"tunnel {t.get('id')}: {t.get('hub')!r} is not a hub")
         if t.get("spoke") not in spokes: errs.append(f"tunnel {t.get('id')}: {t.get('spoke')!r} is not a spoke")
-        if not any({l.get("a"), l.get("b")} == {t.get("hub"), t.get("spoke")} for l in intent.get("links") or []): errs.append(f"tunnel {t.get('id')}: no link between {t.get('hub')} and {t.get('spoke')}")
+        if wan_path(intent, t.get("hub"), t.get("spoke"))[0] is None: errs.append(f"tunnel {t.get('id')}: no link between {t.get('hub')} (or its firewall) and {t.get('spoke')}")
     for sp in spokes:
         if not any(t.get("spoke") == sp for t in tunnels): errs.append(f"spoke {sp} has no tunnel")
     cap = int((intent.get("capacity") or {}).get("tunnels_per_headend") or 50)

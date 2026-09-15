@@ -27,15 +27,17 @@ if problems: sys.exit("invalid intent:\n  " + "\n  ".join(problems))
 nb = pynautobot.api(a.url, token=a.token)
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 SITE = I["site"]["name"]
-DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(DEV); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
+DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(n for n, d in DEV.items() if d["role"] in ("hub", "spoke")); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
+FIREWALLS = sorted(n for n, d in DEV.items() if d["role"] == "firewall")
 NODES = intent_mod.nodes()                                # mgmt ip -> {node, idx, role} (VM facts)
-LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items()}
+LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items() if d["role"] != "firewall"}
 LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
-WIRED = {}                                              # (router, port) -> "peer GiN"
+def port_name(node, port): return f"eth{port}" if DEV[node]["role"] == "firewall" else f"GigabitEthernet{port}"
+WIRED = {}                                              # (node, port) -> "peer <interface>"
 for l in LINKS:
-    WIRED[(l["a"], l["a_port"])] = f"{l['b']} Gi{l['b_port']}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} Gi{l['a_port']}"
-SC = intent_mod.scalars("MAC_OUI", "HUB_PORTS", "SPOKE_PORTS"); OUI = SC["MAC_OUI"] or "52:54:00:c7"
-PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2))}   # spoke-facing / WAN ports per role
+    WIRED[(l["a"], l["a_port"])] = f"{l['b']} {port_name(l['b'], l['b_port'])}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} {port_name(l['a'], l['a_port'])}"
+SC = intent_mod.scalars("MAC_OUI", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS"); OUI = SC["MAC_OUI"] or "52:54:00:c7"
+PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2)), "firewall": range(1, 1 + int(SC["FW_PORTS"] or 8))}
 
 created = []
 def gql(query):
@@ -67,7 +69,8 @@ site = nb.dcim.locations.get(name=SITE) or sys.exit("run onboard.py first")
 ns = nb.ipam.namespaces.get(name="Global"); plat = nb.dcim.platforms.get(name="cisco_xe")
 sg = nb.extras.secrets_groups.get(name="lab-devices"); mgmt_vrf = nb.ipam.vrfs.get(name="Mgmt-vrf", namespace=ns.id)
 roles = {"hub": get_or_create(nb.extras.roles, {"name": "vpn-hub"}, color="e91e63", content_types=["dcim.device"]),
-         "spoke": get_or_create(nb.extras.roles, {"name": "vpn-spoke"}, color="f48fb1", content_types=["dcim.device"])}
+         "spoke": get_or_create(nb.extras.roles, {"name": "vpn-spoke"}, color="f48fb1", content_types=["dcim.device"]),
+         "firewall": get_or_create(nb.extras.roles, {"name": "vpn-firewall"}, color="ff9800", content_types=["dcim.device"])}
 prole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["ipam.prefix"])
          for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"))}
 tag_adv = get_or_create(nb.extras.tags, {"name": "bgp:advertise"}, color="ff5722", content_types=["ipam.prefix"])
@@ -90,10 +93,12 @@ regions, branches = {}, {}
 for i, name in enumerate(I["regions"]):
     regions[name] = get_or_create(nb.dcim.locations, {"name": name}, location_type=lt_region.id, parent=site.id, status=active.id)
     ensure(regions[name], parent=site.id, description=f"region #{i + 1} of {len(I['regions'])}")
-for d in I["devices"]:
+for d in sorted(I["devices"], key=lambda x: x["role"] == "firewall"):   # routers first: a firewall shares (and never re-describes) its headend's site
     br = branches.get(d["site"]) or get_or_create(nb.dcim.locations, {"name": d["site"]}, location_type=lt_branch.id, parent=regions[d["region"]].id, status=active.id)
-    ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}")
-    ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", "")); branches[d["site"]] = br
+    if d["role"] != "firewall":
+        ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}")
+        ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", ""))
+    branches[d["site"]] = br
 
 # VPN model: Nautobot's core "vpn" app (3.2+). Phase 1 / Phase 2 policies -> profile -> VPN -> tunnels with
 # hub/spoke endpoints (source interface + address, tunnel interface, protected prefixes). Cisco object names live
@@ -134,7 +139,9 @@ def drop_legacy_tunnel_model(t):
     for x in ep.filter(destination_id=t.id) + ep.filter(source_id=t.id):
         if str(getattr(x.relationship, "key", "")) in ("tunnel_source", "tunnel_peer"): x.delete(); created.append(f"removed relationship {x.relationship.key} on {t.device.name}/{t.name}")
 
-CTX = {"oob": I["oob"], "domain_name": I["domain_name"]}
+CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
+       # policy for the VyOS firewalls between a headend and its spokes: only what the tunnels need may cross
+       "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "log_drops": True}, "management": {"ssh": True, "lldp": True}}}
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})
@@ -161,10 +168,15 @@ def ensure_ip(itf, cidr, primary_of=None, exclusive=True):
     if primary_of is not None: ensure(primary_of, primary_ip4=ip.id)
     return ip
 def ensure_cable(x, y):
-    for itf in (x, y):   # a cable left with one end (its device was deleted) is replaced
-        c = itf.cable
-        if c and (getattr(c, "termination_b", None) is None or getattr(c, "termination_a", None) is None):
-            requests.delete(f"{a.url}/api/dcim/cables/{c.id}/", headers=H, timeout=30); created.append(f"removed dangling cable on {itf.device.name}/{itf.name}")
+    """Cable x<->y; a cable left with one end (device deleted) or going to another peer (re-wiring) is replaced."""
+    for itf in (x, y):
+        cur = requests.get(f"{a.url}/api/dcim/interfaces/{itf.id}/", params={"depth": 1}, headers=H, timeout=30).json().get("cable")
+        if not cur: continue
+        c = requests.get(f"{a.url}/api/dcim/cables/{cur['id']}/", headers=H, timeout=30)
+        if c.status_code == 404: continue
+        c = c.json(); ends = {c.get("termination_a_id"), c.get("termination_b_id")}
+        if None in ends or ends != {x.id, y.id}:
+            requests.delete(f"{a.url}/api/dcim/cables/{cur['id']}/", headers=H, timeout=30); created.append(f"removed cable on {itf.device.name}/{itf.name} (dangling or re-wired)")
     x, y = nb.dcim.interfaces.get(x.id), nb.dcim.interfaces.get(y.id)
     if x.cable or y.cable: return
     nb.dcim.cables.create(termination_a_type="dcim.interface", termination_a_id=x.id, termination_b_type="dcim.interface", termination_b_id=y.id, status=connected.id)
@@ -187,9 +199,32 @@ for r in ROUTERS:
     for port in PORTS[d["role"]]:  # wired ports get description/enabled from the links; set here so one update suffices
         wired = WIRED.get((r, port))
         gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
+        if not wired:   # a port that lost its link (re-wiring) must not keep an address
+            for x in nb.ipam.ip_address_to_interface.filter(interface=gi[(r, port)].id): x.delete(); created.append(f"unassigned address from unwired {r}/GigabitEthernet{port}")
     lo0 = ensure_iface(dev, "Loopback0", "virtual", "Router ID"); tag(ensure_prefix(f"{d['router_id']}/32", prole["loopback"], f"{r} router-id")); ensure_ip(lo0, f"{d['router_id']}/32")
     lo10 = ensure_iface(dev, "Loopback10", "virtual", "site LAN"); tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(lo10, f"{LAN_IP[r]}/24")
     devs[r] = dev
+# firewalls: VyOS devices created here (no onboarding); eth0 = management, eth1 = headend side, eth2.. = spokes
+if FIREWALLS:
+    mfr = get_or_create(nb.dcim.manufacturers, {"name": "VyOS"})
+    dtype = nb.dcim.device_types.get(model="VyOS", manufacturer=mfr.id) or nb.dcim.device_types.create(model="VyOS", manufacturer=mfr.id, u_height=1); created.append("device-type:VyOS") if not dtype.id in [x.id for x in nb.dcim.device_types.filter(model="VyOS")] else None
+    dtype = nb.dcim.device_types.get(model="VyOS", manufacturer=mfr.id)
+    vplat = nb.dcim.platforms.get(name="vyos") or nb.dcim.platforms.create(name="vyos", manufacturer=mfr.id, network_driver="vyos", napalm_driver="vyos"); vplat = nb.dcim.platforms.get(name="vyos")
+    for f in FIREWALLS:
+        d = DEV[f]
+        dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else nb.dcim.devices.get(name=f)
+        if dev is None:
+            dev = nb.dcim.devices.create(name=f, device_type=dtype.id, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id); created.append(f"device:{f}")
+        ensure(dev, name=f, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id, comments=d.get("comments", ""))
+        ensure_cf(dev, contact=DEV[d["hub"]].get("contact", ""))
+        idx = NODES[d["mgmt_ip"]]["idx"]
+        e0 = ensure_iface(dev, "eth0", "1000base-t", "OOB management", mgmt_only=True, mac=f"{OUI}:{idx:02x}:00")
+        ensure_ip(e0, f"{d['mgmt_ip']}/24", primary_of=dev)
+        for port in PORTS["firewall"]:
+            wired = WIRED.get((f, port))
+            gi[(f, port)] = ensure_iface(dev, f"eth{port}", "1000base-t", (f"to {wired}" if wired else "unwired"), enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
+        devs[f] = dev
+
 # WAN point-to-point links: addresses, cables
 for l in LINKS:
     an, ap, bn, bp, pfx = l["a"], l["a_port"], l["b"], l["b_port"], l["prefix"]; hosts = list(ipaddress.IPv4Network(pfx).hosts())
@@ -198,17 +233,31 @@ for l in LINKS:
     ensure_ip(ia, f"{hosts[0]}/30"); ensure_ip(ib, f"{hosts[1]}/30"); ensure_cable(ia, ib)
 # VTI tunnels: hub TunnelN <-> spoke TunnelN over the link between them, as core VPN tunnels with two endpoints
 def wan_iface(r, other):
+    """The interface on r that carries traffic to `other`: the direct link, or (for a headend) its firewall link."""
     for l in LINKS:
         if {l["a"], l["b"]} == {r, other}: return gi[(r, l["a_port"] if l["a"] == r else l["b_port"])]
+    # behind a firewall: a headend uses its firewall link for every spoke; a spoke uses its link to the headend's firewall
+    fw = intent_mod.firewall_of(I, r if DEV[r]["role"] == "hub" else other)
+    if fw:
+        for l in LINKS:
+            if {l["a"], l["b"]} == {r, fw}: return gi[(r, l["a_port"] if l["a"] == r else l["b_port"])]
+    sys.exit(f"no WAN link between {r} and {other} (or {other}'s firewall)")
 def ensure_endpoint(r, t, other):
     src = wan_iface(r, other); src_ip = nb.ipam.ip_addresses.get(interfaces=src.id)
+    # an interface can be the source of only ONE endpoint (OneToOne): a headend behind a firewall sources every
+    # tunnel from the same WAN interface, so its endpoints carry the source address only
+    shared = DEV[r]["role"] == "hub" and intent_mod.firewall_of(I, r) is not None
+    src_if = None if shared else src.id
     protect = [nb.ipam.prefixes.get(prefix=DEV[r]["lan"], namespace=ns.id).id, nb.ipam.prefixes.get(prefix=f"{DEV[r]['router_id']}/32", namespace=ns.id).id]
     ep = nb.vpn.vpn_tunnel_endpoints.get(tunnel_interface=t.id)
     if ep is None:
-        ep = nb.vpn.vpn_tunnel_endpoints.create(source_interface=src.id, source_ipaddress=src_ip.id, tunnel_interface=t.id, vpn_profile=prof.id,
+        ep = nb.vpn.vpn_tunnel_endpoints.create(**({"source_interface": src_if} if src_if else {}), source_ipaddress=src_ip.id, tunnel_interface=t.id, vpn_profile=prof.id,
                                                 role=vrole[DEV[r]["role"]].id, protected_prefixes=protect); created.append(f"vpn-endpoint:{r}/{t.name} via {src.name}")
     else:
-        ensure(ep, source_interface=src.id, source_ipaddress=src_ip.id, vpn_profile=prof.id, role=vrole[DEV[r]["role"]].id)
+        if shared and getattr(ep.source_interface, "id", None):
+            requests.patch(f"{a.url}/api/vpn/vpn-tunnel-endpoints/{ep.id}/", json={"source_interface": None}, headers=H, timeout=30).raise_for_status(); created.append(f"endpoint {r}/{t.name}: source interface cleared (shared WAN)")
+            ep = nb.vpn.vpn_tunnel_endpoints.get(ep.id)
+        ensure(ep, **({"source_interface": src_if} if src_if else {}), source_ipaddress=src_ip.id, vpn_profile=prof.id, role=vrole[DEV[r]["role"]].id)
         have = gql('{ vpn_tunnel_endpoints(id: "%s") { protected_prefixes { id } } }' % ep.id)["vpn_tunnel_endpoints"][0]["protected_prefixes"]
         if sorted(x["id"] for x in have) != sorted(protect):   # M2M fields are absent from REST reads, so pynautobot's update() never sends them: PATCH directly
             requests.patch(f"{a.url}/api/vpn/vpn-tunnel-endpoints/{ep.id}/", json={"protected_prefixes": protect}, headers=H, timeout=30).raise_for_status()

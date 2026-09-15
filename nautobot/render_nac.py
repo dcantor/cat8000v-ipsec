@@ -25,7 +25,7 @@ QUERY = q["results"][0]["query"] if q["count"] == 1 else (Path(__file__).resolve
 r = requests.post(f"{a.url}/api/graphql/", json={"query": QUERY}, headers=H, timeout=60); r.raise_for_status()
 data = r.json()
 if data.get("errors"): sys.exit(f"GraphQL errors: {data['errors']}")
-devices = sorted(data["data"]["devices"], key=lambda d: d["name"])
+devices = sorted((d for d in data["data"]["devices"] if (d.get("role") or {}).get("name") != "vpn-firewall"), key=lambda d: d["name"])   # firewalls are VyOS: rendered by render_vyos.py
 bgp_ri = {x["device"]["name"]: x for x in data["data"]["bgp_routing_instances"]}
 # GraphQL renders choice values as enum names (IPSEC_TUNNEL, AES_256_CBC, IKEV2); keys below use that form
 ENCAP = {"IPSEC_TUNNEL": "ipsec ipv4", "GRE": "gre ip"}
@@ -44,13 +44,38 @@ def far_end(ep):
     for t in ep["endpoint_z_vpn_tunnels"]: return t, t["endpoint_a"]
     return None, None
 
+def source_iface(ep):
+    """The tunnel source interface: the endpoint's source interface, else the interface that holds its source address
+    (a headend behind a firewall sources every tunnel from the same WAN interface, so those endpoints carry only the address)."""
+    if ep.get("source_interface"): return ep["source_interface"]["name"]
+    return ep["source_ipaddress"]["interfaces"][0]["name"]
+
 def tunnel_model(i, ip, mask):
     """Native NAC tunnel interface (iosxe_interface_tunnel) - destroyed cleanly when a spoke is removed."""
     ep = i["vpn_tunnel_endpoints_tunnel"]; tun, peer = far_end(ep); ios = ep["vpn_profile"]["extra_options"]["ios"]
     assert norm(tun["encapsulation"]) == "IPSEC_TUNNEL", f"{i['name']}: only IPsec-Tunnel encapsulation is rendered natively"
     return {"name": i["name"][6:], "description": i["description"], "ipv4": {"address": ip, "address_mask": mask}, "ip_mtu": 1400,
-            "tunnel_source": ep["source_interface"]["name"], "tunnel_destination_ipv4": peer["source_ipaddress"]["address"].split("/")[0],
+            "tunnel_source": source_iface(ep), "tunnel_destination_ipv4": peer["source_ipaddress"]["address"].split("/")[0],
             "tunnel_mode_ipsec_ipv4": True, "tunnel_protection_ipsec_profile": ios["ipsec_profile"]}
+
+def static_routes(dev):
+    """Through a firewall the far end of a tunnel is not on a connected network: one static route per tunnel towards the
+    far endpoint's source address, next hop = the address on the other side of this router's WAN link (the firewall)."""
+    routes = {}
+    for i in dev["interfaces"]:
+        ep = i["vpn_tunnel_endpoints_tunnel"]
+        if not ep: continue
+        tun, far = far_end(ep)
+        if not far: continue
+        src_if = next((x for x in dev["interfaces"] if x["name"] == source_iface(ep)), None)
+        if not src_if or not src_if.get("connected_interface") or not src_if["connected_interface"]["ip_addresses"]: continue
+        peer_dev = src_if["connected_interface"]["device"]
+        if (peer_dev.get("role") or {}).get("name") != "vpn-firewall": continue   # directly connected: no route needed
+        via = src_if["connected_interface"]["ip_addresses"][0]["address"].split("/")[0]
+        dst = ipaddress.IPv4Interface(far["source_ipaddress"]["address"])
+        net = dst.network if (ep.get("role") or {}).get("name", "").lower() == "hub" else ipaddress.IPv4Network(f"{dst.ip}/32")   # headend: the spoke's link /30; spoke: the headend's WAN /32
+        routes[str(net)] = {"prefix": str(net.network_address), "mask": str(net.netmask), "next_hops": [{"ip": via, "name": f"via-{peer_dev['name']}"}]}
+    return [routes[k] for k in sorted(routes, key=lambda k: ipaddress.IPv4Network(k))]
 
 def mss_cli(i):   # the module has no ip_tcp_adjust_mss attribute for tunnels: one raw line on top of the native interface
     return f"interface {i['name']}\n ip tcp adjust-mss 1360\n"
@@ -129,7 +154,7 @@ def render(dev):
             "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
                               **({"crypto": crypto_model(next(iter(profiles.values())), dev)} if profiles else {}),
                               "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks, "tunnels": sorted(tunnels, key=lambda t: int(t["name"]))},
-                              "routing": {"bgp": bgp}}}
+                              "routing": {"bgp": bgp, **({"static_routes": static_routes(dev)} if static_routes(dev) else {})}}}
 
 rendered = [render(d) for d in devices]
 templates = [t for d in rendered for t in d.pop("_templates")]

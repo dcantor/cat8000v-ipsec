@@ -23,7 +23,8 @@ H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 # the shared SoT query (switch lab, extended by the DMVPN lab) gets the core VPN app's tunnel endpoint per interface
 gq = nb.extras.graphql_queries.get(name="golden-config-lab")
 Q = gq.query
-VPN_EP = ("                 vpn_tunnel_endpoints_tunnel { source_interface { name } source_ipaddress { address }\n"
+VPN_EP = ("                 connected_interface { name device { name role { name } } ip_addresses { address } }\n"
+          "                 vpn_tunnel_endpoints_tunnel { role { name } source_interface { name } source_ipaddress { address interfaces { name } }\n"
           "                   vpn_profile { name keepalive_enabled keepalive_interval keepalive_retries extra_options\n"
           "                     vpn_phase1_policies { ike_version encryption_algorithm integrity_algorithm dh_group authentication_method }\n"
           "                     vpn_phase2_policies { encryption_algorithm integrity_algorithm } }\n"
@@ -34,6 +35,10 @@ legacy = "                 rel_tunnel_peer { rel_tunnel_source_source { ip_addre
 Q = Q.replace(legacy, "")   # the relationship was dropped when this lab moved to the core VPN model
 if "vpn_tunnel_endpoints_tunnel" not in Q and anchor in Q:
     Q = Q.replace(anchor, anchor + VPN_EP)
+elif "connected_interface { name device { name role { name } }" not in Q:   # firewall era: the far side of each link + the source address's interface
+    Q = Q.replace("                 vpn_tunnel_endpoints_tunnel { source_interface { name } source_ipaddress { address }\n",
+                  "                 connected_interface { name device { name role { name } } ip_addresses { address } }\n"
+                  "                 vpn_tunnel_endpoints_tunnel { role { name } source_interface { name } source_ipaddress { address interfaces { name } }\n")
 if Q != gq.query:
     requests.patch(f"{a.url}/api/extras/graphql-queries/{gq.id}/", json={"query": Q}, headers=H, timeout=30).raise_for_status()
     print("  extended GraphQL query golden-config-lab (vpn tunnel endpoints)")
@@ -53,9 +58,11 @@ if pw:
 
 # scope + settings
 dg = nb.extras.dynamic_groups.get(name=f"{SLUG}-routers")
+FILTER = {"location": [SITE], "platform": ["cisco_xe"]}   # the IOS-XE routers only: the VyOS firewalls are managed by render_vyos.py
 if dg is None:
-    dg = nb.extras.dynamic_groups.create(name=f"{SLUG}-routers", content_type="dcim.device", group_type="dynamic-filter",
-                                         filter={"location": [SITE]}); print(f"  created dynamic group {SLUG}-routers")
+    dg = nb.extras.dynamic_groups.create(name=f"{SLUG}-routers", content_type="dcim.device", group_type="dynamic-filter", filter=FILTER); print(f"  created dynamic group {SLUG}-routers")
+elif (dg.filter or {}) != FILTER:
+    dg.update({"filter": FILTER}); print(f"  narrowed dynamic group {SLUG}-routers to cisco_xe")
 repos = {n: nb.extras.git_repositories.get(name=n) for n in ("config-backups", "intended-configs", "golden-config-templates")}
 gcs = gc.golden_config_settings.get(name=SLUG)
 fields = {"slug": SLUG, "weight": 3000, "dynamic_group": dg.id, "sot_agg_query": gq.id,
@@ -75,7 +82,7 @@ for slug, fname, match in (("wan-interface", "WAN interface", "interface Gigabit
                                   config_ordered=False, config_remediation=True); print(f"  created compliance rule {slug}")
 if a.no_run:
     sys.exit(0)
-devs = [d.id for d in nb.dcim.devices.filter(location=SITE)]
+devs = [d.id for d in nb.dcim.devices.filter(location=SITE, platform="cisco_xe")]
 def run(name):
     job = nb.extras.jobs.get(name=name)
     if not job.enabled: job.update({"enabled": True})

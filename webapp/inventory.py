@@ -31,7 +31,7 @@ class Inventory:
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
         """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
-        q = """{ devices(role: ["vpn-hub", "vpn-spoke"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } }
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } }
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
                  interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
         import sys; from pathlib import Path
@@ -41,12 +41,19 @@ class Inventory:
         out = []
         for d in r.json()["data"]["devices"]:
             ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
-            out.append({"name": d["name"], "role": "hub" if d["role"]["name"] == "vpn-hub" else "spoke", "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
+            out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
                         "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
                         "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"], "asn": (ri.get("autonomous_system") or {}).get("asn"),
                         "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
                         "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
-        return sorted(out, key=lambda d: (d["role"] != "hub", d["name"]))
+        # a firewall's headend: the device on the far side of its eth1 (from Nautobot cables)
+        q2 = """{ interfaces(device: [%s], name: "eth1") { device { name } connected_interface { device { name } } } }""" % ", ".join('"%s"' % d["name"] for d in out if d["role"] == "firewall")
+        if any(d["role"] == "firewall" for d in out):
+            r2 = requests.post(f"{self.url}/api/graphql/", json={"query": q2}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60).json()
+            hub_of = {i["device"]["name"]: (i.get("connected_interface") or {}).get("device", {}).get("name") for i in r2.get("data", {}).get("interfaces", [])}
+            for d in out:
+                if d["role"] == "firewall": d["hub"] = hub_of.get(d["name"])
+        return sorted(out, key=lambda d: ({"hub": 0, "firewall": 1, "spoke": 2}[d["role"]], d["name"]))
 
     def model(self):
         r = requests.post(f"{self.url}/api/graphql/", json={"query": QUERY}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60)

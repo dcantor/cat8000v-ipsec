@@ -24,6 +24,30 @@ vrf definition {{ va.vrf.name }}
 ip domain name {{ config_context.domain_name }}
 !
 ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.gateway }}
+{#- static routes through a firewall: one per tunnel towards the far endpoint's source address (headend: the spoke's /30,
+    spoke: the headend's WAN /32), next hop = the firewall's address on this router's WAN link #}
+{%- set routes = [] %}
+{%- for i in interfaces if i.vpn_tunnel_endpoints_tunnel %}
+{%-   set ep = i.vpn_tunnel_endpoints_tunnel %}
+{%-   set tun = (ep.endpoint_a_vpn_tunnels + ep.endpoint_z_vpn_tunnels) | first %}
+{%-   set far = tun.endpoint_z if ep.endpoint_a_vpn_tunnels else tun.endpoint_a %}
+{%-   set srcname = ep.source_interface.name if ep.source_interface else ep.source_ipaddress.interfaces[0].name %}
+{%-   set src = (interfaces | selectattr('name', 'equalto', srcname) | list | first) %}
+{%-   if src and src.connected_interface and src.connected_interface.device.role.name == 'vpn-firewall' and src.connected_interface.ip_addresses %}
+{%-     set via = src.connected_interface.ip_addresses[0].address.split('/')[0] %}
+{%-     set faddr = far.source_ipaddress.address %}
+{%-     if ep.role and ep.role.name == 'hub' %}
+{%-       set net = (faddr | ipaddress_interface('network') | string) | ipaddress_network('network_address') ~ ' ' ~ masks[faddr.split('/')[1]] %}
+{%-     else %}
+{%-       set net = faddr.split('/')[0] ~ ' 255.255.255.255' %}
+{%-     endif %}
+{%-     set line = 'ip route ' ~ net ~ ' ' ~ via ~ ' name via-' ~ src.connected_interface.device.name %}
+{%-     if line not in routes %}{% set _ = routes.append(line) %}{% endif %}
+{%-   endif %}
+{%- endfor +%}
+{% for r in routes | sort %}
+{{ r }}
+{% endfor %}
 !
 ip access-list standard {{ config_context.oob.acl }}
  10 remark OOB management network
@@ -59,7 +83,7 @@ interface {{ i.name }}
  ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
  ip mtu 1400
  ip tcp adjust-mss 1360
- tunnel source {{ ep.source_interface.name }}
+ tunnel source {{ ep.source_interface.name if ep.source_interface else ep.source_ipaddress.interfaces[0].name }}
  tunnel mode {{ encap[tun.encapsulation | upper | replace('-', '_')] }}
  tunnel destination {{ far.source_ipaddress.address.split('/')[0] }}
  tunnel protection ipsec profile {{ ep.vpn_profile.extra_options.ios.ipsec_profile }}

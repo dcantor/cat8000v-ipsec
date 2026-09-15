@@ -13,11 +13,15 @@ MIN_HEADENDS = 2     # every spoke needs redundant headends
 def facts():
     """Current allocations from lab.conf + the intent."""
     C = intent_mod.lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "NODE_IDX", "CONSOLE_PORT")
-    sc = intent_mod.scalars("OOB_GATEWAY", "HUB_PORTS", "SPOKE_PORTS", "C8000V_RAM_MIB")
+    sc = intent_mod.scalars("OOB_GATEWAY", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS", "C8000V_RAM_MIB")
     I = intent_mod.load(); hubs = [d for d in I["devices"] if d["role"] == "hub"]
     wiring = intent_mod.wiring()
     def ports_used(n): return {w["a_port"] for w in wiring if w["a"] == n} | {w["b_port"] for w in wiring if w["b"] == n}
-    return {"C": C, "sc": sc, "I": I, "hubs": hubs, "hub": hubs[0], "wiring": wiring, "ports_used": ports_used,
+    # a spoke's link lands on the headend's WAN edge: its firewall when it has one, else the headend itself
+    def edge_of(h): return intent_mod.firewall_of(I, h) or h
+    def edge_ports(h): return range(2, 2 + (int(sc["FW_PORTS"] or 8) - 1)) if intent_mod.firewall_of(I, h) else range(2, 2 + int(sc["HUB_PORTS"] or 2))
+    def ifname(dev, port): return f"eth{port}" if any(d["name"] == dev and d["role"] == "firewall" for d in I["devices"]) else f"GigabitEthernet{port}"
+    return {"C": C, "sc": sc, "I": I, "hubs": hubs, "hub": hubs[0], "wiring": wiring, "ports_used": ports_used, "edge_of": edge_of, "edge_ports": edge_ports, "ifname": ifname,
             "hub_ports": range(2, 2 + int(sc["HUB_PORTS"] or 2)), "spoke_ports": range(2, 2 + int(sc["SPOKE_PORTS"] or 2)),
             "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)}
 
@@ -36,13 +40,14 @@ def suggest_links(I, f, spoke_name, hubs, spoke_ports_taken=()):
     """One link + tunnel allocation per hub: hub port, spoke port, WAN /30, tunnel id, tunnel /30."""
     used_pfx = _used_prefixes(I); tids = {int(t["id"]) for t in I["tunnels"]}; sports = set(spoke_ports_taken); out = []
     for h in hubs:
-        hub_port = _next_free(f["hub_ports"], f["ports_used"](h)); spoke_port = _next_free(f["spoke_ports"], sports); sports.add(spoke_port)
+        edge = f["edge_of"](h)
+        hub_port = _next_free(f["edge_ports"](h), f["ports_used"](edge)); spoke_port = _next_free(f["spoke_ports"], sports); sports.add(spoke_port)
         tid = _next_free(range(1, 10000), tids); tids.add(tid)
         wan = _next_free((ipaddress.IPv4Network(f"100.65.{k}.0/30") for k in range(1, 255)), used_pfx); used_pfx.add(wan)
         tun = _next_free((ipaddress.IPv4Network(f"172.17.{k}.0/30") for k in range(1, 255)), used_pfx); used_pfx.add(tun)
-        out.append({"hub": h, "hub_port": hub_port, "spoke_port": spoke_port, "tunnel_id": tid, "wan_prefix": str(wan), "tunnel_prefix": str(tun),
+        out.append({"hub": h, "edge": edge, "edge_if": f["ifname"](edge, hub_port) if hub_port else None, "hub_port": hub_port, "spoke_port": spoke_port, "tunnel_id": tid, "wan_prefix": str(wan), "tunnel_prefix": str(tun),
                     "hub_wan_ip": str(list(wan.hosts())[0]), "spoke_wan_ip": str(list(wan.hosts())[1]), "hub_tunnel_ip": str(list(tun.hosts())[0]), "spoke_tunnel_ip": str(list(tun.hosts())[1]),
-                    "hub_ports_free": sorted(set(f["hub_ports"]) - f["ports_used"](h)), "hub_tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h)})
+                    "hub_ports_free": sorted(set(f["edge_ports"](h)) - f["ports_used"](edge)), "hub_tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h)})
     return out
 
 
@@ -52,9 +57,10 @@ def suggest_identity(I, C, role):
     while f"{role}{n}" in C["ROLE"] or f"{role}{n}" in {d["name"] for d in I["devices"]} or (role == "hub" and n == 1 and "hub" in C["ROLE"]): n += 1
     oob = ipaddress.IPv4Network(I["oob"]["prefix"]); used_ips = set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}
     mgmt_ip = _next_free((str(h) for h in list(oob.hosts())[10:]), used_ips)
-    rids = {d["router_id"] for d in I["devices"]}; rid = _next_free((f"10.255.1.{k}" for k in range(1, 255)), rids)
-    lans = {ipaddress.IPv4Network(d["lan"]) for d in I["devices"]}; lan = _next_free((ipaddress.IPv4Network(f"192.168.{k}.0/24") for k in range(11, 255)), lans)
-    asns = {int(d["asn"]) for d in I["devices"]}; base = min(int(d["asn"]) for d in I["devices"]); asn = _next_free(range(base + 1, base + 1000), asns)
+    routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke")]
+    rids = {d["router_id"] for d in routers}; rid = _next_free((f"10.255.1.{k}" for k in range(1, 255)), rids)
+    lans = {ipaddress.IPv4Network(d["lan"]) for d in routers}; lan = _next_free((ipaddress.IPv4Network(f"192.168.{k}.0/24") for k in range(11, 255)), lans)
+    asns = {int(d["asn"]) for d in routers}; base = min(int(d["asn"]) for d in routers); asn = _next_free(range(base + 1, base + 1000), asns)
     return {"name": f"{role}{n}", "mgmt_ip": mgmt_ip, "node_idx": idx, "console_port": max(int(v) for v in C["CONSOLE_PORT"].values()) + 1,
             "router_id": rid, "lan": str(lan), "asn": asn}
 
@@ -73,8 +79,8 @@ def suggest(hubs=None, region=None):
             "psk": intent_mod.new_psk(), "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
             "links": suggest_links(I, f, ident["name"], chosen),
             "context": {"hubs": [{"name": h["name"], "region": h.get("region"), "distance": intent_mod.region_distance(I, region, h.get("region")),
-                                  "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"],
-                                  "ports_free": sorted(set(f["hub_ports"]) - f["ports_used"](h["name"]))} for h in f["hubs"]],
+                                  "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"], "edge": f["edge_of"](h["name"]),
+                                  "ports_free": sorted(set(f["edge_ports"](h["name"])) - f["ports_used"](f["edge_of"](h["name"])))} for h in f["hubs"]],
                         "regions": I["regions"], "nearest": intent_mod.nearest_hubs(I, region, MIN_HEADENDS), "capacity": f["capacity"], "spoke_ports": list(f["spoke_ports"])}}
 
 
@@ -98,17 +104,18 @@ def validate(spec):
         if ip not in ipaddress.IPv4Network(I["oob"]["prefix"]): errs.append(f"management IP must be in {I['oob']['prefix']}")
         if str(ip) in set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}: errs.append(f"management IP {ip} is in use")
     except ValueError: errs.append("management IP is not an IPv4 address")
+    routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke")]
     try:
-        if ipaddress.IPv4Address(spec.get("router_id", "")) in {ipaddress.IPv4Address(d["router_id"]) for d in I["devices"]}: errs.append("router-id in use")
+        if ipaddress.IPv4Address(spec.get("router_id", "")) in {ipaddress.IPv4Address(d["router_id"]) for d in routers}: errs.append("router-id in use")
     except ValueError: errs.append("router-id is not an IPv4 address")
     try:
         lan = ipaddress.IPv4Network(spec.get("lan", ""), strict=True)
         if lan.prefixlen != 24: errs.append("site LAN must be a /24")
-        if lan in {ipaddress.IPv4Network(d["lan"]) for d in I["devices"]}: errs.append(f"LAN {lan} in use")
+        if lan in {ipaddress.IPv4Network(d["lan"]) for d in routers}: errs.append(f"LAN {lan} in use")
     except ValueError: errs.append("site LAN is not a valid network")
     asn = int(spec.get("asn") or 0)
     if not (1 <= asn <= 4294967295): errs.append("ASN out of range")
-    if asn in {int(d["asn"]) for d in I["devices"]}: errs.append(f"AS {asn} is in use (one AS per site)")
+    if asn in {int(d["asn"]) for d in routers}: errs.append(f"AS {asn} is in use (one AS per site)")
     if not intent_mod.INTENT_FILE.exists(): errs.append("lab-intent.json missing (run ./lab.sh intent init)")
     if spec.get("region") not in (I.get("regions") or []): errs.append(f"region must be one of {I.get('regions')}")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}", spec.get("site") or ""): errs.append("site name: letters/digits/space/_.-")
@@ -128,8 +135,9 @@ def validate_links(links, I, f, name):
     for l in links:
         h = l.get("hub")
         if h not in hub_names: errs.append(f"{h!r} is not a hub"); continue
-        if int(l.get("hub_port") or 0) not in f["hub_ports"]: errs.append(f"{h}: hub port must be Gi{f['hub_ports'][0]}..Gi{f['hub_ports'][-1]}")
-        elif int(l["hub_port"]) in f["ports_used"](h): errs.append(f"{h} Gi{l['hub_port']} is already wired")
+        edge = f["edge_of"](h); ep = f["edge_ports"](h)
+        if int(l.get("hub_port") or 0) not in ep: errs.append(f"{h}: port on {edge} must be {f['ifname'](edge, ep[0])}..{f['ifname'](edge, ep[-1])}")
+        elif int(l["hub_port"]) in f["ports_used"](edge): errs.append(f"{edge} {f['ifname'](edge, int(l['hub_port']))} is already wired")
         sp = int(l.get("spoke_port") or 0)
         if sp not in f["spoke_ports"]: errs.append(f"{h}: spoke port must be Gi{f['spoke_ports'][0]}..Gi{f['spoke_ports'][-1]}")
         elif sp in sports: errs.append(f"spoke port Gi{sp} used for two hubs")
@@ -173,7 +181,7 @@ def add_to_lab_conf(spec):
     s = _replace_array(s, "NODE_IDX", [f"[{n}]={spec['node_idx']}"])
     links = spec.get("links") or []   # the hub is always the first (anchoring) end of a link
     if links:
-        s = _replace_array(s, "LINKS", [f"{l['hub']}:{l['hub_port']} {l['spoke']}:{l['spoke_port']} {l['wan_prefix']}" for l in links], multiline=True)
+        s = _replace_array(s, "LINKS", [f"{l.get('edge') or l['hub']}:{l['hub_port']} {l['spoke']}:{l['spoke_port']} {l['wan_prefix']}" for l in links], multiline=True)
         s = _replace_array(s, "TUNNELS", [f"{l['tunnel_id']} {l['hub']} {l['spoke']} {l['tunnel_prefix']}" for l in links], multiline=True)
     s = _replace_array(s, "ROUTERS", [n]); s = _replace_array(s, "ALL_NODES", [n])
     p.write_text(s)
@@ -197,7 +205,7 @@ def add_to_intent(spec):
                          "site_code": spec.get("site_code", ""), "contact": spec.get("contact", ""), **({"psk": spec["psk"]} if spec.get("role", "spoke") == "spoke" else {})})
     I["devices"].sort(key=lambda d: (d["role"] != "hub", d["name"]))
     for l in spec.get("links") or []:
-        I["links"].append({"a": l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
+        I["links"].append({"a": l.get("edge") or l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
         I["tunnels"].append({"id": int(l["tunnel_id"]), "hub": l["hub"], "spoke": l["spoke"], "prefix": l["tunnel_prefix"]})
     if spec.get("change_ticket"): I["vpn"]["change_ticket"] = spec["change_ticket"]
     problems = intent_mod.validate(I)
@@ -206,14 +214,23 @@ def add_to_intent(spec):
 
 
 def hub_changes(spec):
-    """What the pipeline will configure on each hub and on the spoke (for the review step)."""
-    I = intent_mod.load(); asn_of = {d["name"]: d["asn"] for d in I["devices"]}; out = []
+    """What the pipeline will configure on each headend (and its firewall) and on the spoke (for the review step)."""
+    I = intent_mod.load(); asn_of = {d["name"]: d["asn"] for d in I["devices"] if "asn" in d}; out = []
     for l in spec.get("links") or []:
         wan = list(ipaddress.IPv4Network(l["wan_prefix"]).hosts()); tun = list(ipaddress.IPv4Network(l["tunnel_prefix"]).hosts())
-        out.append({"hub": l["hub"], "interface": f"GigabitEthernet{l['hub_port']}", "wan_ip": f"{wan[0]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[0]}/30",
-                    "tunnel_destination": str(wan[1]), "bgp_neighbor": f"{tun[1]} remote-as {spec['asn']}",
+        fw = intent_mod.firewall_of(I, l["hub"])
+        hub_wan = None
+        if fw:   # the headend's own WAN address is on its firewall link (shared by every tunnel)
+            hl = next((x for x in I["links"] if {x["a"], x["b"]} == {fw, l["hub"]}), None)
+            if hl:
+                hh = list(ipaddress.IPv4Network(hl["prefix"]).hosts()); hub_wan = str(hh[1] if hl["b"] == l["hub"] else hh[0]); fw_side = str(hh[0] if hl["b"] == l["hub"] else hh[1])
+        out.append({"hub": l["hub"], "firewall": fw, "interface": f"{'eth' if fw else 'GigabitEthernet'}{l['hub_port']}" if not fw else f"{fw} eth{l['hub_port']}",
+                    "wan_ip": f"{wan[0]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[0]}/30",
+                    "tunnel_source": f"{hub_wan} (shared WAN behind {fw})" if fw else f"{wan[0]}", "tunnel_destination": str(wan[1]), "bgp_neighbor": f"{tun[1]} remote-as {spec['asn']}",
+                    "hub_route": f"ip route {ipaddress.IPv4Network(l['wan_prefix']).network_address} 255.255.255.252 -> {fw_side} ({fw})" if fw else None,
                     "spoke": {"interface": f"GigabitEthernet{l['spoke_port']}", "wan_ip": f"{wan[1]}/30", "tunnel": f"Tunnel{l['tunnel_id']}", "tunnel_ip": f"{tun[1]}/30",
-                              "tunnel_destination": str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {asn_of.get(l['hub'], '?')}"},
+                              "tunnel_destination": hub_wan or str(wan[0]), "bgp_neighbor": f"{tun[0]} remote-as {asn_of.get(l['hub'], '?')}",
+                              "route": f"ip route {hub_wan}/32 -> {wan[0]} ({fw})" if fw else None},
                     "tunnels_after": sum(1 for t in I["tunnels"] if t["hub"] == l["hub"]) + 1, "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)})
     return {"links": out, "loopbacks": f"Loopback0 {spec['router_id']}/32, Loopback10 {str(list(ipaddress.IPv4Network(spec['lan']).hosts())[0])}/24"}
 
@@ -223,7 +240,7 @@ def hub_links(hub_name, spokes):
     f = facts(); I = f["I"]; out = []
     for sp in spokes:
         used = f["ports_used"](sp)
-        alloc = suggest_links(I, f, sp, [hub_name])[0]; alloc["spoke_port"] = _next_free(f["spoke_ports"], used)
+        alloc = suggest_links(I, f, sp, [hub_name])[0]; alloc["spoke_port"] = _next_free(f["spoke_ports"], used); alloc["edge"] = hub_name
         if alloc["spoke_port"] is None: raise RuntimeError(f"{sp} has no free WAN port for {hub_name}")
         alloc["spoke"] = sp; out.append(alloc)
         I["links"].append({"a": hub_name, "a_port": alloc["hub_port"], "b": sp, "b_port": alloc["spoke_port"], "prefix": alloc["wan_prefix"]})
@@ -243,9 +260,9 @@ def removal_plan(name):
     if errs: return errs, None
     cap = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50); links = []
     for t in (t for t in I["tunnels"] if t["spoke"] == name):
-        link = next((l for l in I["links"] if {l["a"], l["b"]} == {t["hub"], name}), None)
-        hub_port = (link["a_port"] if link["a"] == t["hub"] else link["b_port"]) if link else None
-        links.append({"hub": t["hub"], "hub_port": hub_port, "hub_interface": f"GigabitEthernet{hub_port}" if hub_port else None, "wan_prefix": link["prefix"] if link else None,
+        link, fw = intent_mod.wan_path(I, t["hub"], name); edge = fw or t["hub"]
+        hub_port = (link["a_port"] if link["a"] == edge else link["b_port"]) if link else None
+        links.append({"hub": t["hub"], "firewall": fw, "hub_port": hub_port, "hub_interface": (f"{edge} {'eth' if fw else 'GigabitEthernet'}{hub_port}") if hub_port else None, "wan_prefix": link["prefix"] if link else None,
                       "tunnel_id": t["id"], "tunnel": f"Tunnel{t['id']}", "tunnel_prefix": t["prefix"], "tunnels_after": sum(1 for x in I["tunnels"] if x["hub"] == t["hub"]) - 1, "capacity": cap})
     return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "lan": dev["lan"], "router_id": dev["router_id"], "links": links}
 

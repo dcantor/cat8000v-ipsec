@@ -160,44 +160,24 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to spoke1 Gi3
+          description: WAN to fw-central eth1
           shutdown: false
           cdp: true
           ipv4:
-            address: 100.65.4.1
+            address: 100.64.2.2
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to spoke2 Gi3
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.5.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '4'
-          description: WAN to spoke3 Gi3
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.6.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '5'
-          description: WAN to spoke4 Gi2
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.7.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '6'
-          description: WAN to spoke5 Gi2
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.12.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '7'
           shutdown: true
@@ -235,7 +215,7 @@ iosxe:
             address: 172.17.5.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet3
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.5.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -245,7 +225,7 @@ iosxe:
             address: 172.17.6.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet4
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.6.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -255,7 +235,7 @@ iosxe:
             address: 172.17.7.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet5
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.7.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -265,7 +245,7 @@ iosxe:
             address: 172.17.12.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet6
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.12.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -307,6 +287,32 @@ iosxe:
               - network: 10.255.1.5
                 mask: 255.255.255.255
               - network: 192.168.14.0
+        static_routes:
+        - prefix: 100.65.4.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
+        - prefix: 100.65.5.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
+        - prefix: 100.65.6.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
+        - prefix: 100.65.7.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
+        - prefix: 100.65.12.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
   - name: east-headend
     host: 10.2.0.11
     protocol: restconf
@@ -375,28 +381,18 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to spoke1 Gi2
+          description: WAN to fw-east eth1
           shutdown: false
           cdp: true
           ipv4:
-            address: 100.65.1.1
+            address: 100.64.1.2
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to spoke2 Gi2
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.2.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '4'
-          description: WAN to spoke3 Gi2
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.3.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '5'
           shutdown: true
@@ -440,7 +436,7 @@ iosxe:
             address: 172.17.2.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet3
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -450,7 +446,7 @@ iosxe:
             address: 172.17.3.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet4
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -482,6 +478,22 @@ iosxe:
               - network: 10.255.1.1
                 mask: 255.255.255.255
               - network: 192.168.11.0
+        static_routes:
+        - prefix: 100.65.1.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.1.1
+            name: via-fw-east
+        - prefix: 100.65.2.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.1.1
+            name: via-fw-east
+        - prefix: 100.65.3.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.1.1
+            name: via-fw-east
   - name: spoke1
     host: 10.2.0.12
     protocol: restconf
@@ -516,15 +528,15 @@ iosxe:
           - name: VPN-KEYRING
             peers:
             - name: east-headend
-              ipv4_address: 100.65.1.1
+              ipv4_address: 100.64.1.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke1}
             - name: central-headend
-              ipv4_address: 100.65.4.1
+              ipv4_address: 100.64.2.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke1}
             - name: west-headend
-              ipv4_address: 100.65.8.1
+              ipv4_address: 100.64.3.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke1}
           profiles:
@@ -550,7 +562,7 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to east-headend Gi2
+          description: WAN to fw-east eth2
           shutdown: false
           cdp: true
           ipv4:
@@ -558,7 +570,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to central-headend Gi2
+          description: WAN to fw-central eth2
           shutdown: false
           cdp: true
           ipv4:
@@ -566,7 +578,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
-          description: WAN to west-headend Gi2
+          description: WAN to fw-west eth2
           shutdown: false
           cdp: true
           ipv4:
@@ -594,7 +606,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.1.1
+          tunnel_destination_ipv4: 100.64.1.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '4'
@@ -604,7 +616,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.65.4.1
+          tunnel_destination_ipv4: 100.64.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '8'
@@ -614,7 +626,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet4
-          tunnel_destination_ipv4: 100.65.8.1
+          tunnel_destination_ipv4: 100.64.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
@@ -645,6 +657,22 @@ iosxe:
               - network: 10.255.1.2
                 mask: 255.255.255.255
               - network: 192.168.12.0
+        static_routes:
+        - prefix: 100.64.1.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.1.1
+            name: via-fw-east
+        - prefix: 100.64.2.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.4.1
+            name: via-fw-central
+        - prefix: 100.64.3.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.8.1
+            name: via-fw-west
   - name: spoke2
     host: 10.2.0.13
     protocol: restconf
@@ -679,15 +707,15 @@ iosxe:
           - name: VPN-KEYRING
             peers:
             - name: east-headend
-              ipv4_address: 100.65.2.1
+              ipv4_address: 100.64.1.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke2}
             - name: central-headend
-              ipv4_address: 100.65.5.1
+              ipv4_address: 100.64.2.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke2}
             - name: west-headend
-              ipv4_address: 100.65.9.1
+              ipv4_address: 100.64.3.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke2}
           profiles:
@@ -713,7 +741,7 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to east-headend Gi3
+          description: WAN to fw-east eth3
           shutdown: false
           cdp: true
           ipv4:
@@ -721,7 +749,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to central-headend Gi3
+          description: WAN to fw-central eth3
           shutdown: false
           cdp: true
           ipv4:
@@ -729,7 +757,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
-          description: WAN to west-headend Gi3
+          description: WAN to fw-west eth3
           shutdown: false
           cdp: true
           ipv4:
@@ -757,7 +785,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.2.1
+          tunnel_destination_ipv4: 100.64.1.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '5'
@@ -767,7 +795,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.65.5.1
+          tunnel_destination_ipv4: 100.64.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '9'
@@ -777,7 +805,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet4
-          tunnel_destination_ipv4: 100.65.9.1
+          tunnel_destination_ipv4: 100.64.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
@@ -808,6 +836,22 @@ iosxe:
               - network: 10.255.1.3
                 mask: 255.255.255.255
               - network: 192.168.23.0
+        static_routes:
+        - prefix: 100.64.1.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.2.1
+            name: via-fw-east
+        - prefix: 100.64.2.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.5.1
+            name: via-fw-central
+        - prefix: 100.64.3.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.9.1
+            name: via-fw-west
   - name: spoke3
     host: 10.2.0.14
     protocol: restconf
@@ -841,16 +885,16 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: west-headend
-              ipv4_address: 100.65.10.1
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke3}
             - name: east-headend
-              ipv4_address: 100.65.3.1
+              ipv4_address: 100.64.1.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke3}
             - name: central-headend
-              ipv4_address: 100.65.6.1
+              ipv4_address: 100.64.2.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke3}
+            - name: west-headend
+              ipv4_address: 100.64.3.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke3}
           profiles:
@@ -876,7 +920,7 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to east-headend Gi4
+          description: WAN to fw-east eth4
           shutdown: false
           cdp: true
           ipv4:
@@ -884,7 +928,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to central-headend Gi4
+          description: WAN to fw-central eth4
           shutdown: false
           cdp: true
           ipv4:
@@ -892,7 +936,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
-          description: WAN to west-headend Gi4
+          description: WAN to fw-west eth4
           shutdown: false
           cdp: true
           ipv4:
@@ -920,7 +964,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.3.1
+          tunnel_destination_ipv4: 100.64.1.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '6'
@@ -930,7 +974,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.65.6.1
+          tunnel_destination_ipv4: 100.64.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '10'
@@ -940,7 +984,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet4
-          tunnel_destination_ipv4: 100.65.10.1
+          tunnel_destination_ipv4: 100.64.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
@@ -971,6 +1015,22 @@ iosxe:
               - network: 10.255.1.4
                 mask: 255.255.255.255
               - network: 192.168.13.0
+        static_routes:
+        - prefix: 100.64.1.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.3.1
+            name: via-fw-east
+        - prefix: 100.64.2.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.6.1
+            name: via-fw-central
+        - prefix: 100.64.3.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.10.1
+            name: via-fw-west
   - name: spoke4
     host: 10.2.0.16
     protocol: restconf
@@ -1003,12 +1063,12 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: west-headend
-              ipv4_address: 100.65.11.1
+            - name: central-headend
+              ipv4_address: 100.64.2.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke4}
-            - name: central-headend
-              ipv4_address: 100.65.7.1
+            - name: west-headend
+              ipv4_address: 100.64.3.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke4}
           profiles:
@@ -1034,7 +1094,7 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to central-headend Gi5
+          description: WAN to fw-central eth5
           shutdown: false
           cdp: true
           ipv4:
@@ -1042,7 +1102,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to west-headend Gi5
+          description: WAN to fw-west eth5
           shutdown: false
           cdp: true
           ipv4:
@@ -1073,7 +1133,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.7.1
+          tunnel_destination_ipv4: 100.64.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '11'
@@ -1083,7 +1143,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.65.11.1
+          tunnel_destination_ipv4: 100.64.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
@@ -1109,6 +1169,17 @@ iosxe:
               - network: 10.255.1.6
                 mask: 255.255.255.255
               - network: 192.168.15.0
+        static_routes:
+        - prefix: 100.64.2.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.7.1
+            name: via-fw-central
+        - prefix: 100.64.3.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.11.1
+            name: via-fw-west
   - name: spoke5
     host: 10.2.0.18
     protocol: restconf
@@ -1142,11 +1213,11 @@ iosxe:
           - name: VPN-KEYRING
             peers:
             - name: central-headend
-              ipv4_address: 100.65.12.1
+              ipv4_address: 100.64.2.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke5}
             - name: west-headend
-              ipv4_address: 100.65.13.1
+              ipv4_address: 100.64.3.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke5}
           profiles:
@@ -1172,7 +1243,7 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to central-headend Gi6
+          description: WAN to fw-central eth6
           shutdown: false
           cdp: true
           ipv4:
@@ -1180,7 +1251,7 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to west-headend Gi6
+          description: WAN to fw-west eth6
           shutdown: false
           cdp: true
           ipv4:
@@ -1211,7 +1282,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.12.1
+          tunnel_destination_ipv4: 100.64.2.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
         - name: '13'
@@ -1221,7 +1292,7 @@ iosxe:
             address_mask: 255.255.255.252
           ip_mtu: 1400
           tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.65.13.1
+          tunnel_destination_ipv4: 100.64.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
@@ -1247,6 +1318,17 @@ iosxe:
               - network: 10.255.1.8
                 mask: 255.255.255.255
               - network: 192.168.17.0
+        static_routes:
+        - prefix: 100.64.2.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.12.1
+            name: via-fw-central
+        - prefix: 100.64.3.2
+          mask: 255.255.255.255
+          next_hops:
+          - ip: 100.65.13.1
+            name: via-fw-west
   - name: west-headend
     host: 10.2.0.17
     protocol: restconf
@@ -1325,44 +1407,24 @@ iosxe:
         ethernets:
         - type: GigabitEthernet
           id: '2'
-          description: WAN to spoke1 Gi4
+          description: WAN to fw-west eth1
           shutdown: false
           cdp: true
           ipv4:
-            address: 100.65.8.1
+            address: 100.64.3.2
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          description: WAN to spoke2 Gi4
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.9.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '4'
-          description: WAN to spoke3 Gi4
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.10.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '5'
-          description: WAN to spoke4 Gi3
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.11.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '6'
-          description: WAN to spoke5 Gi3
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.13.1
-            address_mask: 255.255.255.252
+          shutdown: true
         - type: GigabitEthernet
           id: '7'
           shutdown: true
@@ -1400,7 +1462,7 @@ iosxe:
             address: 172.17.9.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet3
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.9.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -1410,7 +1472,7 @@ iosxe:
             address: 172.17.10.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet4
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.10.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -1420,7 +1482,7 @@ iosxe:
             address: 172.17.11.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet5
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.11.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -1430,7 +1492,7 @@ iosxe:
             address: 172.17.13.1
             address_mask: 255.255.255.252
           ip_mtu: 1400
-          tunnel_source: GigabitEthernet6
+          tunnel_source: GigabitEthernet2
           tunnel_destination_ipv4: 100.65.13.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
@@ -1472,3 +1534,29 @@ iosxe:
               - network: 10.255.1.7
                 mask: 255.255.255.255
               - network: 192.168.16.0
+        static_routes:
+        - prefix: 100.65.8.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.3.1
+            name: via-fw-west
+        - prefix: 100.65.9.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.3.1
+            name: via-fw-west
+        - prefix: 100.65.10.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.3.1
+            name: via-fw-west
+        - prefix: 100.65.11.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.3.1
+            name: via-fw-west
+        - prefix: 100.65.13.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.3.1
+            name: via-fw-west

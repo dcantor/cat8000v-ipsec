@@ -1,0 +1,2609 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.14.4 on linux)" generated="2026-09-14T20:06:29.695453" rpa="false" schemaversion="5">
+<suite id="s1" name="c8000v ipsec vti lab" source="/home/dcantor/cat8000v-ipsec/tests/suites">
+<suite id="s1-s1" name="01 Management" source="/home/dcantor/cat8000v-ipsec/tests/suites/01_management.robot">
+<test id="s1-s1-t1" name="Routers are reachable over the OOB network with SSH and RESTCONF" line="7">
+<for flavor="IN">
+<iter>
+<kw name="Router Host" owner="common">
+<var>${host}</var>
+<arg>${r}</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:29.952517" elapsed="0.000028"/>
+</kw>
+<kw name="Host Ping" owner="LabLib">
+<arg>${host}</arg>
+<doc>ICMP ping from the host; fails unless at least one reply.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.952863" elapsed="0.000028"/>
+</kw>
+<kw name="Tcp Port Should Be Open" owner="LabLib">
+<arg>${host}</arg>
+<arg>22</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:29.952983" elapsed="0.000022"/>
+</kw>
+<kw name="Tcp Port Should Be Open" owner="LabLib">
+<arg>${host}</arg>
+<arg>443</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953088" elapsed="0.000018"/>
+</kw>
+<kw name="Restconf Get" owner="LabLib">
+<var>${json}</var>
+<arg>${host}</arg>
+<arg>Cisco-IOS-XE-native:native/hostname</arg>
+<doc>GET /restconf/data/&lt;path&gt; and return the parsed JSON.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953180" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${json}[Cisco-IOS-XE-native:hostname]</arg>
+<arg>${r}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953283" elapsed="0.000014"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${ver}</var>
+<arg>${r}</arg>
+<arg>show version | include uptime|Version 17</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953428" elapsed="0.000019"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${ver}</arg>
+<arg>${r} uptime</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953510" elapsed="0.000013"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${ver}</arg>
+<arg>Version 17.15</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.953576" elapsed="0.000013"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.952201" elapsed="0.001407"/>
+</iter>
+<msg time="2026-09-14T20:06:29.953642" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.951297" elapsed="0.002397">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.950959" elapsed="0.002908">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<test id="s1-s1-t2" name="Management interface lives in Mgmt-vrf with a default route to the host" line="20">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${cfg}</var>
+<arg>${r}</arg>
+<arg>show run interface GigabitEthernet1</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.954851" elapsed="0.000018"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>vrf forwarding Mgmt-vrf</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.954936" elapsed="0.000019"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>ip address ${ROUTERS}[${r}][host] 255.255.255.0</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.955050" elapsed="0.000019"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${rt}</var>
+<arg>${r}</arg>
+<arg>show ip route vrf Mgmt-vrf 0.0.0.0</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.955183" elapsed="0.000021"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${rt}</arg>
+<arg>Routing entry for 0.0.0.0/0</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.955292" elapsed="0.000021"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rt}</arg>
+<arg>(?m)^\\s*\\*?\\s*${OOB_GATEWAY}\\b</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.955399" elapsed="0.000016"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.954753" elapsed="0.000688"/>
+</iter>
+<msg time="2026-09-14T20:06:29.955473" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.954345" elapsed="0.001159">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.954064" elapsed="0.001561">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<test id="s1-s1-t3" name="License boot level provides the security feature set" line="30">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${lic}</var>
+<arg>${r}</arg>
+<arg>show version | include License Level</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.956457" elapsed="0.000029"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${lic}</arg>
+<arg>(?m)^License Level:\\s*network-advantage</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.956585" elapsed="0.000022"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${lic}</arg>
+<arg>(?m)^Addon License Level:\\s*dna-advantage</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.956744" elapsed="0.000023"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.956315" elapsed="0.000489"/>
+</iter>
+<msg time="2026-09-14T20:06:29.956834" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.955969" elapsed="0.000894">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.955778" elapsed="0.001193">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<test id="s1-s1-t4" name="AAA, SSH and VTY hardening from the NAC baseline" line="37">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${aaa}</var>
+<arg>${r}</arg>
+<arg>show run | include ^aaa</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958179" elapsed="0.000026"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${aaa}</arg>
+<arg>(?m)^aaa new-model$</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958324" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${aaa}</arg>
+<arg>(?m)^aaa authentication login default local$</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958454" elapsed="0.000023"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${aaa}</arg>
+<arg>(?m)^aaa authorization exec default local\\s*$</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958582" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${ssh}</var>
+<arg>${r}</arg>
+<arg>show ip ssh</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958773" elapsed="0.000026"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${ssh}</arg>
+<arg>SSH Enabled - version 2.0</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958906" elapsed="0.000026"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${ssh}</arg>
+<arg>Authentication timeout: 60 secs; Authentication retries: 3</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959047" elapsed="0.000021"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${vty}</var>
+<arg>${r}</arg>
+<arg>show run | section ^line vty</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959215" elapsed="0.000027"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${vty}</arg>
+<arg>transport input ssh</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959353" elapsed="0.000022"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${vty}</arg>
+<arg>access-class ${MGMT_ACL} in vrf-also</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959478" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${acl}</var>
+<arg>${r}</arg>
+<arg>show ip access-lists ${MGMT_ACL}</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959656" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${acl}</arg>
+<arg>20 permit 10\\.2\\.0\\.0, wildcard bits 0\\.0\\.0\\.255</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959795" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${banner}</var>
+<arg>${r}</arg>
+<arg>show run | section ^banner motd</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.959974" elapsed="0.000026"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${banner}</arg>
+<arg>${BANNER_TEXT}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.960098" elapsed="0.000024"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.958038" elapsed="0.002126"/>
+</iter>
+<msg time="2026-09-14T20:06:29.960199" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.957525" elapsed="0.002716">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.957237" elapsed="0.003140">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:06:29.961089" elapsed="0.000136"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:06:29.960893" elapsed="0.000398"/>
+</kw>
+<doc>Out-of-band management plane of the C8000v routers: reachability, SSH, RESTCONF, Mgmt-vrf, hardening.</doc>
+<status status="FAIL" start="2026-09-14T20:06:29.730320" elapsed="0.231005"/>
+</suite>
+<suite id="s1-s2" name="02 Underlay" source="/home/dcantor/cat8000v-ipsec/tests/suites/02_underlay.robot">
+<test id="s1-s2-t1" name="WAN point-to-point interfaces are up with the modelled addresses" line="8">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${brief}</var>
+<arg>${t}[hub]</arg>
+<arg>show ip interface brief | include ${t}[hub_if]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.967065" elapsed="0.000028"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>${t}[hub_if]\\s+${t}[hub_wan]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.967216" elapsed="0.000026"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${brief}</var>
+<arg>${t}[spoke]</arg>
+<arg>show ip interface brief | include ${t}[spoke_if]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.967406" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>${t}[spoke_if]\\s+${t}[spoke_wan]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.967547" elapsed="0.000023"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.966903" elapsed="0.000709"/>
+</iter>
+<msg time="2026-09-14T20:06:29.967653" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.966382" elapsed="0.001322">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.966074" elapsed="0.001784">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s2-t2" name="Each spoke reaches its headends' WAN addresses through the firewall, and nothing else" line="16">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${t}[spoke]</arg>
+<arg>ping ${t}[spoke_gw] source ${t}[spoke_if] repeat 3</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969116" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|66) percent</arg>
+<arg>msg=${t}[spoke]: firewall side of its link unreachable</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969268" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${t}[spoke]</arg>
+<arg>ping ${t}[hub_wan] source ${t}[spoke_if] repeat 3</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969459" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|66) percent</arg>
+<arg>msg=${t}[spoke]: ${t}[hub] WAN ${t}[hub_wan] unreachable via ${t}[firewall]</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969601" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${t}[hub]</arg>
+<arg>ping ${t}[spoke_wan] source ${t}[hub_if] repeat 3</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969799" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|66) percent</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.969937" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${rt}</var>
+<arg>${t}[spoke]</arg>
+<arg>show ip route ${t}[hub_wan]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.970113" elapsed="0.000026"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rt}</arg>
+<arg>Known via "static"[\s\S]*${t}[spoke_gw]</arg>
+<arg>msg=${t}[spoke]: no static route to ${t}[hub] via the firewall</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.970254" elapsed="0.000023"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.968983" elapsed="0.001347"/>
+</iter>
+<msg time="2026-09-14T20:06:29.970368" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.968465" elapsed="0.001943">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${a}</var>
+<arg>${SPOKE_TUNNELS}[${SPOKES}[0]][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.970535" elapsed="0.000050"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${b}</var>
+<arg>${SPOKE_TUNNELS}[${SPOKES}[1]][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.970706" elapsed="0.000021"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${SPOKES}[0]</arg>
+<arg>ping ${b}[spoke_wan] source ${a}[spoke_if] repeat 2</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.970881" elapsed="0.000026"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is 0 percent</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.971016" elapsed="0.000021"/>
+</kw>
+<status status="FAIL" start="2026-09-14T20:06:29.968136" elapsed="0.003038">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s2-t3" name="LLDP shows the firewall on each spoke's WAN port and on the headend's WAN port" line="33">
+<for flavor="IN">
+<iter>
+<kw name="Wait Until Keyword Succeeds" owner="BuiltIn">
+<arg>120s</arg>
+<arg>10s</arg>
+<arg>Lldp Shows Link</arg>
+<arg>${t}</arg>
+<doc>Runs the specified keyword and retries if it fails.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.972356" elapsed="0.000025"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.972241" elapsed="0.000191"/>
+</iter>
+<msg time="2026-09-14T20:06:29.972473" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.971786" elapsed="0.000726">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.971455" elapsed="0.001195">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s2-t4" name="Loopbacks carry the router-id and the site LAN" line="38">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${brief}</var>
+<arg>${r}</arg>
+<arg>show ip interface brief | include Loopback</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.973832" elapsed="0.000028"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>(?m)^Loopback0\\s+${ROUTERS}[${r}][router_id]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.973989" elapsed="0.000023"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>(?m)^Loopback10\\s+${ROUTERS}[${r}][lan_ip]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.974120" elapsed="0.000024"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.973672" elapsed="0.000515"/>
+</iter>
+<msg time="2026-09-14T20:06:29.974228" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.973197" elapsed="0.001074">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.972934" elapsed="0.001483">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:06:29.975136" elapsed="0.000128"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:06:29.974935" elapsed="0.000399"/>
+</kw>
+<doc>WAN underlay: each spoke has a point-to-point /30 link to its headend's firewall, each headend one link to its
+firewall; the headend WAN address is reached through the firewall (static routes); LLDP adjacency; loopbacks.</doc>
+<status status="FAIL" start="2026-09-14T20:06:29.962070" elapsed="0.013299"/>
+</suite>
+<suite id="s1-s3" name="03 Ipsec Vti" source="/home/dcantor/cat8000v-ipsec/tests/suites/03_ipsec_vti.robot">
+<test id="s1-s3-t1" name="Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec profile" line="8">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${cfg}</var>
+<arg>${t}[hub]</arg>
+<arg>show run interface Tunnel${t}[id]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.981458" elapsed="0.000034"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>description IPsec VTI to ${t}[spoke]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.981631" elapsed="0.000026"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>ip address ${t}[hub_ip] 255.255.255.252</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.981780" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel source ${t}[hub_if]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.981915" elapsed="0.000022"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel destination ${t}[spoke_wan]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982043" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel mode ipsec ipv4</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982175" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel protection ipsec profile ${IPSEC_PROFILE}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982304" elapsed="0.000023"/>
+</kw>
+<kw name="Should Not Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>nhrp</arg>
+<doc>Fails if ``container`` contains ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982436" elapsed="0.000023"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${cfg}</var>
+<arg>${t}[spoke]</arg>
+<arg>show run interface Tunnel${t}[id]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982630" elapsed="0.000027"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>description IPsec VTI to ${t}[hub]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982779" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>ip address ${t}[spoke_ip] 255.255.255.252</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.982916" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel source ${t}[spoke_if]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.983045" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel destination ${t}[hub_wan]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.983174" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel mode ipsec ipv4</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.983308" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel protection ipsec profile ${IPSEC_PROFILE}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.983456" elapsed="0.000023"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.981261" elapsed="0.002263"/>
+</iter>
+<msg time="2026-09-14T20:06:29.983569" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.980634" elapsed="0.002980">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.980253" elapsed="0.003531">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s3-t2" name="Tunnels are up/up at both ends and the tunnel subnet is reachable" line="27">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${brief}</var>
+<arg>${t}[hub]</arg>
+<arg>show ip interface brief | include Tunnel${t}[id]${SPACE}</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985071" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>Tunnel${t}[id]\\s+${t}[hub_ip]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985226" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${brief}</var>
+<arg>${t}[spoke]</arg>
+<arg>show ip interface brief | include Tunnel${t}[id]${SPACE}</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985411" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${brief}</arg>
+<arg>Tunnel${t}[id]\\s+${t}[spoke_ip]\\s+YES\\s+\\S+\\s+up\\s+up</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985550" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${t}[spoke]</arg>
+<arg>ping ${t}[hub_ip] source Tunnel${t}[id] repeat 5</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985745" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|80) percent</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.985885" elapsed="0.000023"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.984924" elapsed="0.001026"/>
+</iter>
+<msg time="2026-09-14T20:06:29.985994" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.984393" elapsed="0.001645">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.984079" elapsed="0.002111">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s3-t3" name="IKEv2 SAs are READY with the modelled proposal and PSK authentication" line="37">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${sa}</var>
+<arg>${t}[hub]</arg>
+<arg>show crypto ikev2 sa</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.987463" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>(?m)^\\d+\\s+${t}[hub_wan]/500\\s+${t}[spoke_wan]/500\\s+none/none\\s+READY</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.987615" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: PSK, Auth verify: PSK</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.987759" elapsed="0.000023"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${ssa}</var>
+<arg>${t}[spoke]</arg>
+<arg>show crypto ikev2 sa</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.987948" elapsed="0.000028"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${ssa}</arg>
+<arg>(?m)^\\d+\\s+${t}[spoke_wan]/500\\s+${t}[hub_wan]/500\\s+none/none\\s+READY</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988100" elapsed="0.000024"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.987310" elapsed="0.000858"/>
+</iter>
+<msg time="2026-09-14T20:06:29.988210" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.986792" elapsed="0.001462">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${prof}</var>
+<arg>${r}</arg>
+<arg>show crypto ikev2 profile</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988618" elapsed="0.000027"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${prof}</arg>
+<arg>IKEv2 profile: ${IKEV2_PROFILE}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988773" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${prof}</arg>
+<arg>Local authentication method: pre-share</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988902" elapsed="0.000024"/>
+</kw>
+<if>
+<branch type="IF" condition="${DPD}[enabled]">
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${prof}</arg>
+<arg>DPD: interval ${DPD}[interval], retry-interval ${DPD}[retries], on-demand</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.989159" elapsed="0.000025"/>
+</kw>
+<status status="NOT RUN" start="2026-09-14T20:06:29.989036" elapsed="0.000190"/>
+</branch>
+<status status="NOT RUN" start="2026-09-14T20:06:29.989001" elapsed="0.000266"/>
+</if>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988480" elapsed="0.000825"/>
+</iter>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:29.988326" elapsed="0.001015"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.986477" elapsed="0.003014">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s3-t4" name="Traffic through the tunnels is encrypted with the modelled transform set" line="54">
+<for flavor="IN">
+<iter>
+<kw name="Ipsec Encaps">
+<var>${before}</var>
+<arg>${t}[spoke]</arg>
+<arg>Tunnel${t}[id]</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:29.990867" elapsed="0.000034"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${t}[spoke]</arg>
+<arg>ping ${t}[hub_ip] source Tunnel${t}[id] repeat 10</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991072" elapsed="0.000033"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|90|80) percent</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991231" elapsed="0.000024"/>
+</kw>
+<kw name="Wait Until Keyword Succeeds" owner="BuiltIn">
+<arg>90s</arg>
+<arg>5s</arg>
+<arg>Encaps Advanced</arg>
+<arg>${t}[spoke]</arg>
+<arg>Tunnel${t}[id]</arg>
+<arg>${before}</arg>
+<doc>Runs the specified keyword and retries if it fails.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991382" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${sa}</var>
+<arg>${t}[spoke]</arg>
+<arg>show crypto ipsec sa interface Tunnel${t}[id]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991577" elapsed="0.000025"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>transform: ${ESP_TRANSFORM}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991750" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>in use settings ={Tunnel, }</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.991879" elapsed="0.000024"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.990683" elapsed="0.001261"/>
+</iter>
+<msg time="2026-09-14T20:06:29.991986" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.990143" elapsed="0.001892">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.989806" elapsed="0.002382">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s3-t5" name="Each hub holds exactly one IKEv2 session per spoke tunnel" line="66">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${sess}</var>
+<arg>${h}</arg>
+<arg>show crypto ikev2 session | include ^Session-id</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.993415" elapsed="0.000027"/>
+</kw>
+<kw name="Get Line Count" owner="String">
+<var>${n}</var>
+<arg>${sess}</arg>
+<doc>Returns and logs the number of lines in the given string.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.993560" elapsed="0.000025"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${n}</arg>
+<arg>${{ len($HUB_TUNNELS[$h]) }}</arg>
+<arg>msg=${h}: ${sess}</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:29.993702" elapsed="0.000021"/>
+</kw>
+<var name="${h}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:29.993273" elapsed="0.000490"/>
+</iter>
+<msg time="2026-09-14T20:06:29.993805" level="FAIL">Variable '@{HUBS}' not found.</msg>
+<var>${h}</var>
+<value>@{HUBS}</value>
+<status status="FAIL" start="2026-09-14T20:06:29.992805" elapsed="0.001044">Variable '@{HUBS}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.992486" elapsed="0.001508">Variable '@{HUBS}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:06:29.994701" elapsed="0.000117"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:06:29.994503" elapsed="0.000376"/>
+</kw>
+<doc>Point-to-point IPsec VTIs (tunnel mode ipsec ipv4) between each hub and each of its spokes, IKEv2 with
+pre-shared keys, traffic actually encrypted, no encryption of the OOB management plane.</doc>
+<status status="FAIL" start="2026-09-14T20:06:29.976256" elapsed="0.018658"/>
+</suite>
+<suite id="s1-s4" name="04 Routing" source="/home/dcantor/cat8000v-ipsec/tests/suites/04_routing.robot">
+<test id="s1-s4-t1" name="Each hub has an Established eBGP session with each of its spokes over the tunnel" line="8">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${sum}</var>
+<arg>${h}</arg>
+<arg>show bgp ipv4 unicast summary</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.000741" elapsed="0.000029"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sum}</arg>
+<arg>local AS number ${ROUTERS}[${h}][asn]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.000894" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sum}</arg>
+<arg>BGP router identifier ${ROUTERS}[${h}][router_id]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001031" elapsed="0.000023"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sum}</arg>
+<arg>(?m)^${t}[spoke_ip]\\s+4\\s+${ROUTERS}[${t}[spoke]][asn]\\s+.*\\s\\d+\\s*$</arg>
+<arg>msg=${h}: session to ${t}[spoke] not Established</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001288" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${nbr}</var>
+<arg>${h}</arg>
+<arg>show bgp ipv4 unicast neighbors ${t}[spoke_ip] | include BGP state|external link</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001474" elapsed="0.000027"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${nbr}</arg>
+<arg>BGP state = Established</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001613" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${nbr}</arg>
+<arg>external link</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001754" elapsed="0.000023"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001192" elapsed="0.000625"/>
+</iter>
+<var>${t}</var>
+<value>@{HUB_TUNNELS}[${h}]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001112" elapsed="0.000742"/>
+</for>
+<kw name="Get Line Count" owner="String">
+<var>${count}</var>
+<arg>${{ $sum.split('Neighbor', 1)[1].strip() }}</arg>
+<doc>Returns and logs the number of lines in the given string.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.001964" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${count}</arg>
+<arg>${{ len($HUB_TUNNELS[$h]) + 1 }}</arg>
+<arg>msg=${h} must peer with its spokes only</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.002097" elapsed="0.000024"/>
+</kw>
+<var name="${h}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.000555" elapsed="0.001617"/>
+</iter>
+<msg time="2026-09-14T20:06:30.002214" level="FAIL">Variable '@{HUBS}' not found.</msg>
+<var>${h}</var>
+<value>@{HUBS}</value>
+<status status="FAIL" start="2026-09-14T20:06:30.000022" elapsed="0.002237">Variable '@{HUBS}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:29.999677" elapsed="0.002734">Variable '@{HUBS}' not found.</status>
+</test>
+<test id="s1-s4-t2" name="Every spoke peers with its hub(s) only and learns every other site" line="23">
+<kw name="Evaluate" owner="BuiltIn">
+<msg time="2026-09-14T20:06:30.003919" level="FAIL">Evaluating expression '2 * (len($ROUTER_NAMES) - 1)' failed: Variable '$ROUTER_NAMES' not found.</msg>
+<var>${want}</var>
+<arg>2 * (len($ROUTER_NAMES) - 1)</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="FAIL" start="2026-09-14T20:06:30.003084" elapsed="0.000997">Evaluating expression '2 * (len($ROUTER_NAMES) - 1)' failed: Variable '$ROUTER_NAMES' not found.</status>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${sum}</var>
+<arg>${s}</arg>
+<arg>show bgp ipv4 unicast summary | begin Neighbor</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004495" elapsed="0.000029"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sum}</arg>
+<arg>(?m)^${t}[hub_ip]\\s+4\\s+${ROUTERS}[${t}[hub]][asn]\\s+.*\\s\\d+\\s*$</arg>
+<arg>msg=${s}: session to ${t}[hub] not Established</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004747" elapsed="0.000024"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004647" elapsed="0.000171"/>
+</iter>
+<var>${t}</var>
+<value>@{SPOKE_TUNNELS}[${s}]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004589" elapsed="0.000267"/>
+</for>
+<kw name="Get Line Count" owner="String">
+<var>${count}</var>
+<arg>${sum}</arg>
+<doc>Returns and logs the number of lines in the given string.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004991" elapsed="0.000024"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${count}</arg>
+<arg>${{ len($SPOKE_TUNNELS[$s]) + 1 }}</arg>
+<arg>msg=spokes must peer with their hubs only</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005129" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${rt}</var>
+<arg>${s}</arg>
+<arg>show ip route bgp</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005329" elapsed="0.000026"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Continue For Loop If" owner="BuiltIn">
+<arg>'${s}' == '${o}'</arg>
+<doc>Skips the current FOR loop iteration if the ``condition`` is true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005578" elapsed="0.000023"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rt}</arg>
+<arg>(?m)^B\\s+${ROUTERS}[${o}][lan] \\[20/0\\] via 172\\.17\\.</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005740" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rt}</arg>
+<arg>(?m)^B\\s+${ROUTERS}[${o}][router_id](/32)? \\[20/0\\] via 172\\.17\\.</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005875" elapsed="0.000023"/>
+</kw>
+<var name="${o}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005490" elapsed="0.000451"/>
+</iter>
+<var>${o}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.005420" elapsed="0.000558"/>
+</for>
+<var name="${s}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004333" elapsed="0.001684"/>
+</iter>
+<var>${s}</var>
+<value>@{SPOKES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.004162" elapsed="0.001890"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:30.002709" elapsed="0.003486">Evaluating expression '2 * (len($ROUTER_NAMES) - 1)' failed: Variable '$ROUTER_NAMES' not found.</status>
+</test>
+<test id="s1-s4-t3" name="Spoke routes to other spokes go through a hub" line="40">
+<kw name="Evaluate" owner="BuiltIn">
+<msg time="2026-09-14T20:06:30.007603" level="FAIL">Evaluating expression "'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])" failed: Variable '$ROUTERS' not found.</msg>
+<var>${hub_asns}</var>
+<arg>'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="FAIL" start="2026-09-14T20:06:30.006850" elapsed="0.000887">Evaluating expression "'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])" failed: Variable '$ROUTERS' not found.</status>
+</kw>
+<for flavor="IN">
+<iter>
+<for flavor="IN">
+<iter>
+<kw name="Continue For Loop If" owner="BuiltIn">
+<arg>'${s}' == '${o}'</arg>
+<doc>Skips the current FOR loop iteration if the ``condition`` is true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.008146" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${path}</var>
+<arg>${s}</arg>
+<arg>show bgp ipv4 unicast ${ROUTERS}[${o}][lan]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.008337" elapsed="0.000027"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${path}</arg>
+<arg>(?m)^\\s+(${hub_asns}) ${ROUTERS}[${o}][asn]\\s*$</arg>
+<arg>msg=${s}: no hub-transit path to ${o} LAN</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.008485" elapsed="0.000025"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${path}</arg>
+<arg>valid, external, best</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.008625" elapsed="0.000023"/>
+</kw>
+<var name="${o}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.008054" elapsed="0.000644"/>
+</iter>
+<var>${o}</var>
+<value>@{SPOKES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.007962" elapsed="0.000772"/>
+</for>
+<var name="${s}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.007928" elapsed="0.000846"/>
+</iter>
+<var>${s}</var>
+<value>@{SPOKES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.007814" elapsed="0.000994"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:30.006486" elapsed="0.002461">Evaluating expression "'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])" failed: Variable '$ROUTERS' not found.</status>
+</test>
+<test id="s1-s4-t4" name="Site LANs reach each other through the encrypted tunnels" line="51">
+<for flavor="IN">
+<iter>
+<for flavor="IN">
+<iter>
+<kw name="Continue For Loop If" owner="BuiltIn">
+<arg>'${r}' == '${o}'</arg>
+<doc>Skips the current FOR loop iteration if the ``condition`` is true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010299" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${p}</var>
+<arg>${r}</arg>
+<arg>ping ${ROUTERS}[${o}][lan_ip] source ${ROUTERS}[${r}][lan_ip] repeat 5</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010489" elapsed="0.000028"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${p}</arg>
+<arg>Success rate is (100|80|60) percent</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010646" elapsed="0.000025"/>
+</kw>
+<var name="${o}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010203" elapsed="0.000528"/>
+</iter>
+<var>${o}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010128" elapsed="0.000640"/>
+</for>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:30.010094" elapsed="0.000716"/>
+</iter>
+<msg time="2026-09-14T20:06:30.010849" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:30.009544" elapsed="0.001349">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${hub_ips}</var>
+<arg>'|'.join([t['hub_ip'] for t in $SPOKE_TUNNELS[$SPOKES[0]]]).replace('.', '\\\\.')</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.011014" elapsed="0.000023"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${tr}</var>
+<arg>${SPOKES}[0]</arg>
+<arg>traceroute ${ROUTERS}[${SPOKES}[1]][lan_ip] source ${ROUTERS}[${SPOKES}[0]][lan_ip] numeric probe 1 timeout 2</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.011200" elapsed="0.000026"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${tr}</arg>
+<arg>(?m)^\\s*1\\s+(${hub_ips})\\s</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:30.011347" elapsed="0.000021"/>
+</kw>
+<status status="FAIL" start="2026-09-14T20:06:30.009241" elapsed="0.002266">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:06:30.012214" elapsed="0.000112"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:06:30.012025" elapsed="0.000363"/>
+</kw>
+<doc>eBGP over the VTIs: one AS per site, every hub peers with each of its spokes, spokes learn every other
+site via a hub (AS path through the hub), end-to-end reachability between site LANs.</doc>
+<status status="FAIL" start="2026-09-14T20:06:29.995745" elapsed="0.016679"/>
+</suite>
+<suite id="s1-s5" name="05 Nac Compliance" source="/home/dcantor/cat8000v-ipsec/tests/suites/05_nac_compliance.robot">
+<test id="s1-s5-t1" name="Terraform plan reports no drift from the NAC data model" line="7">
+<kw name="Terraform Plan Exit Code" owner="LabLib">
+<msg time="2026-09-14T20:06:49.833269" level="INFO" html="true">&lt;pre&gt;unicast/ipv4-unicast/neighbor=172.17.2.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["central-headend/172.17.4.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65204/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.4.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["central-headend/172.17.5.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65204/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.5.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["west-headend/172.17.8.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65206/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.8.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke5/172.17.12.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65207/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.12.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["west-headend/172.17.9.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65206/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.9.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke4/172.17.11.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65205/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.11.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["central-headend/172.17.7.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65204/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.7.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["central-headend/172.17.12.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65204/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.12.2]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke2/172.17.5.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65202/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.5.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke3/172.17.10.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.10.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke1/172.17.4.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65201/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.4.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke4/172.17.7.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65205/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.7.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["spoke3/172.17.3.1"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65203/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.3.1]
+module.iosxe.iosxe_bgp_ipv4_unicast_neighbor.bgp_ipv4_unicast_neighbor["west-headend/172.17.13.2"]: Refreshing state... [id=Cisco-IOS-XE-native:native/router/Cisco-IOS-XE-bgp:bgp=65206/address-family/no-vrf/ipv4=unicast/ipv4-unicast/neighbor=172.17.13.2]
+module.iosxe.iosxe_cli.cli_0["west-headend/mss_west-headend_tunnel9"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke1/mss_spoke1_tunnel1"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["west-headend/mss_west-headend_tunnel8"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke4/mss_spoke4_tunnel11"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["central-headend/mss_central-headend_tunnel6"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["central-headend/mss_central-headend_tunnel12"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["central-headend/mss_central-headend_tunnel5"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["east-headend/mss_east-headend_tunnel1"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["central-headend/mss_central-headend_tunnel4"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke2/mss_spoke2_tunnel2"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke5/mss_spoke5_tunnel12"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke4/mss_spoke4_tunnel7"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke3/mss_spoke3_tunnel6"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["central-headend/mss_central-headend_tunnel7"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke3/mss_spoke3_tunnel10"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["west-headend/mss_west-headend_tunnel11"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke1/mss_spoke1_tunnel8"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["east-headend/mss_east-headend_tunnel3"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["east-headend/mss_east-headend_tunnel2"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["west-headend/mss_west-headend_tunnel10"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke1/mss_spoke1_tunnel4"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["west-headend/mss_west-headend_tunnel13"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke2/mss_spoke2_tunnel9"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke3/mss_spoke3_tunnel3"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke2/mss_spoke2_tunnel5"]: Refreshing state...
+module.iosxe.iosxe_cli.cli_0["spoke5/mss_spoke5_tunnel13"]: Refreshing state...
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
+
+&lt;/pre&gt;</msg>
+<msg time="2026-09-14T20:06:49.833661" level="INFO">${rc} = 0</msg>
+<var>${rc}</var>
+<doc>Run `terraform plan -detailed-exitcode` via lab.sh nac: 0 = no drift, 2 = changes.</doc>
+<status status="PASS" start="2026-09-14T20:06:30.029394" elapsed="19.804331"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-09-14T20:06:49.834727" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${rc}</arg>
+<arg>0</arg>
+<arg>msg=terraform plan exit code ${rc} (0 = in sync, 2 = drift, 1 = error)</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-09-14T20:06:49.833893" elapsed="0.000908"/>
+</kw>
+<tag>nac</tag>
+<status status="PASS" start="2026-09-14T20:06:30.028808" elapsed="19.806117"/>
+</test>
+<doc>Configuration compliance: the routers match the Network-as-Code data model (no Terraform drift).</doc>
+<status status="PASS" start="2026-09-14T20:06:30.013285" elapsed="19.821975"/>
+</suite>
+<suite id="s1-s6" name="06 Nautobot" source="/home/dcantor/cat8000v-ipsec/tests/suites/06_nautobot.robot">
+<test id="s1-s6-t1" name="Routers exist in Nautobot with role, serial, platform and management IP matching reality" line="10">
+<for flavor="IN">
+<iter>
+<kw name="Nautobot Get" owner="LabLib">
+<var>${d}</var>
+<arg>dcim/devices/</arg>
+<arg>name=${r}</arg>
+<arg>depth=1</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844312" elapsed="0.000026"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${d}[count]</arg>
+<arg>1</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844447" elapsed="0.000021"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${dev}</var>
+<arg>${d}[results][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844622" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[location][name]</arg>
+<arg>${ROUTERS}[${r}][site]</arg>
+<arg>msg=${r} must live at its branch/HQ location</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844765" elapsed="0.000021"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[role][name]</arg>
+<arg>vpn-${ROUTERS}[${r}][role]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844868" elapsed="0.000014"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[device_type][model]</arg>
+<arg>C8000V</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.844968" elapsed="0.000018"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[platform][name]</arg>
+<arg>cisco_xe</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.845056" elapsed="0.000018"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[primary_ip4][host]</arg>
+<arg>${ROUTERS}[${r}][host]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.845233" elapsed="0.000016"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${ver}</var>
+<arg>${r}</arg>
+<arg>show version | include Processor board ID</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.845391" elapsed="0.000025"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${ver}</arg>
+<arg>${dev}[serial]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.845496" elapsed="0.000016"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:49.843953" elapsed="0.001667"/>
+</iter>
+<msg time="2026-09-14T20:06:49.845657" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:49.843497" elapsed="0.002214">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:49.843201" elapsed="0.002645">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<test id="s1-s6-t2" name="WAN links are modelled as cables between the hub and spoke ports with /30 addresses" line="24">
+<for flavor="IN">
+<iter>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${d}</var>
+<arg>{ interfaces(device:["${t}[spoke]"], name:"${t}[spoke_if]") { enabled description ip_addresses { address parent { prefix role { name } } } connected_interface { name device { name } ip_addresses { address } } } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:49.846961" elapsed="0.000098"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${i}</var>
+<arg>${d}[interfaces][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847155" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be True" owner="BuiltIn">
+<arg>${i}[enabled]</arg>
+<doc>Fails if the given condition is not true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847254" elapsed="0.000016"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[description]</arg>
+<arg>WAN to ${t}[hub] ${{ $t['hub_if'].replace('GigabitEthernet', 'Gi') }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847350" elapsed="0.000015"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[ip_addresses][0][address]</arg>
+<arg>${t}[spoke_wan]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847438" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[ip_addresses][0][parent][prefix]</arg>
+<arg>${t}[wan_prefix]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847523" elapsed="0.000018"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[ip_addresses][0][parent][role][name]</arg>
+<arg>wan-p2p</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847615" elapsed="0.000015"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[connected_interface][device][name]</arg>
+<arg>${t}[hub]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847852" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[connected_interface][name]</arg>
+<arg>${t}[hub_if]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.847952" elapsed="0.000088"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[connected_interface][ip_addresses][0][address]</arg>
+<arg>${t}[hub_wan]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.848133" elapsed="0.000018"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:49.846885" elapsed="0.001297"/>
+</iter>
+<msg time="2026-09-14T20:06:49.848216" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:49.846403" elapsed="0.001844">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${d}</var>
+<arg>{ interfaces(device:[${ROUTER_GQL}], description:"unwired") { device { name } name enabled } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:49.848338" elapsed="0.000017"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Not Be True" owner="BuiltIn">
+<arg>${i}[enabled]</arg>
+<arg>msg=${i}[device][name]/${i}[name] is unwired but enabled</arg>
+<doc>Fails if the given condition is true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.848506" elapsed="0.000090"/>
+</kw>
+<var name="${i}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:49.848443" elapsed="0.000188"/>
+</iter>
+<var>${i}</var>
+<value>@{d}[interfaces]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:49.848392" elapsed="0.000266"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:49.846152" elapsed="0.002623">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s6-t3" name="The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spoke pair, hub/spoke endpoints" line="42">
+<kw name="Nautobot Graphql" owner="LabLib">
+<msg time="2026-09-14T20:06:49.849822" level="FAIL">Variable '${VPN_NAME}' not found.</msg>
+<var>${d}</var>
+<arg>{ vpns(name:"${VPN_NAME}") { name service_type status { name } vpn_profile { name } vpn_tunnels { name tunnel_id encapsulation status { name } vpn_profile { name } endpoint_a { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } endpoint_z { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } } } }</arg>
+<status status="FAIL" start="2026-09-14T20:06:49.849250" elapsed="0.000610">Variable '${VPN_NAME}' not found.</status>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${d}[vpns]</arg>
+<arg>1</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.849954" elapsed="0.000091"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${vpn}</var>
+<arg>${d}[vpns][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850141" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${vpn}[service_type]</arg>
+<arg>IPSEC</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850263" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${vpn}[status][name]</arg>
+<arg>Active</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850378" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${vpn}[vpn_profile][name]</arg>
+<arg>${IPSEC_PROFILE}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850474" elapsed="0.000015"/>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${vpn}[vpn_tunnels]</arg>
+<arg>${{ len($TUNNEL_LIST) }}</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850559" elapsed="0.000019"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${s}</var>
+<arg>${t}[endpoint_z][device][name]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850858" elapsed="0.000017"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${h}</var>
+<arg>${t}[endpoint_a][device][name]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850953" elapsed="0.000206"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${x}</var>
+<arg>[x for x in $TUNNEL_LIST if x['hub'] == $h and x['spoke'] == $s][0]</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851251" elapsed="0.000016"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${t}[name]</arg>
+<arg>${h}-${s}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851348" elapsed="0.000016"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${t}[tunnel_id]</arg>
+<arg>${x}[id]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851435" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${t}[encapsulation]</arg>
+<arg>IPSEC_TUNNEL</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851519" elapsed="0.000095"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${t}[status][name]</arg>
+<arg>Active</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851718" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${t}[vpn_profile][name]</arg>
+<arg>${VPN_PROFILE}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851817" elapsed="0.000018"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${a}</var>
+<arg>${t}[endpoint_a]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.851905" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[role][name]</arg>
+<arg>hub</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852076" elapsed="0.000027"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[source_interface][name]</arg>
+<arg>${x}[hub_if]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852181" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[source_ipaddress][address]</arg>
+<arg>${x}[hub_wan]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852268" elapsed="0.000018"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[tunnel_interface][name]</arg>
+<arg>Tunnel${x}[id]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852594" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[tunnel_interface][type]</arg>
+<arg>TUNNEL</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852703" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${a}[tunnel_interface][ip_addresses][0][address]</arg>
+<arg>${x}[hub_ip]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852795" elapsed="0.000017"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${pfx}</var>
+<arg>sorted(p['prefix'] for p in $a['protected_prefixes'])</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.852882" elapsed="0.000016"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${pfx}</arg>
+<arg>${{ sorted([$ROUTERS[$h]['router_id'] + '/32', $ROUTERS[$h]['lan']]) }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.854595" elapsed="0.000024"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${z}</var>
+<arg>${t}[endpoint_z]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.854802" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${z}[role][name]</arg>
+<arg>spoke</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.854908" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${z}[source_interface][name]</arg>
+<arg>${x}[spoke_if]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855009" elapsed="0.000018"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${z}[source_ipaddress][address]</arg>
+<arg>${x}[spoke_wan]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855119" elapsed="0.000016"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${z}[tunnel_interface][name]</arg>
+<arg>Tunnel${x}[id]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855213" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${z}[tunnel_interface][ip_addresses][0][address]</arg>
+<arg>${x}[spoke_ip]/30</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855300" elapsed="0.000016"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${pfx}</var>
+<arg>sorted(p['prefix'] for p in $z['protected_prefixes'])</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855393" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${pfx}</arg>
+<arg>${{ sorted([$ROUTERS[$s]['router_id'] + '/32', $ROUTERS[$s]['lan']]) }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855487" elapsed="0.000013"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${cfg}</var>
+<arg>${h}</arg>
+<arg>show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855659" elapsed="0.000024"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel source ${a}[source_interface][name]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855773" elapsed="0.000020"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel destination ${{ $z['source_ipaddress']['address'].split('/')[0] }}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855866" elapsed="0.000014"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel mode ipsec ipv4</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.855959" elapsed="0.000021"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${cfg}</var>
+<arg>${s}</arg>
+<arg>show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.856134" elapsed="0.000397"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel source ${z}[source_interface][name]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.856625" elapsed="0.000018"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel destination ${{ $a['source_ipaddress']['address'].split('/')[0] }}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.856742" elapsed="0.000016"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${cfg}</arg>
+<arg>tunnel mode ipsec ipv4</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.856834" elapsed="0.000019"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850794" elapsed="0.006084"/>
+</iter>
+<var>${t}</var>
+<value>@{vpn}[vpn_tunnels]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:49.850619" elapsed="0.006290"/>
+</for>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${d}</var>
+<arg>{ interfaces(device:[${ROUTER_GQL}], type:"tunnel") { cf_tunnel_mode cf_tunnel_ipsec_profile rel_tunnel_source_source { name } } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857075" elapsed="0.000091"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[cf_tunnel_mode]</arg>
+<arg>${None}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857376" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[cf_tunnel_ipsec_profile]</arg>
+<arg>${None}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857475" elapsed="0.000014"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${i}[rel_tunnel_source_source]</arg>
+<arg>${None}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857560" elapsed="0.000018"/>
+</kw>
+<var name="${i}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857295" elapsed="0.000310"/>
+</iter>
+<var>${i}</var>
+<value>@{d}[interfaces]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:49.857229" elapsed="0.000397"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:49.848934" elapsed="0.008854">Variable '${VPN_NAME}' not found.</status>
+</test>
+<test id="s1-s6-t4" name="Locations form the hierarchy lab site -&gt; region -&gt; branch, with site metadata on the branch" line="96">
+<kw name="Nautobot Graphql" owner="LabLib">
+<msg time="2026-09-14T20:06:51.358728" level="INFO">GraphQL { locations(location_type:"Branch") { name cf_site_code cf_contact parent { name location_type { name } parent { name } } devices { name } } }
+-&gt; 200 {"data":{"locations":[{"name":"branch-1","cf_site_code":"EA-1","cf_contact":"noc-east@lab.local","parent":{"name":"East","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"spoke1"}]},{"name":"branch-2","cf_site_code":"CE-2","cf_contact":"noc-central@lab.local","parent":{"name":"Central","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"spoke2"}]},{"name":"branch-3","cf_site_code":"WE-3","cf_contact":"noc-west@lab.local","parent":{"name":"West","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"spoke3"}]},{"name":"branch-4","cf_site_code":"CE-4","cf_contact":"noc-central@lab.local","parent":{"name":"Central","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"spoke4"}]},{"name":"branch-5","cf_site_code":"WE-5","cf_contact":"noc-west@lab.local","parent":{"name":"West","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"spoke5"}]},{"name":"central-hq","cf_site_code":"CE-HQ","cf_contact":"noc-central@lab.local","parent":{"name":"Central","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"central-headend"},{"name":"fw-central"}]},{"name":"east-hq","cf_site_code":"EA-HQ","cf_contact":"noc-east@lab.local","parent":{"name":"East","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"east-headend"},{"name":"fw-east"}]},{"name":"west-hq","cf_site_code":"WE-HQ","cf_contact":"noc-west@lab.local","parent":{"name":"West","location_type":{"name":"Region"},"parent":{"name":"c8000v-ipsec-lab"}},"devices":[{"name":"fw-west"},{"name":"west-headend"}]}]}}</msg>
+<msg time="2026-09-14T20:06:51.359201" level="INFO">${d} = {'locations': [{'name': 'branch-1', 'cf_site_code': 'EA-1', 'cf_contact': 'noc-east@lab.local', 'parent': {'name': 'East', 'location_type': {'name': 'Region'}, 'parent': {'name': 'c8000v-ipsec-lab'}},...</msg>
+<var>${d}</var>
+<arg>{ locations(location_type:"Branch") { name cf_site_code cf_contact parent { name location_type { name } parent { name } } devices { name } } }</arg>
+<status status="PASS" start="2026-09-14T20:06:49.858431" elapsed="1.500815"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${br}</var>
+<arg>[l for l in $d['locations'] if l['name'] == $ROUTERS[$r]['site']][0]</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.360405" elapsed="0.000030"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${br}[parent][name]</arg>
+<arg>${ROUTERS}[${r}][region]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.360624" elapsed="0.000026"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${br}[parent][location_type][name]</arg>
+<arg>Region</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.360838" elapsed="0.000024"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${br}[parent][parent][name]</arg>
+<arg>${NAUTOBOT_LOCATION}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.360951" elapsed="0.000019"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${br}[cf_site_code]</arg>
+<arg>${ROUTERS}[${r}][site_code]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.361050" elapsed="0.000016"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${{ [x['name'] for x in $br['devices']] }}</arg>
+<arg>${r}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.361143" elapsed="0.000020"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.360204" elapsed="0.000985"/>
+</iter>
+<msg time="2026-09-14T20:06:51.361220" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:51.359454" elapsed="0.001809">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${rg}</var>
+<arg>{ locations(location_type:"Region") { name } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:51.361560" elapsed="0.000020"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${{ sorted([l["name"] for l in $rg["locations"]]) }}</arg>
+<arg>${{ sorted($REGIONS) }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.361667" elapsed="0.000104"/>
+</kw>
+<status status="FAIL" start="2026-09-14T20:06:49.858078" elapsed="1.503841">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<test id="s1-s6-t5" name="Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke" line="109">
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${kr}</var>
+<arg>${s}</arg>
+<arg>show run | section crypto ikev2 keyring</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363280" elapsed="0.000031"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${kr}</arg>
+<arg>(?s)peer ${t}[hub]\\s+address ${t}[hub_wan]\\s+pre-shared-key ${ROUTERS}[${s}][psk]</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363521" elapsed="0.000024"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363442" elapsed="0.000149"/>
+</iter>
+<var>${t}</var>
+<value>@{SPOKE_TUNNELS}[${s}]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363378" elapsed="0.000251"/>
+</for>
+<for flavor="IN">
+<iter>
+<kw name="Continue For Loop If" owner="BuiltIn">
+<arg>'${s}' == '${o}'</arg>
+<doc>Skips the current FOR loop iteration if the ``condition`` is true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363846" elapsed="0.000026"/>
+</kw>
+<kw name="Should Not Contain" owner="BuiltIn">
+<arg>${kr}</arg>
+<arg>${ROUTERS}[${o}][psk]</arg>
+<arg>msg=${s} must not know ${o}'s key</arg>
+<doc>Fails if ``container`` contains ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363982" elapsed="0.000024"/>
+</kw>
+<var name="${o}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363753" elapsed="0.000300"/>
+</iter>
+<var>${o}</var>
+<value>@{SPOKES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363694" elapsed="0.000395"/>
+</for>
+<var name="${s}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.363104" elapsed="0.001023"/>
+</iter>
+<msg time="2026-09-14T20:06:51.364168" level="FAIL">Variable '@{SPOKES}' not found.</msg>
+<var>${s}</var>
+<value>@{SPOKES}</value>
+<status status="FAIL" start="2026-09-14T20:06:51.362600" elapsed="0.001613">Variable '@{SPOKES}' not found.</status>
+</for>
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${kr}</var>
+<arg>${h}</arg>
+<arg>show run | section crypto ikev2 keyring</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364556" elapsed="0.000026"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${kr}</arg>
+<arg>(?s)peer ${t}[spoke]\\s+address ${t}[spoke_wan]\\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364935" elapsed="0.000024"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364841" elapsed="0.000162"/>
+</iter>
+<var>${t}</var>
+<value>@{HUB_TUNNELS}[${h}]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364644" elapsed="0.000395"/>
+</for>
+<kw name="Should Not Contain" owner="BuiltIn">
+<arg>${kr}</arg>
+<arg>address 0.0.0.0</arg>
+<arg>msg=${h} still has the wildcard peer</arg>
+<doc>Fails if ``container`` contains ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.365144" elapsed="0.000024"/>
+</kw>
+<var name="${h}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364392" elapsed="0.000821"/>
+</iter>
+<var>${h}</var>
+<value>@{HUBS}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.364281" elapsed="0.000967"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:51.362264" elapsed="0.003139">Variable '@{SPOKES}' not found.</status>
+</test>
+<test id="s1-s6-t6" name="The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers" line="128">
+<kw name="Nautobot Graphql" owner="LabLib">
+<msg time="2026-09-14T20:06:51.366853" level="FAIL">Variable '${VPN_PROFILE}' not found.</msg>
+<var>${d}</var>
+<arg>{ vpn_profiles(name:"${VPN_PROFILE}") { name keepalive_enabled keepalive_interval keepalive_retries extra_options vpn_phase1_policies { name ike_version encryption_algorithm integrity_algorithm dh_group lifetime_seconds authentication_method } vpn_phase2_policies { name encryption_algorithm integrity_algorithm lifetime } } }</arg>
+<status status="FAIL" start="2026-09-14T20:06:51.366161" elapsed="0.000740">Variable '${VPN_PROFILE}' not found.</status>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${d}[vpn_profiles]</arg>
+<arg>1</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367027" elapsed="0.000025"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${prof}</var>
+<arg>${d}[vpn_profiles][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367167" elapsed="0.000024"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${ios}</var>
+<arg>${prof}[extra_options][ios]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367301" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${ios}[ikev2_profile]</arg>
+<arg>${IKEV2_PROFILE}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367433" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${ios}[ipsec_profile]</arg>
+<arg>${IPSEC_PROFILE}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367656" elapsed="0.000024"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${p1}</var>
+<arg>${prof}[vpn_phase1_policies][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367793" elapsed="0.000022"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${p2}</var>
+<arg>${prof}[vpn_phase2_policies][0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.367923" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p1}[ike_version]</arg>
+<arg>IKEV2</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368055" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p1}[authentication_method]</arg>
+<arg>PSK</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368182" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p1}[encryption_algorithm]</arg>
+<arg>${{ [$IKE['encryption']] }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368311" elapsed="0.000024"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p1}[integrity_algorithm]</arg>
+<arg>${{ [$IKE['integrity']] }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368448" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p1}[dh_group]</arg>
+<arg>${{ [str($IKE['dh_group'])] }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368656" elapsed="0.000025"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p2}[encryption_algorithm]</arg>
+<arg>${{ [$IPSEC['encryption']] }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368803" elapsed="0.000022"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${p2}[integrity_algorithm]</arg>
+<arg>${{ [$IPSEC['integrity']] }}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.368918" elapsed="0.000024"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${prof}[keepalive_enabled]</arg>
+<arg>${DPD}[enabled]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369051" elapsed="0.000023"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Show" owner="common">
+<var>${sa}</var>
+<arg>${r}</arg>
+<arg>show crypto ikev2 proposal ${ios}[ikev2_proposal]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369523" elapsed="0.000142"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>Encryption : ${IKE_PROPOSAL_ENCR}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369788" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>Integrity</arg>
+<arg>: ${IKE}[integrity]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369916" elapsed="0.000022"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>DH Group</arg>
+<arg>: \\S+/Group ${IKE}[dh_group]\\b</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370054" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${ts}</var>
+<arg>${r}</arg>
+<arg>show crypto ipsec transform-set ${ios}[transform_set]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370249" elapsed="0.000026"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${ts}</arg>
+<arg>\\{ ${ESP_TRANSFORM}\\s*\\}</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370387" elapsed="0.000024"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${prof_out}</var>
+<arg>${r}</arg>
+<arg>show crypto ikev2 profile ${ios}[ikev2_profile]</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370661" elapsed="0.000035"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${prof_out}</arg>
+<arg>Keyring: ${ios}[ikev2_keyring]</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370805" elapsed="0.000023"/>
+</kw>
+<if>
+<branch type="IF" condition="${prof}[keepalive_enabled]">
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${prof_out}</arg>
+<arg>DPD: interval ${prof}[keepalive_interval], retry-interval ${prof}[keepalive_retries], on-demand</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371037" elapsed="0.000024"/>
+</kw>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370933" elapsed="0.000169"/>
+</branch>
+<status status="NOT RUN" start="2026-09-14T20:06:51.370901" elapsed="0.000238"/>
+</if>
+<kw name="Show" owner="common">
+<var>${sa}</var>
+<arg>${r}</arg>
+<arg>show crypto ikev2 sa | include READY</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371294" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sa}</arg>
+<arg>READY</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371434" elapsed="0.000023"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369358" elapsed="0.002140"/>
+</iter>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.369138" elapsed="0.002483"/>
+</for>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${d}</var>
+<arg>{ devices(location:"${NAUTOBOT_LOCATION}") { name config_context } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371741" elapsed="0.000024"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[config_context][oob][gateway]</arg>
+<arg>${OOB_GATEWAY}</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371988" elapsed="0.000024"/>
+</kw>
+<var name="${dev}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371885" elapsed="0.000168"/>
+</iter>
+<var>${dev}</var>
+<value>@{d}[devices]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.371824" elapsed="0.000264"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:51.365766" elapsed="0.006494">Variable '${VPN_PROFILE}' not found.</status>
+</test>
+<test id="s1-s6-t7" name="BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the live sessions" line="165">
+<kw name="Nautobot Graphql" owner="LabLib">
+<msg time="2026-09-14T20:06:51.373769" level="FAIL">Variable '${ROUTER_GQL}' not found.</msg>
+<var>${d}</var>
+<arg>{ bgp_routing_instances(device:[${ROUTER_GQL}]) { device { name } autonomous_system { asn } router_id { address } endpoints { source_ip { address } autonomous_system { asn } peer { source_ip { address } autonomous_system { asn } routing_instance { device { name } } } } } }</arg>
+<status status="FAIL" start="2026-09-14T20:06:51.373097" elapsed="0.000723">Variable '${ROUTER_GQL}' not found.</status>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${d}[bgp_routing_instances]</arg>
+<arg>${{ len($ROUTER_NAMES) }}</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.373946" elapsed="0.000024"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${r}</var>
+<arg>${ri}[device][name]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374297" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${ri}[autonomous_system][asn]</arg>
+<arg>${ROUTERS}[${r}][asn]</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374427" elapsed="0.000023"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${ri}[router_id][address]</arg>
+<arg>${ROUTERS}[${r}][router_id]/32</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374650" elapsed="0.000026"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${expected}</var>
+<arg>len($HUB_TUNNELS.get($r, [])) or len($SPOKE_TUNNELS.get($r, []))</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374800" elapsed="0.000022"/>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${ri}[endpoints]</arg>
+<arg>${expected}</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374930" elapsed="0.000025"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${sum}</var>
+<arg>${r}</arg>
+<arg>show bgp ipv4 unicast summary | begin Neighbor</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375130" elapsed="0.000028"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${ep}[autonomous_system][asn]</arg>
+<arg>${ROUTERS}[${r}][asn]</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375400" elapsed="0.000023"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<var>${peer}</var>
+<arg>${ep}[peer][routing_instance][device][name]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375614" elapsed="0.000026"/>
+</kw>
+<kw name="Should Not Be Equal As Integers" owner="BuiltIn">
+<arg>${ep}[peer][autonomous_system][asn]</arg>
+<arg>${ROUTERS}[${r}][asn]</arg>
+<arg>msg=peering must be eBGP</arg>
+<doc>Fails if objects are equal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375751" elapsed="0.000025"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<arg>${ep}[peer][autonomous_system][asn]</arg>
+<arg>${ROUTERS}[${peer}][asn]</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375887" elapsed="0.000023"/>
+</kw>
+<kw name="Fetch From Left" owner="String">
+<var>${peer_ip}</var>
+<arg>${ep}[peer][source_ip][address]</arg>
+<arg>/</arg>
+<doc>Returns contents of the ``string`` before the first occurrence of ``marker``.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.376039" elapsed="0.000025"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${sum}</arg>
+<arg>(?m)^${peer_ip}\\s+4\\s+${ROUTERS}[${peer}][asn]\\s+.*\\s\\d+\\s*$</arg>
+<arg>msg=${r}: session to ${peer_ip} not Established</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:51.376180" elapsed="0.000024"/>
+</kw>
+<var name="${ep}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375315" elapsed="0.000934"/>
+</iter>
+<var>${ep}</var>
+<value>@{ri}[endpoints]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.375216" elapsed="0.001070"/>
+</for>
+<var name="${ri}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374209" elapsed="0.002118"/>
+</iter>
+<var>${ri}</var>
+<value>@{d}[bgp_routing_instances]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:51.374032" elapsed="0.002330"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:51.372594" elapsed="0.003923">Variable '${ROUTER_GQL}' not found.</status>
+</test>
+<test id="s1-s6-t8" name="NAC device model rendered from Nautobot matches the committed file" line="185">
+<kw name="Render Nac Check" owner="LabLib">
+<msg time="2026-09-14T20:06:53.147789" level="INFO" html="true">&lt;pre&gt;nac/data matches Nautobot + intent
+
+&lt;/pre&gt;</msg>
+<msg time="2026-09-14T20:06:53.147973" level="INFO">${rc} = 0</msg>
+<var>${rc}</var>
+<status status="PASS" start="2026-09-14T20:06:51.377322" elapsed="1.770679"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-09-14T20:06:53.148486" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${rc}</arg>
+<arg>0</arg>
+<arg>msg=nac/data/devices.nac.yaml differs from Nautobot — run ./lab.sh nautobot render</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-09-14T20:06:53.148152" elapsed="0.000398"/>
+</kw>
+<tag>nac</tag>
+<status status="PASS" start="2026-09-14T20:06:51.376928" elapsed="1.771724"/>
+</test>
+<test id="s1-s6-t9" name="Golden Config: router backups are in Gitea and every compliance row is compliant" line="190">
+<for flavor="IN">
+<iter>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${raw}</var>
+<arg>__import__('requests').get('http://10.0.0.10:3000/api/v1/repos/lab/config-backups/raw/${r}.cfg', timeout=30).text</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.149597" elapsed="0.000020"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${raw}</arg>
+<arg>hostname ${r}</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.149723" elapsed="0.000019"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${raw}</arg>
+<arg>tunnel mode ipsec ipv4</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.149817" elapsed="0.000016"/>
+</kw>
+<var name="${r}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.149512" elapsed="0.000349"/>
+</iter>
+<msg time="2026-09-14T20:06:53.149891" level="FAIL">Variable '@{ROUTER_NAMES}' not found.</msg>
+<var>${r}</var>
+<value>@{ROUTER_NAMES}</value>
+<status status="FAIL" start="2026-09-14T20:06:53.149188" elapsed="0.000736">Variable '@{ROUTER_NAMES}' not found.</status>
+</for>
+<kw name="Nautobot Get" owner="LabLib">
+<var>${cc}</var>
+<arg>plugins/golden-config/config-compliance/</arg>
+<arg>location=${NAUTOBOT_LOCATION}</arg>
+<arg>limit=200</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.150014" elapsed="0.000017"/>
+</kw>
+<kw name="Should Be True" owner="BuiltIn">
+<arg>${cc}[count] &gt;= 45</arg>
+<arg>msg=expected 15 features x 3 routers, got ${cc}[count]</arg>
+<doc>Fails if the given condition is not true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.150105" elapsed="0.000016"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Be True" owner="BuiltIn">
+<arg>${row}[compliance]</arg>
+<arg>msg=non-compliant: ${row}[device] ${row}[rule] missing=${row}[missing] extra=${row}[extra]</arg>
+<doc>Fails if the given condition is not true.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.150261" elapsed="0.000016"/>
+</kw>
+<var name="${row}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.150207" elapsed="0.000101"/>
+</iter>
+<var>${row}</var>
+<value>@{cc}[results]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:53.150162" elapsed="0.000168"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:53.148886" elapsed="0.001536">Variable '@{ROUTER_NAMES}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:06:53.150960" elapsed="0.000085"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:06:53.150809" elapsed="0.000284"/>
+</kw>
+<doc>The IPsec lab as modelled in the shared Nautobot: devices match the routers, p2p links are cabled,
+the VPN lives in the core VPN app (VPN, tunnels, hub/spoke endpoints, profile with Phase 1/2 policies),
+eBGP peerings match the live sessions, the rendered NAC device model matches the committed file,
+Golden Config is compliant.</doc>
+<status status="FAIL" start="2026-09-14T20:06:49.836010" elapsed="3.315106"/>
+</suite>
+<suite id="s1-s7" name="07 Firewalls" source="/home/dcantor/cat8000v-ipsec/tests/suites/07_firewalls.robot">
+<test id="s1-s7-t1" name="Each headend has exactly one firewall, reachable over the OOB network with SSH" line="9">
+<kw name="Evaluate" owner="BuiltIn">
+<msg time="2026-09-14T20:06:53.155844" level="FAIL">Evaluating expression 'sorted($FIREWALL_OF)' failed: Variable '$FIREWALL_OF' not found.</msg>
+<var>${hubs}</var>
+<arg>sorted($FIREWALL_OF)</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="FAIL" start="2026-09-14T20:06:53.155347" elapsed="0.000596">Evaluating expression 'sorted($FIREWALL_OF)' failed: Variable '$FIREWALL_OF' not found.</status>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${hubs}</arg>
+<arg>${HUBS}</arg>
+<arg>msg=every headend must have a firewall</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156055" elapsed="0.000020"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Host Ping" owner="LabLib">
+<arg>${FIREWALLS}[${f}][host]</arg>
+<doc>ICMP ping from the host; fails unless at least one reply.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156263" elapsed="0.000018"/>
+</kw>
+<kw name="Tcp Port Should Be Open" owner="LabLib">
+<arg>${FIREWALLS}[${f}][host]</arg>
+<arg>22</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156354" elapsed="0.000016"/>
+</kw>
+<kw name="Vyos">
+<var>${v}</var>
+<arg>${f}</arg>
+<arg>show version | match Version</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156500" elapsed="0.000023"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${v}</arg>
+<arg>VyOS</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156600" elapsed="0.000016"/>
+</kw>
+<kw name="Vyos">
+<var>${h}</var>
+<arg>${f}</arg>
+<arg>show configuration commands | match host-name</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156726" elapsed="0.000020"/>
+</kw>
+<kw name="Should Contain" owner="BuiltIn">
+<arg>${h}</arg>
+<arg>host-name '${f}'</arg>
+<doc>Fails if ``container`` does not contain ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156828" elapsed="0.000018"/>
+</kw>
+<var name="${f}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156202" elapsed="0.000671"/>
+</iter>
+<var>${f}</var>
+<value>@{FIREWALLS}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:53.156125" elapsed="0.000773"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:53.154993" elapsed="0.002033">Evaluating expression 'sorted($FIREWALL_OF)' failed: Variable '$FIREWALL_OF' not found.</status>
+</test>
+<test id="s1-s7-t2" name="Firewall interfaces carry the modelled addresses and face the right neighbours" line="21">
+<for flavor="IN">
+<iter>
+<kw name="Vyos">
+<var>${ifs}</var>
+<arg>${t}[firewall]</arg>
+<arg>show interfaces</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.157941" elapsed="0.000022"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${ifs}</arg>
+<arg>(?m)^${t}[fw_spoke_if]\\s+${t}[spoke_gw]/30\\s.*u/u\\s+to ${t}[spoke] ${t}[spoke_if]</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158058" elapsed="0.000020"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${ifs}</arg>
+<arg>(?m)^${t}[fw_hub_if]\\s+${t}[hub_gw]/30\\s.*u/u\\s+to ${t}[hub] ${t}[hub_if]</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158160" elapsed="0.000018"/>
+</kw>
+<var name="${t}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.157838" elapsed="0.000372"/>
+</iter>
+<msg time="2026-09-14T20:06:53.158239" level="FAIL">Variable '@{TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<value>@{TUNNEL_LIST}</value>
+<status status="FAIL" start="2026-09-14T20:06:53.157459" elapsed="0.000811">Variable '@{TUNNEL_LIST}' not found.</status>
+</for>
+<kw name="Nautobot Graphql" owner="LabLib">
+<var>${d}</var>
+<arg>{ devices(role:["vpn-firewall"], location:["${NAUTOBOT_LOCATION}"]) { name platform { name } location { name } interfaces { name enabled ip_addresses { address } connected_interface { name device { name } } } } }</arg>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158363" elapsed="0.000021"/>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${d}[devices]</arg>
+<arg>${{ len($FIREWALLS) }}</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158473" elapsed="0.000020"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[platform][name]</arg>
+<arg>vyos</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158683" elapsed="0.000027"/>
+</kw>
+<kw name="Should Be Equal" owner="BuiltIn">
+<arg>${dev}[location][name]</arg>
+<arg>${FIREWALLS}[${dev}[name]][site]</arg>
+<doc>Fails if the given objects are unequal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158786" elapsed="0.000017"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<var>${wired}</var>
+<arg>[i for i in $dev['interfaces'] if i['enabled'] and i['name'] != 'eth0']</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158878" elapsed="0.000017"/>
+</kw>
+<for flavor="IN">
+<iter>
+<kw name="Should Not Be Equal" owner="BuiltIn">
+<arg>${i}[connected_interface]</arg>
+<arg>${None}</arg>
+<arg>msg=${dev}[name]/${i}[name] enabled but not cabled</arg>
+<doc>Fails if the given objects are equal.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.159049" elapsed="0.000018"/>
+</kw>
+<kw name="Length Should Be" owner="BuiltIn">
+<arg>${i}[ip_addresses]</arg>
+<arg>1</arg>
+<doc>Verifies that the length of the given item is correct.</doc>
+<status status="NOT RUN" start="2026-09-14T20:06:53.159142" elapsed="0.000017"/>
+</kw>
+<var name="${i}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158980" elapsed="0.000209"/>
+</iter>
+<var>${i}</var>
+<value>@{wired}</value>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158935" elapsed="0.000281"/>
+</for>
+<var name="${dev}"/>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158618" elapsed="0.000625"/>
+</iter>
+<var>${dev}</var>
+<value>@{d}[devices]</value>
+<status status="NOT RUN" start="2026-09-14T20:06:53.158535" elapsed="0.000730"/>
+</for>
+<status status="FAIL" start="2026-09-14T20:06:53.157245" elapsed="0.002124">Variable '@{TUNNEL_LIST}' not found.</status>
+</test>
+<test id="s1-s7-t3" name="The rendered firewall configuration matches what runs on the firewalls" line="39">
+<kw name="Vyos Check" owner="LabLib">
+<msg time="2026-09-14T20:07:13.212490" level="INFO" html="true">&lt;pre&gt;fw-central: in sync
+fw-east: in sync
+fw-west: in sync
+
+&lt;/pre&gt;</msg>
+<msg time="2026-09-14T20:07:13.212737" level="INFO">${rc} = 0</msg>
+<var>${rc}</var>
+<status status="PASS" start="2026-09-14T20:06:53.159936" elapsed="20.052838"/>
+</kw>
+<kw name="Should Be Equal As Integers" owner="BuiltIn">
+<msg time="2026-09-14T20:07:13.213356" level="INFO">Argument types are:
+&lt;class 'int'&gt;
+&lt;class 'str'&gt;</msg>
+<arg>${rc}</arg>
+<arg>0</arg>
+<arg>msg=a firewall drifted from Nautobot — run ./lab.sh nautobot vyos</arg>
+<doc>Fails if objects are unequal after converting them to integers.</doc>
+<status status="PASS" start="2026-09-14T20:07:13.212949" elapsed="0.000468"/>
+</kw>
+<tag>nac</tag>
+<status status="PASS" start="2026-09-14T20:06:53.159598" elapsed="20.054097"/>
+</test>
+<test id="s1-s7-t4" name="Only IKEv2, ESP and ICMP cross the firewall; the tunnels actually carry ESP through it" line="44">
+<for flavor="IN">
+<iter>
+<kw name="Vyos">
+<var>${rules}</var>
+<arg>${f}</arg>
+<arg>show firewall ipv4 forward filter</arg>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215077" elapsed="0.000028"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rules}</arg>
+<arg>(?m)^10\\s+accept\\s+udp\\s+\\d+\\s+\\S+\\s+udp dport \\{ 500, 4500 \\}</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215228" elapsed="0.000024"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rules}</arg>
+<arg>(?m)^20\\s+accept\\s+esp\\s+[1-9]\\d*\\s</arg>
+<arg>msg=${f}: no ESP packets have crossed</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215341" elapsed="0.000021"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rules}</arg>
+<arg>(?m)^30\\s+accept\\s+icmp</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215442" elapsed="0.000018"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rules}</arg>
+<arg>(?m)^900\\s+drop\\s+all</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215600" elapsed="0.000026"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${rules}</arg>
+<arg>(?m)^default\\s+drop</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.215731" elapsed="0.000024"/>
+</kw>
+<var name="${f}"/>
+<status status="NOT RUN" start="2026-09-14T20:07:13.214914" elapsed="0.000874"/>
+</iter>
+<msg time="2026-09-14T20:07:13.215824" level="FAIL">Variable '@{FIREWALLS}' not found.</msg>
+<var>${f}</var>
+<value>@{FIREWALLS}</value>
+<status status="FAIL" start="2026-09-14T20:07:13.214382" elapsed="0.001484">Variable '@{FIREWALLS}' not found.</status>
+</for>
+<status status="FAIL" start="2026-09-14T20:07:13.214057" elapsed="0.001954">Variable '@{FIREWALLS}' not found.</status>
+</test>
+<test id="s1-s7-t5" name="Non-VPN traffic from a spoke to a headend is dropped by the firewall" line="54">
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2026-09-14T20:07:13.217272" level="FAIL">Variable '${TUNNEL_LIST}' not found.</msg>
+<var>${t}</var>
+<arg>${TUNNEL_LIST}[0]</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="FAIL" start="2026-09-14T20:07:13.216660" elapsed="0.000651">Variable '${TUNNEL_LIST}' not found.</status>
+</kw>
+<kw name="Drop Counter">
+<var>${before}</var>
+<arg>${t}[firewall]</arg>
+<status status="NOT RUN" start="2026-09-14T20:07:13.217507" elapsed="0.000022"/>
+</kw>
+<kw name="Show" owner="common">
+<var>${out}</var>
+<arg>${t}[spoke]</arg>
+<arg>telnet ${t}[hub_wan] 22 /source-interface ${t}[spoke_if]</arg>
+<arg>120</arg>
+<doc>Run a show command on a router by name.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.217663" elapsed="0.000054"/>
+</kw>
+<kw name="Should Not Contain" owner="BuiltIn">
+<arg>${out}</arg>
+<arg>SSH-2.0</arg>
+<arg>msg=SSH from ${t}[spoke] reached ${t}[hub] through ${t}[firewall]</arg>
+<doc>Fails if ``container`` contains ``item`` one or more times.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.217849" elapsed="0.000021"/>
+</kw>
+<kw name="Should Match Regexp" owner="BuiltIn">
+<arg>${out}</arg>
+<arg>Connection timed out|Destination unreachable|Connection refused</arg>
+<doc>Fails if ``string`` does not match ``pattern`` as a regular expression.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.217965" elapsed="0.000020"/>
+</kw>
+<kw name="Wait Until Keyword Succeeds" owner="BuiltIn">
+<arg>30s</arg>
+<arg>5s</arg>
+<arg>Drops Increased</arg>
+<arg>${t}[firewall]</arg>
+<arg>${before}</arg>
+<doc>Runs the specified keyword and retries if it fails.</doc>
+<status status="NOT RUN" start="2026-09-14T20:07:13.218094" elapsed="0.000018"/>
+</kw>
+<status status="FAIL" start="2026-09-14T20:07:13.216347" elapsed="0.001879">Variable '${TUNNEL_LIST}' not found.</status>
+</test>
+<kw name="Suite Teardown Close Connections" owner="common" type="TEARDOWN">
+<kw name="Close All Connections" owner="LabLib">
+<status status="PASS" start="2026-09-14T20:07:13.219100" elapsed="0.000115"/>
+</kw>
+<status status="PASS" start="2026-09-14T20:07:13.218908" elapsed="0.000371"/>
+</kw>
+<doc>The VyOS firewall in front of each headend: modelled in Nautobot, configured from it, and actually
+filtering: only IKEv2, ESP and ICMP cross between the spokes and the headend; anything else is dropped.</doc>
+<status status="FAIL" start="2026-09-14T20:06:53.151775" elapsed="20.067539"/>
+</suite>
+<status status="FAIL" start="2026-09-14T20:06:29.696308" elapsed="43.524768"/>
+</suite>
+<statistics>
+<total>
+<stat pass="3" fail="29" skip="0">All Tests</stat>
+</total>
+<tag>
+<stat pass="3" fail="0" skip="0">nac</stat>
+</tag>
+<suite>
+<stat name="c8000v ipsec vti lab" id="s1" pass="3" fail="29" skip="0">c8000v ipsec vti lab</stat>
+<stat name="01 Management" id="s1-s1" pass="0" fail="4" skip="0">c8000v ipsec vti lab.01 Management</stat>
+<stat name="02 Underlay" id="s1-s2" pass="0" fail="4" skip="0">c8000v ipsec vti lab.02 Underlay</stat>
+<stat name="03 Ipsec Vti" id="s1-s3" pass="0" fail="5" skip="0">c8000v ipsec vti lab.03 Ipsec Vti</stat>
+<stat name="04 Routing" id="s1-s4" pass="0" fail="4" skip="0">c8000v ipsec vti lab.04 Routing</stat>
+<stat name="05 Nac Compliance" id="s1-s5" pass="1" fail="0" skip="0">c8000v ipsec vti lab.05 Nac Compliance</stat>
+<stat name="06 Nautobot" id="s1-s6" pass="1" fail="8" skip="0">c8000v ipsec vti lab.06 Nautobot</stat>
+<stat name="07 Firewalls" id="s1-s7" pass="1" fail="4" skip="0">c8000v ipsec vti lab.07 Firewalls</stat>
+</suite>
+</statistics>
+<errors>
+<msg time="2026-09-14T20:06:29.936163" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:29.964742" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:29.978876" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:29.998399" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:30.015604" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:49.841677" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+<msg time="2026-09-14T20:06:53.153749" level="ERROR">Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'
+Traceback (most recent call last):
+  File "/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py", line 16, in &lt;module&gt;
+    ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+                                                                               ~^^^^^^^
+PYTHONPATH:
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/resources
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/nautobot
+  /home/dcantor/cat8000v-ipsec/tests/.venv/bin
+  /usr/lib/python314.zip
+  /usr/lib/python3.14
+  /usr/lib/python3.14/lib-dynload
+  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages</msg>
+</errors>
+</robot>

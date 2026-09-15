@@ -47,10 +47,11 @@ class Profile(BaseModel):
 class Device(BaseModel):
     name: str = Field(..., description="hostname / Nautobot device name", examples=["spoke1"])
     mgmt_ip: str = Field(..., description="management address (fixed by the VM's day-0 config)", examples=["10.2.0.12"])
-    role: Literal["hub", "spoke"]
-    asn: int = Field(..., examples=[65201])
-    router_id: str = Field(..., examples=["10.255.1.2"])
-    lan: str = Field(..., description="site LAN /24 (Loopback10)", examples=["192.168.12.0/24"])
+    role: Literal["hub", "spoke", "firewall"]
+    hub: Optional[str] = Field(None, description="firewall only: the headend it fronts")
+    asn: Optional[int] = Field(None, examples=[65201])
+    router_id: Optional[str] = Field(None, examples=["10.255.1.2"])
+    lan: Optional[str] = Field(None, description="site LAN /24 (Loopback10)", examples=["192.168.12.0/24"])
     comments: str = ""
     region: Optional[str] = Field(None, examples=["East"])
     site: Optional[str] = Field(None, description="branch / HQ location in Nautobot", examples=["branch-1"])
@@ -94,7 +95,8 @@ class RunOptions(BaseModel):
 
 class SpokeLink(BaseModel):
     hub: str = Field(..., examples=["central-headend"])
-    hub_port: int = Field(..., description="headend GigabitEthernet number", examples=[6])
+    edge: Optional[str] = Field(None, description="device the link lands on: the headend's firewall (fw-…) or the headend itself", examples=["fw-central"])
+    hub_port: int = Field(..., description="port number on the edge device (ethN on a firewall, GigabitEthernetN on a headend)", examples=[6])
     spoke_port: int = Field(..., examples=[2])
     tunnel_id: int = Field(..., examples=[12])
     wan_prefix: str = Field(..., examples=["100.65.12.0/30"])

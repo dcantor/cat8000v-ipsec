@@ -31,15 +31,24 @@ data = {"location": site.id, "namespace": ns.id, "ip_addresses": ",".join(a.ips)
         "secrets_group": sg.id, "device_role": role.id, "device_status": active.id, "interface_status": active.id,
         "ip_address_status": active.id, "set_mgmt_only": True, "update_devices_without_primary_ip": False,
         "dryrun": False, "memory_profiling": False, "debug": False}
-print(f"==> running '{job.name}' for {a.ips}")
-res = nb.extras.jobs.run(job_id=job.id, data=data); jr = res.job_result.id
-for _ in range(120):
-    st = str(nb.extras.job_results.get(jr).status)
-    if st in ("SUCCESS", "FAILURE", "REVOKED"): break
-    time.sleep(5)
-print(f"==> {st}  {a.url}/extras/job-results/{jr}/")
-for e in nb.extras.job_logs.filter(job_result=jr):
-    if str(e.log_level) in ("warning", "error", "critical", "failure"): print(f"   [{e.log_level}] {e.message[:200]}")
+# the job matches existing devices by name + location; devices that were moved to a branch location would be
+# duplicated, so only addresses Nautobot does not know yet (anywhere under the lab site) are onboarded
+known = {str(getattr(d.primary_ip4, "address", "")).split("/")[0] for d in nb.dcim.devices.filter(location=site.id)}
+new_ips = [ip for ip in a.ips if ip not in known]
+st = "SUCCESS"
+if new_ips:
+    data["ip_addresses"] = ",".join(new_ips)
+    print(f"==> running '{job.name}' for {new_ips}")
+    res = nb.extras.jobs.run(job_id=job.id, data=data); jr = res.job_result.id
+    for _ in range(120):
+        st = str(nb.extras.job_results.get(jr).status)
+        if st in ("SUCCESS", "FAILURE", "REVOKED"): break
+        time.sleep(5)
+    print(f"==> {st}  {a.url}/extras/job-results/{jr}/")
+    for e in nb.extras.job_logs.filter(job_result=jr):
+        if str(e.log_level) in ("warning", "error", "critical", "failure"): print(f"   [{e.log_level}] {e.message[:200]}")
+else:
+    print(f"==> all of {a.ips} already onboarded; refreshing serials only")
 # the onboarding job does not refresh existing devices, and a C8000v's serial follows the VM UUID: re-read it over SSH
 try:
     from netmiko import ConnectHandler

@@ -30,7 +30,7 @@ RUNS_DIR = Path(__file__).resolve().parent / "runs"; RUNS_DIR.mkdir(exist_ok=Tru
 RESULTS = LAB / "results"
 NAUTOBOT_URL = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080")
 NAUTOBOT_PUBLIC_URL = os.environ.get("NAUTOBOT_PUBLIC_URL", "http://192.168.50.231:8080")
-STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot": "Nautobot source of truth (seed)",
+STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot": "Nautobot source of truth (seed)", "firewalls": "VyOS firewalls rendered from Nautobot and pushed",
                "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
                "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
                "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
@@ -80,23 +80,23 @@ class Run:
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
         if self.mode == "spoke":
-            steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "plan", "apply"]
+            steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "firewalls", "plan", "apply"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
             return steps
         if self.mode == "hub":
-            steps = ["hub_validate", "hub_labconf", "hub_vm", "hub_bootstrap", "hub_onboard", "hub_intent", "nautobot", "render", "plan", "apply"]
+            steps = ["hub_validate", "hub_labconf", "hub_vm", "hub_bootstrap", "hub_onboard", "hub_intent", "nautobot", "render", "firewalls", "plan", "apply"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
             return steps
         if self.mode == "remove":
             # hub config is removed by Terraform (native tunnel/ethernet/BGP resources are destroyed) once the spoke is gone from Nautobot
-            steps = ["rm_validate", "rm_down", "rm_nautobot", "rm_intent", "nautobot", "render", "rm_state", "plan", "apply", "rm_vm"]
+            steps = ["rm_validate", "rm_down", "rm_nautobot", "rm_intent", "nautobot", "render", "firewalls", "rm_state", "plan", "apply", "rm_vm"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
             return steps
         if self.mode == "plan": return ["validate", "save", "nautobot", "render", "plan"]
-        steps = ["validate", "save", "nautobot", "render", "plan", "apply"]
+        steps = ["validate", "save", "nautobot", "render", "firewalls", "plan", "apply"]
         if self.options.get("golden", True): steps.append("golden")
         if self.options.get("test", True): steps.append("test")
         return steps
@@ -285,6 +285,14 @@ class Run:
         rc = self.sh(["./lab.sh", "nautobot", "render"])
         if rc: raise RuntimeError(f"render failed (rc={rc})")
         s["summary"] = "nac/data/devices.nac.yaml + device_groups.nac.yaml regenerated from Nautobot"
+
+    def do_firewalls(self, s):
+        """VyOS firewalls: interface addresses from the model, policy from the config context; pushed before Terraform so
+        the underlay through the firewall exists when the tunnels come up."""
+        rc = self.sh(["./lab.sh", "nautobot", "vyos"])
+        if rc: raise RuntimeError(f"firewall push failed (rc={rc})")
+        done = [l["line"] for l in self.log if l["line"].endswith("commands)") and ": " in l["line"]]
+        s["summary"] = "; ".join(x.split(" (")[0] for x in done[-8:]) or "no firewalls"
 
     def do_plan(self, s):
         rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", "-parallelism=1"])

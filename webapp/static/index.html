@@ -219,7 +219,7 @@
         <div><label>Site LAN /24 (Loopback10) <span class="suggest">suggested</span></label><input id="sp.lan"></div>
         <div><label>AS number <span class="suggest">suggested</span></label><input id="sp.asn" type="number"></div>
       </div>
-      <table style="margin-top:12px"><thead><tr><th>Headend</th><th>Hub port <span class="suggest">suggested</span></th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody id="sp.links"></tbody></table>
+      <table style="margin-top:12px"><thead><tr><th>Headend</th><th>Edge port <span class="suggest">suggested</span></th><th>Spoke port</th><th>WAN p2p /30</th><th>Tunnel #</th><th>Tunnel /30</th></tr></thead><tbody id="sp.links"></tbody></table>
       <div class="hint" style="margin-top:8px">Hub takes the first address of each /30, the spoke the second. The same TunnelN number is used at both ends. <span id="sp.cap"></span></div>
     </div>
     <div id="wiz-3" hidden>
@@ -417,7 +417,7 @@ async function refreshLinks() {
   // re-suggest link allocations for the chosen hubs (keeps identity fields the user typed)
   const r = await (await fetch('/api/spokes/suggest?hubs=' + encodeURIComponent(selectedHubs().join(',')) + '&region=' + encodeURIComponent($('sp.region').value))).json();
   wizSpec.links = r.links;
-  $('sp.links').innerHTML = r.links.map((l, i) => `<tr><td><span class="pill hub">${esc(l.hub)}</span><div class="hint">free: ${l.hub_ports_free.map(p => 'Gi' + p).join(', ')}</div></td>
+  $('sp.links').innerHTML = r.links.map((l, i) => `<tr><td><span class="pill hub">${esc(l.hub)}</span><div class="hint">${l.edge !== l.hub ? 'via firewall ' + esc(l.edge) + ' · ' : ''}free: ${l.hub_ports_free.map(p => (l.edge !== l.hub ? 'eth' : 'Gi') + p).join(', ')}</div></td>
     <td><input data-l="${i}" data-k="hub_port" type="number" value="${l.hub_port}"></td><td><input data-l="${i}" data-k="spoke_port" type="number" value="${l.spoke_port}"></td>
     <td><input data-l="${i}" data-k="wan_prefix" value="${l.wan_prefix}"></td><td><input data-l="${i}" data-k="tunnel_id" type="number" value="${l.tunnel_id}"></td><td><input data-l="${i}" data-k="tunnel_prefix" value="${l.tunnel_prefix}"></td></tr>`).join('');
   $('sp.cap').textContent = r.links.map(l => `${l.hub}: ${l.hub_tunnels + 1} of ${wizSpec.context.capacity} tunnels after`).join(' · ');
@@ -449,14 +449,16 @@ async function wizNext() {
   if (wizStep === 2) {
     const h = v.hub_changes;
     $('wiz-review').innerHTML = `<div class="box"><h4>Spoke ${esc(spec.name)} (new VM, ${esc(spec.mgmt_ip)})</h4><dl>
-        ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}</dd>`).join('')}
+        ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}${l.spoke.route ? ' · ' + esc(l.spoke.route) : ''}</dd>`).join('')}
         <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
         <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)})</dd>
         <dt>Location</dt><dd>${esc(spec.region)} / ${esc(spec.site)} (${esc(spec.site_code || '-')}, ${esc(spec.contact || '-')})</dd>
         <dt>PSK</dt><dd>unique to this spoke (${spec.psk.length} chars) — added to every headend's keyring</dd>
         <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
-      ${h.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)} (coordinated configuration)</h4><dl>
-        <dt>WAN</dt><dd>${esc(l.interface)} ${esc(l.wan_ip)} (no shutdown, cdp)</dd><dt>Tunnel</dt><dd>${esc(l.tunnel)} ${esc(l.tunnel_ip)} → dest ${esc(l.tunnel_destination)}, ipsec profile</dd>
+      ${h.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)}${l.firewall ? ' + firewall ' + esc(l.firewall) : ''} (coordinated configuration)</h4><dl>
+        <dt>${l.firewall ? 'Firewall' : 'WAN'}</dt><dd>${esc(l.interface)} ${esc(l.wan_ip)}${l.firewall ? ' (IKE / ESP / ICMP filter)' : ' (no shutdown, cdp)'}</dd>
+        <dt>Tunnel</dt><dd>${esc(l.tunnel)} ${esc(l.tunnel_ip)} · source ${esc(l.tunnel_source)} → dest ${esc(l.tunnel_destination)}, ipsec profile</dd>
+        ${l.hub_route ? `<dt>Route</dt><dd>${esc(l.hub_route)}</dd>` : ''}
         <dt>eBGP</dt><dd>neighbor ${esc(l.bgp_neighbor)}</dd><dt>Nautobot</dt><dd>cable ${esc(l.interface)} ↔ ${esc(l.spoke.interface)}, VPN tunnel ${esc(l.hub)}-${esc(spec.name)}, endpoints, peering</dd>
         <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after provisioning</dd></dl></div>`).join('')}`;
     wizStep = 3; showWiz(); return;
@@ -478,8 +480,8 @@ async function openRemove(name) {
   $('rm-body').innerHTML = `<div class="review"><div class="box"><h4>Spoke ${esc(d.name)} (${esc(d.mgmt_ip)})</h4><dl>
       <dt>VM</dt><dd>powered off, then undefined</dd><dt>Nautobot</dt><dd>device, interfaces, addresses, prefixes, VPN endpoints, BGP instance, AS ${esc(d.asn)}</dd>
       <dt>Released</dt><dd>LAN ${esc(d.lan)}, router-id ${esc(d.router_id)}${d.links.map(l => `, WAN ${esc(l.wan_prefix || '-')}, tunnel ${esc(l.tunnel_prefix || '-')}`).join('')}</dd></dl></div>
-    ${d.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)} (coordinated clean-up)</h4><dl>
-      <dt>Tunnel</dt><dd>${esc(l.tunnel || '-')} removed (Terraform destroy)</dd><dt>WAN</dt><dd>${esc(l.hub_interface || '-')} address removed, port shut down and freed</dd>
+    ${d.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)}${l.firewall ? ' + ' + esc(l.firewall) : ''} (coordinated clean-up)</h4><dl>
+      <dt>Tunnel</dt><dd>${esc(l.tunnel || '-')} removed (Terraform destroy)${l.firewall ? ', static route removed' : ''}</dd><dt>${l.firewall ? 'Firewall port' : 'WAN'}</dt><dd>${esc(l.hub_interface || '-')} address removed, port disabled and freed</dd>
       <dt>eBGP</dt><dd>neighbour for AS ${esc(d.asn)} removed</dd><dt>Nautobot</dt><dd>VPN tunnel ${esc(l.hub)}-${esc(d.name)}, hub endpoint, cable, peering</dd>
       <dt>Capacity</dt><dd>${l.tunnels_after} / ${l.capacity} tunnels after removal</dd></dl></div>`).join('')}</div>
     <div class="hint" style="margin-top:10px">Order: power off → Nautobot clean-up → intent/lab.conf → seed/render → forget the spoke in Terraform state → plan/apply on the hub → Golden Config → tests → delete the VM.</div>`;
@@ -541,15 +543,20 @@ function renderTopology(d) {
   // group by region (in the order the regions appear across the devices, hubs first)
   const regions = [...new Set(d.devices.map(x => x.region || 'unassigned'))];
   const byRegion = (list) => [...list].sort((a, b) => regions.indexOf(a.region || 'unassigned') - regions.indexOf(b.region || 'unassigned') || a.name.localeCompare(b.name));
-  const hubs = byRegion(d.devices.filter(x => x.role === 'hub')), spokes = byRegion(d.devices.filter(x => x.role === 'spoke'));
+  const hubs = byRegion(d.devices.filter(x => x.role === 'hub')), spokes = byRegion(d.devices.filter(x => x.role === 'spoke')), fws = d.devices.filter(x => x.role === 'firewall');
   // node box: four text lines; width from the longest line (≈6.4px per character at 11px, 7.8px at 13px bold)
-  const lines = n => [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
+  const lines = n => n.role === 'firewall' ? [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · VyOS`, `in front of ${n.hub || '?'}`] : [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
   const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
-  const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, BOT = 386, H = BOT + NH + 30;
+  const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, MID = fws.length ? 230 : null, BOT = fws.length ? 430 : 386, H = BOT + NH + 30;
   const REGION_COLORS = ['#fff7ed', '#eff6ff', '#f0fdf4', '#fdf4ff', '#f8fafc'];
   const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length) + 60);
   const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
   place(hubs, TOP); place(spokes, BOT);
+  // firewalls sit under their headend
+  fws.forEach(f => { const h = pos[f.hub]; pos[f.name] = { x: h ? h.x : 20, y: MID }; });
+  // physical links (cables): firewall <-> headend and firewall <-> spoke, thin grey lines under the tunnels
+  const wires = fws.map(f => { const ph = pos[f.hub], pf = pos[f.name]; if (!ph) return ''; let w = `<line class="wire" x1="${ph.x + NW / 2}" y1="${ph.y + NH}" x2="${pf.x + NW / 2}" y2="${pf.y}"/>`;
+    d.tunnels.filter(t => t.headend === f.hub).forEach(t => { const ps = pos[t.spoke]; if (ps) w += `<line class="wire" x1="${pf.x + NW / 2}" y1="${pf.y + NH}" x2="${ps.x + NW / 2}" y2="${ps.y}"/>`; }); return w; }).join('');
   const node = n => { const p = pos[n.name]; return `<a href="${n.url}" target="_blank"><g class="node ${n.role}" transform="translate(${p.x},${p.y})">
       <rect width="${NW}" height="${NH}"></rect><text class="nm" x="10" y="19">${esc(n.name)}</text><text class="sub" x="${NW - 10}" y="19" text-anchor="end">${n.role}</text>
       ${lines(n).map((l, i) => `<text class="sub" x="10" y="${36 + i * 15}">${esc(l)}</text>`).join('')}</g></a>`; };
@@ -581,7 +588,8 @@ function renderTopology(d) {
   }
   $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <text x="12" y="${TOP - 30}" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 30}" fill="#6b7684" font-size="11">spokes · grouped by region</text>
-    ${bands.join('')}${edges}${hubs.map(node).join('')}${spokes.map(node).join('')}</svg>`;
+    ${fws.length ? `<text x="12" y="${MID - 12}" fill="#6b7684" font-size="11">firewalls (VyOS) · underlay links in grey</text>` : ''}
+    ${bands.join('')}${wires}${edges}${hubs.map(node).join('')}${fws.map(node).join('')}${spokes.map(node).join('')}</svg>`;
 }
 
 load(); loadRuns(); showView();

@@ -99,6 +99,24 @@ class LabLib:
         return body["data"]
 
     @keyword
+    def run_vyos_command(self, host, command, timeout=60):
+        """Run an operational command on a VyOS firewall (SSH, vyos/vyos)."""
+        key = f"vyos:{host}"
+        if key not in self._ssh:
+            self._ssh[key] = ConnectHandler(device_type="vyos", host=host, username=os.environ.get("VYOS_USERNAME", "vyos"), password=os.environ.get("VYOS_PASSWORD", "vyos"))
+        out = self._ssh[key].send_command(command, read_timeout=timeout)
+        logger.info(f"<pre>{host}# {command}\n{out}</pre>", html=True)
+        return out
+
+    @keyword
+    def vyos_check(self):
+        url, token = self._nautobot()
+        r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_vyos.py"), "--check"], capture_output=True, text=True,
+                           timeout=300, env={**os.environ, "NAUTOBOT_URL": url, "NAUTOBOT_TOKEN": token})
+        logger.info(f"<pre>{r.stdout[-4000:]}\n{r.stderr[-1000:]}</pre>", html=True)
+        return r.returncode
+
+    @keyword
     def render_nac_check(self):
         url, token = self._nautobot()
         r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_nac.py"), "--check"], capture_output=True, text=True,

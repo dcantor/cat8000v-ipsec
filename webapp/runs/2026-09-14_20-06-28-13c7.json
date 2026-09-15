@@ -1,0 +1,1445 @@
+{
+ "id": "2026-09-14_20-06-28-13c7",
+ "mode": "test",
+ "status": "failed",
+ "started": 1789430788.9203944,
+ "finished": 1789430833.911592,
+ "steps": [
+  {
+   "name": "validate",
+   "title": "Validate intent",
+   "status": "success",
+   "started": 1789430788.9215004,
+   "finished": 1789430788.9371986,
+   "summary": "11 devices, 13 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "failed",
+   "started": 1789430788.9374356,
+   "finished": 1789430833.911582,
+   "summary": "3/32 tests passed"
+  }
+ ],
+ "tests": {
+  "suites": [
+   {
+    "name": "01 Management",
+    "tests": [
+     {
+      "name": "Routers are reachable over the OOB network with SSH and RESTCONF",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.002908",
+      "start": "2026-09-14T20:06:29.950959"
+     },
+     {
+      "name": "Management interface lives in Mgmt-vrf with a default route to the host",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.001561",
+      "start": "2026-09-14T20:06:29.954064"
+     },
+     {
+      "name": "License boot level provides the security feature set",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.001193",
+      "start": "2026-09-14T20:06:29.955778"
+     },
+     {
+      "name": "AAA, SSH and VTY hardening from the NAC baseline",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.003140",
+      "start": "2026-09-14T20:06:29.957237"
+     }
+    ],
+    "passed": 0,
+    "failed": 4
+   },
+   {
+    "name": "02 Underlay",
+    "tests": [
+     {
+      "name": "WAN point-to-point interfaces are up with the modelled addresses",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.001784",
+      "start": "2026-09-14T20:06:29.966074"
+     },
+     {
+      "name": "Each spoke reaches its headends' WAN addresses through the firewall, and nothing else",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.003038",
+      "start": "2026-09-14T20:06:29.968136"
+     },
+     {
+      "name": "LLDP shows the firewall on each spoke's WAN port and on the headend's WAN port",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.001195",
+      "start": "2026-09-14T20:06:29.971455"
+     },
+     {
+      "name": "Loopbacks carry the router-id and the site LAN",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.001483",
+      "start": "2026-09-14T20:06:29.972934"
+     }
+    ],
+    "passed": 0,
+    "failed": 4
+   },
+   {
+    "name": "03 Ipsec Vti",
+    "tests": [
+     {
+      "name": "Each tunnel is a static VTI sourced from the WAN link and protected by the IPsec profile",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.003531",
+      "start": "2026-09-14T20:06:29.980253"
+     },
+     {
+      "name": "Tunnels are up/up at both ends and the tunnel subnet is reachable",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.002111",
+      "start": "2026-09-14T20:06:29.984079"
+     },
+     {
+      "name": "IKEv2 SAs are READY with the modelled proposal and PSK authentication",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.003014",
+      "start": "2026-09-14T20:06:29.986477"
+     },
+     {
+      "name": "Traffic through the tunnels is encrypted with the modelled transform set",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.002382",
+      "start": "2026-09-14T20:06:29.989806"
+     },
+     {
+      "name": "Each hub holds exactly one IKEv2 session per spoke tunnel",
+      "status": "FAIL",
+      "message": "Variable '@{HUBS}' not found.",
+      "elapsed": "0.001508",
+      "start": "2026-09-14T20:06:29.992486"
+     }
+    ],
+    "passed": 0,
+    "failed": 5
+   },
+   {
+    "name": "04 Routing",
+    "tests": [
+     {
+      "name": "Each hub has an Established eBGP session with each of its spokes over the tunnel",
+      "status": "FAIL",
+      "message": "Variable '@{HUBS}' not found.",
+      "elapsed": "0.002734",
+      "start": "2026-09-14T20:06:29.999677"
+     },
+     {
+      "name": "Every spoke peers with its hub(s) only and learns every other site",
+      "status": "FAIL",
+      "message": "Evaluating expression '2 * (len($ROUTER_NAMES) - 1)' failed: Variable '$ROUTER_NAMES' not found.",
+      "elapsed": "0.003486",
+      "start": "2026-09-14T20:06:30.002709"
+     },
+     {
+      "name": "Spoke routes to other spokes go through a hub",
+      "status": "FAIL",
+      "message": "Evaluating expression \"'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])\" failed: Variable '$ROUTERS' not found.",
+      "elapsed": "0.002461",
+      "start": "2026-09-14T20:06:30.006486"
+     },
+     {
+      "name": "Site LANs reach each other through the encrypted tunnels",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.002266",
+      "start": "2026-09-14T20:06:30.009241"
+     }
+    ],
+    "passed": 0,
+    "failed": 4
+   },
+   {
+    "name": "05 Nac Compliance",
+    "tests": [
+     {
+      "name": "Terraform plan reports no drift from the NAC data model",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "19.806117",
+      "start": "2026-09-14T20:06:30.028808"
+     }
+    ],
+    "passed": 1,
+    "failed": 0
+   },
+   {
+    "name": "06 Nautobot",
+    "tests": [
+     {
+      "name": "Routers exist in Nautobot with role, serial, platform and management IP matching reality",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.002645",
+      "start": "2026-09-14T20:06:49.843201"
+     },
+     {
+      "name": "WAN links are modelled as cables between the hub and spoke ports with /30 addresses",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.002623",
+      "start": "2026-09-14T20:06:49.846152"
+     },
+     {
+      "name": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spoke pair, hub/spoke endpoints",
+      "status": "FAIL",
+      "message": "Variable '${VPN_NAME}' not found.",
+      "elapsed": "0.008854",
+      "start": "2026-09-14T20:06:49.848934"
+     },
+     {
+      "name": "Locations form the hierarchy lab site -> region -> branch, with site metadata on the branch",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "1.503841",
+      "start": "2026-09-14T20:06:49.858078"
+     },
+     {
+      "name": "Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke",
+      "status": "FAIL",
+      "message": "Variable '@{SPOKES}' not found.",
+      "elapsed": "0.003139",
+      "start": "2026-09-14T20:06:51.362264"
+     },
+     {
+      "name": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers",
+      "status": "FAIL",
+      "message": "Variable '${VPN_PROFILE}' not found.",
+      "elapsed": "0.006494",
+      "start": "2026-09-14T20:06:51.365766"
+     },
+     {
+      "name": "BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the live sessions",
+      "status": "FAIL",
+      "message": "Variable '${ROUTER_GQL}' not found.",
+      "elapsed": "0.003923",
+      "start": "2026-09-14T20:06:51.372594"
+     },
+     {
+      "name": "NAC device model rendered from Nautobot matches the committed file",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "1.771724",
+      "start": "2026-09-14T20:06:51.376928"
+     },
+     {
+      "name": "Golden Config: router backups are in Gitea and every compliance row is compliant",
+      "status": "FAIL",
+      "message": "Variable '@{ROUTER_NAMES}' not found.",
+      "elapsed": "0.001536",
+      "start": "2026-09-14T20:06:53.148886"
+     }
+    ],
+    "passed": 1,
+    "failed": 8
+   },
+   {
+    "name": "07 Firewalls",
+    "tests": [
+     {
+      "name": "Each headend has exactly one firewall, reachable over the OOB network with SSH",
+      "status": "FAIL",
+      "message": "Evaluating expression 'sorted($FIREWALL_OF)' failed: Variable '$FIREWALL_OF' not found.",
+      "elapsed": "0.002033",
+      "start": "2026-09-14T20:06:53.154993"
+     },
+     {
+      "name": "Firewall interfaces carry the modelled addresses and face the right neighbours",
+      "status": "FAIL",
+      "message": "Variable '@{TUNNEL_LIST}' not found.",
+      "elapsed": "0.002124",
+      "start": "2026-09-14T20:06:53.157245"
+     },
+     {
+      "name": "The rendered firewall configuration matches what runs on the firewalls",
+      "status": "PASS",
+      "message": "",
+      "elapsed": "20.054097",
+      "start": "2026-09-14T20:06:53.159598"
+     },
+     {
+      "name": "Only IKEv2, ESP and ICMP cross the firewall; the tunnels actually carry ESP through it",
+      "status": "FAIL",
+      "message": "Variable '@{FIREWALLS}' not found.",
+      "elapsed": "0.001954",
+      "start": "2026-09-14T20:07:13.214057"
+     },
+     {
+      "name": "Non-VPN traffic from a spoke to a headend is dropped by the firewall",
+      "status": "FAIL",
+      "message": "Variable '${TUNNEL_LIST}' not found.",
+      "elapsed": "0.001879",
+      "start": "2026-09-14T20:07:13.216347"
+     }
+    ],
+    "passed": 1,
+    "failed": 4
+   }
+  ],
+  "total": 32,
+  "passed": 3,
+  "failed": 29
+ },
+ "results_dir": "2026-09-14_20-06-29",
+ "error": "29 test(s) failed",
+ "options": {
+  "golden": true,
+  "test": true,
+  "delete_disk": true
+ },
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4",
+  "spoke5"
+ ],
+ "spoke": null,
+ "resume_of": null,
+ "removal": null,
+ "log": [
+  {
+   "t": 1789430788.9371948,
+   "line": "11 devices, 13 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "t": 1789430788.937591,
+   "line": "$ ./lab.sh test"
+  },
+  {
+   "t": 1789430789.0548651,
+   "line": "==> results: /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29"
+  },
+  {
+   "t": 1789430789.054912,
+   "line": "==> capturing router configurations (pre-run)"
+  },
+  {
+   "t": 1789430789.4044995,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430789.4048457,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/capture_configs.py\", line 9, in <module>"
+  },
+  {
+   "t": 1789430789.4048498,
+   "line": "    from lab_vars import ROUTERS       # noqa: E402"
+  },
+  {
+   "t": 1789430789.4048522,
+   "line": "    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  },
+  {
+   "t": 1789430789.404889,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430789.404893,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430789.4048948,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430789.4049273,
+   "line": "KeyError: 'asn'"
+  },
+  {
+   "t": 1789430789.498464,
+   "line": "warning: config capture failed"
+  },
+  {
+   "t": 1789430789.4985273,
+   "line": "==> running Robot Framework suites"
+  },
+  {
+   "t": 1789430789.7300887,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.7301779,
+   "line": "c8000v ipsec vti lab                                                          "
+  },
+  {
+   "t": 1789430789.7302246,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.936248,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430789.9362519,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430789.9362543,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430789.936256,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430789.936258,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430789.9362605,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430789.9362614,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9362628,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430789.936264,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430789.9362652,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430789.9362667,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430789.936268,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430789.936269,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430789.9513211,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane of the C..."
+  },
+  {
+   "t": 1789430789.951329,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.954602,
+   "line": "Routers are reachable over the OOB network with SSH and RESTCONF      | FAIL |"
+  },
+  {
+   "t": 1789430789.9546058,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430789.9546082,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9557083,
+   "line": "Management interface lives in Mgmt-vrf with a default route to the... | FAIL |"
+  },
+  {
+   "t": 1789430789.9557104,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430789.955712,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9570227,
+   "line": "License boot level provides the security feature set                  | FAIL |"
+  },
+  {
+   "t": 1789430789.9570637,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430789.9571016,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9604316,
+   "line": "AAA, SSH and VTY hardening from the NAC baseline                      | FAIL |"
+  },
+  {
+   "t": 1789430789.9604683,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430789.9604986,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9618347,
+   "line": "c8000v ipsec vti lab.01 Management :: Out-of-band management plane... | FAIL |"
+  },
+  {
+   "t": 1789430789.9619124,
+   "line": "4 tests, 0 passed, 4 failed"
+  },
+  {
+   "t": 1789430789.9619532,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.9648142,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430789.9648166,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430789.964819,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430789.9648213,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430789.9648237,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430789.964826,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430789.9648294,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9648318,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430789.9648342,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9648366,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430789.9648392,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430789.9648426,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430789.9648447,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430789.964847,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430789.9659328,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: each spoke has a point-to..."
+  },
+  {
+   "t": 1789430789.965973,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.9679155,
+   "line": "WAN point-to-point interfaces are up with the modelled addresses      | FAIL |"
+  },
+  {
+   "t": 1789430789.967956,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9679964,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9712336,
+   "line": "Each spoke reaches its headends' WAN addresses through the firewal... | FAIL |"
+  },
+  {
+   "t": 1789430789.971275,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9713147,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9727159,
+   "line": "LLDP shows the firewall on each spoke's WAN port and on the headen... | FAIL |"
+  },
+  {
+   "t": 1789430789.9727557,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9727943,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.974479,
+   "line": "Loopbacks carry the router-id and the site LAN                        | FAIL |"
+  },
+  {
+   "t": 1789430789.9745197,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430789.9745595,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9760244,
+   "line": "c8000v ipsec vti lab.02 Underlay :: WAN underlay: each spoke has a... | FAIL |"
+  },
+  {
+   "t": 1789430789.9760962,
+   "line": "4 tests, 0 passed, 4 failed"
+  },
+  {
+   "t": 1789430789.9761357,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.978954,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430789.9789574,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430789.9789608,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430789.9789634,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430789.9789662,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430789.9789815,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430789.9789839,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.978986,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430789.9789882,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9789906,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9789925,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430789.9789948,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430789.978996,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430789.9789982,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430789.9790006,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430789.9801362,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tunnel mode..."
+  },
+  {
+   "t": 1789430789.9801776,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.9838512,
+   "line": "Each tunnel is a static VTI sourced from the WAN link and protecte... | FAIL |"
+  },
+  {
+   "t": 1789430789.983892,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9839315,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9862552,
+   "line": "Tunnels are up/up at both ends and the tunnel subnet is reachable     | FAIL |"
+  },
+  {
+   "t": 1789430789.9862964,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9863358,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9895635,
+   "line": "IKEv2 SAs are READY with the modelled proposal and PSK authentication | FAIL |"
+  },
+  {
+   "t": 1789430789.989607,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9896486,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9922543,
+   "line": "Traffic through the tunnels is encrypted with the modelled transfo... | FAIL |"
+  },
+  {
+   "t": 1789430789.9923034,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430789.9923415,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9940548,
+   "line": "Each hub holds exactly one IKEv2 session per spoke tunnel             | FAIL |"
+  },
+  {
+   "t": 1789430789.9940953,
+   "line": "Variable '@{HUBS}' not found."
+  },
+  {
+   "t": 1789430789.9941394,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430789.9955142,
+   "line": "c8000v ipsec vti lab.03 Ipsec Vti :: Point-to-point IPsec VTIs (tu... | FAIL |"
+  },
+  {
+   "t": 1789430789.9955847,
+   "line": "5 tests, 0 passed, 5 failed"
+  },
+  {
+   "t": 1789430789.995625,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430789.998469,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430789.9984725,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430789.9984748,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430789.9984772,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430789.9984796,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430789.998482,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430789.9984844,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9984868,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430789.998488,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9984903,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.998493,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430789.9984953,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430789.9984965,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430789.9984992,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430789.9985013,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430789.998504,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430789.999567,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per site, eve..."
+  },
+  {
+   "t": 1789430789.9996076,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430790.0024753,
+   "line": "Each hub has an Established eBGP session with each of its spokes o... | FAIL |"
+  },
+  {
+   "t": 1789430790.002518,
+   "line": "Variable '@{HUBS}' not found."
+  },
+  {
+   "t": 1789430790.0025573,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430790.0062613,
+   "line": "Every spoke peers with its hub(s) only and learns every other site    | FAIL |"
+  },
+  {
+   "t": 1789430790.006303,
+   "line": "Evaluating expression '2 * (len($ROUTER_NAMES) - 1)' failed: Variable '$ROUTER_NAMES' not found."
+  },
+  {
+   "t": 1789430790.0063424,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430790.0090146,
+   "line": "Spoke routes to other spokes go through a hub                         | FAIL |"
+  },
+  {
+   "t": 1789430790.0090551,
+   "line": "Evaluating expression \"'|'.join([$ROUTERS[h]['asn'] for h in $HUBS])\" failed: Variable '$ROUTERS' not found."
+  },
+  {
+   "t": 1789430790.0090957,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430790.0115712,
+   "line": "Site LANs reach each other through the encrypted tunnels              | FAIL |"
+  },
+  {
+   "t": 1789430790.0116131,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430790.0116537,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430790.0130365,
+   "line": "c8000v ipsec vti lab.04 Routing :: eBGP over the VTIs: one AS per ... | FAIL |"
+  },
+  {
+   "t": 1789430790.013109,
+   "line": "4 tests, 0 passed, 4 failed"
+  },
+  {
+   "t": 1789430790.0131493,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430790.015674,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430790.0156772,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430790.0156808,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430790.0156918,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430790.0156991,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430790.0157013,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430790.0157034,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430790.0157058,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430790.0157075,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430790.0157118,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430790.015714,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430790.0157156,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430790.0157173,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430790.0157194,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430790.0157213,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430790.0157228,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430790.0157247,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430790.028657,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance: the rou..."
+  },
+  {
+   "t": 1789430790.0287166,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430809.8350947,
+   "line": "Terraform plan reports no drift from the NAC data model               | PASS |"
+  },
+  {
+   "t": 1789430809.8351083,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430809.835897,
+   "line": "c8000v ipsec vti lab.05 Nac Compliance :: Configuration compliance... | PASS |"
+  },
+  {
+   "t": 1789430809.8359327,
+   "line": "1 test, 1 passed, 0 failed"
+  },
+  {
+   "t": 1789430809.835935,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430809.8417819,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430809.841786,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430809.8417888,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430809.8417916,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430809.8417935,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430809.8417962,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430809.841799,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418007,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430809.8418028,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418045,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418064,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418086,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418107,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430809.8418124,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430809.8418145,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430809.8418164,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430809.8418188,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430809.8418207,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430809.843149,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in the shared..."
+  },
+  {
+   "t": 1789430809.8431604,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430809.8459074,
+   "line": "Routers exist in Nautobot with role, serial, platform and manageme... | FAIL |"
+  },
+  {
+   "t": 1789430809.845911,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430809.8459208,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430809.8488386,
+   "line": "WAN links are modelled as cables between the hub and spoke ports w... | FAIL |"
+  },
+  {
+   "t": 1789430809.8488488,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430809.8488517,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430809.8580484,
+   "line": "The VPN is modelled in Nautobot's core VPN app: one VPN, one tunne... | FAIL |"
+  },
+  {
+   "t": 1789430809.8580523,
+   "line": "Variable '${VPN_NAME}' not found."
+  },
+  {
+   "t": 1789430809.858054,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430811.3620028,
+   "line": "Locations form the hierarchy lab site -> region -> branch, with si... | FAIL |"
+  },
+  {
+   "t": 1789430811.3621068,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430811.3621438,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430811.3655066,
+   "line": "Every spoke uses its own pre-shared key on all of its tunnels and ... | FAIL |"
+  },
+  {
+   "t": 1789430811.3666081,
+   "line": "Variable '@{SPOKES}' not found."
+  },
+  {
+   "t": 1789430811.3666117,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430811.3723497,
+   "line": "The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase... | FAIL |"
+  },
+  {
+   "t": 1789430811.3723953,
+   "line": "Variable '${VPN_PROFILE}' not found."
+  },
+  {
+   "t": 1789430811.3724365,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430811.3766792,
+   "line": "BGP model: one AS per site, eBGP peerings over the tunnel addresse... | FAIL |"
+  },
+  {
+   "t": 1789430811.3767333,
+   "line": "Variable '${ROUTER_GQL}' not found."
+  },
+  {
+   "t": 1789430811.3767738,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430813.1487339,
+   "line": "NAC device model rendered from Nautobot matches the committed file    | PASS |"
+  },
+  {
+   "t": 1789430813.148771,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430813.1504614,
+   "line": "Golden Config: router backups are in Gitea and every compliance ro... | FAIL |"
+  },
+  {
+   "t": 1789430813.150489,
+   "line": "Variable '@{ROUTER_NAMES}' not found."
+  },
+  {
+   "t": 1789430813.1505153,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430813.1515896,
+   "line": "c8000v ipsec vti lab.06 Nautobot :: The IPsec lab as modelled in t... | FAIL |"
+  },
+  {
+   "t": 1789430813.1516452,
+   "line": "9 tests, 1 passed, 8 failed"
+  },
+  {
+   "t": 1789430813.1516733,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430813.1538079,
+   "line": "[ ERROR ] Error in file '/home/dcantor/cat8000v-ipsec/tests/resources/common.resource' on line 4: Processing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: Importing variable file '/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py' failed: KeyError: 'asn'"
+  },
+  {
+   "t": 1789430813.1538107,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430813.1538124,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430813.153814,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430813.153815,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430813.1538174,
+   "line": "PYTHONPATH:"
+  },
+  {
+   "t": 1789430813.1538196,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.1538212,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/resources"
+  },
+  {
+   "t": 1789430813.1538234,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.153825,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.1538258,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.1538274,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.1538284,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.15383,
+   "line": "  /home/dcantor/cat8000v-ipsec/nautobot"
+  },
+  {
+   "t": 1789430813.1538327,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/bin"
+  },
+  {
+   "t": 1789430813.1538336,
+   "line": "  /usr/lib/python314.zip"
+  },
+  {
+   "t": 1789430813.1538355,
+   "line": "  /usr/lib/python3.14"
+  },
+  {
+   "t": 1789430813.1538365,
+   "line": "  /usr/lib/python3.14/lib-dynload"
+  },
+  {
+   "t": 1789430813.1538389,
+   "line": "  /home/dcantor/cat8000v-ipsec/tests/.venv/lib/python3.14/site-packages"
+  },
+  {
+   "t": 1789430813.1549072,
+   "line": "c8000v ipsec vti lab.07 Firewalls :: The VyOS firewall in front of each hea..."
+  },
+  {
+   "t": 1789430813.1549375,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430813.1570797,
+   "line": "Each headend has exactly one firewall, reachable over the OOB netw... | FAIL |"
+  },
+  {
+   "t": 1789430813.1571116,
+   "line": "Evaluating expression 'sorted($FIREWALL_OF)' failed: Variable '$FIREWALL_OF' not found."
+  },
+  {
+   "t": 1789430813.1571386,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430813.1594217,
+   "line": "Firewall interfaces carry the modelled addresses and face the righ... | FAIL |"
+  },
+  {
+   "t": 1789430813.1594539,
+   "line": "Variable '@{TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430813.1594827,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430833.213784,
+   "line": "The rendered firewall configuration matches what runs on the firew... | PASS |"
+  },
+  {
+   "t": 1789430833.213837,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430833.2160652,
+   "line": "Only IKEv2, ESP and ICMP cross the firewall; the tunnels actually ... | FAIL |"
+  },
+  {
+   "t": 1789430833.2161374,
+   "line": "Variable '@{FIREWALLS}' not found."
+  },
+  {
+   "t": 1789430833.2162316,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430833.2185051,
+   "line": "Non-VPN traffic from a spoke to a headend is dropped by the firewall  | FAIL |"
+  },
+  {
+   "t": 1789430833.2185495,
+   "line": "Variable '${TUNNEL_LIST}' not found."
+  },
+  {
+   "t": 1789430833.2185845,
+   "line": "------------------------------------------------------------------------------"
+  },
+  {
+   "t": 1789430833.2200243,
+   "line": "c8000v ipsec vti lab.07 Firewalls :: The VyOS firewall in front of... | FAIL |"
+  },
+  {
+   "t": 1789430833.2200973,
+   "line": "5 tests, 1 passed, 4 failed"
+  },
+  {
+   "t": 1789430833.220762,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430833.2214522,
+   "line": "c8000v ipsec vti lab                                                  | FAIL |"
+  },
+  {
+   "t": 1789430833.2215676,
+   "line": "32 tests, 3 passed, 29 failed"
+  },
+  {
+   "t": 1789430833.221607,
+   "line": "=============================================================================="
+  },
+  {
+   "t": 1789430833.2230344,
+   "line": "Output:  /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/output.xml"
+  },
+  {
+   "t": 1789430833.2681034,
+   "line": "Log:     /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/log.html"
+  },
+  {
+   "t": 1789430833.2745056,
+   "line": "Report:  /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/report.html"
+  },
+  {
+   "t": 1789430833.3932388,
+   "line": "==> capturing router configurations (post-run backup)"
+  },
+  {
+   "t": 1789430833.8057246,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789430833.805728,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/capture_configs.py\", line 9, in <module>"
+  },
+  {
+   "t": 1789430833.8057306,
+   "line": "    from lab_vars import ROUTERS       # noqa: E402"
+  },
+  {
+   "t": 1789430833.805733,
+   "line": "    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  },
+  {
+   "t": 1789430833.805735,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/tests/resources/lab_vars.py\", line 16, in <module>"
+  },
+  {
+   "t": 1789430833.8057375,
+   "line": "    ROUTERS = {d[\"name\"]: {\"role\": d[\"role\"], \"host\": d[\"mgmt_ip\"], \"asn\": str(d[\"asn\"]), \"router_id\": d[\"router_id\"], \"lan\": d[\"lan\"],"
+  },
+  {
+   "t": 1789430833.8057399,
+   "line": "                                                                               ~^^^^^^^"
+  },
+  {
+   "t": 1789430833.8057423,
+   "line": "KeyError: 'asn'"
+  },
+  {
+   "t": 1789430833.8928194,
+   "line": "warning: config capture failed"
+  },
+  {
+   "t": 1789430833.894516,
+   "line": "diff: /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/configs/pre-run: No such file or directory"
+  },
+  {
+   "t": 1789430833.8945198,
+   "line": "diff: /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/configs/post-run: No such file or directory"
+  },
+  {
+   "t": 1789430833.8951328,
+   "line": "    configuration changed during the run, see configs/pre-vs-post.diff"
+  },
+  {
+   "t": 1789430833.9056516,
+   "line": "==> report: /home/dcantor/cat8000v-ipsec/results/2026-09-14_20-06-29/report.html  (rc=29)"
+  },
+  {
+   "t": 1789430833.911588,
+   "line": "!! 29 test(s) failed"
+  }
+ ]
+}

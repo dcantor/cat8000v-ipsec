@@ -21,18 +21,27 @@ Routers exist in Nautobot with role, serial, platform and management IP matching
         Should Contain    ${ver}    ${dev}[serial]
     END
 
-WAN links are modelled as cables between the hub and spoke ports with /30 addresses
+WAN links are modelled as cables: spoke port to the headend's firewall, firewall to the headend, /30 addresses
     FOR    ${t}    IN    @{TUNNEL_LIST}
+        ${far}=    Set Variable If    $t['firewall']    ${t}[firewall]    ${t}[hub]
+        ${far_if}=    Set Variable If    $t['firewall']    ${t}[fw_spoke_if]    ${t}[hub_if]
         ${d}=    Nautobot Graphql    { interfaces(device:["${t}[spoke]"], name:"${t}[spoke_if]") { enabled description ip_addresses { address parent { prefix role { name } } } connected_interface { name device { name } ip_addresses { address } } } }
         ${i}=    Set Variable    ${d}[interfaces][0]
         Should Be True    ${i}[enabled]
-        Should Be Equal    ${i}[description]    WAN to ${t}[hub] ${{ $t['hub_if'].replace('GigabitEthernet', 'Gi') }}
+        Should Be Equal    ${i}[description]    WAN to ${far} ${far_if}
         Should Be Equal    ${i}[ip_addresses][0][address]    ${t}[spoke_wan]/30
         Should Be Equal    ${i}[ip_addresses][0][parent][prefix]    ${t}[wan_prefix]
         Should Be Equal    ${i}[ip_addresses][0][parent][role][name]    wan-p2p
-        Should Be Equal    ${i}[connected_interface][device][name]    ${t}[hub]
-        Should Be Equal    ${i}[connected_interface][name]    ${t}[hub_if]
-        Should Be Equal    ${i}[connected_interface][ip_addresses][0][address]    ${t}[hub_wan]/30
+        Should Be Equal    ${i}[connected_interface][device][name]    ${far}
+        Should Be Equal    ${i}[connected_interface][name]    ${far_if}
+        Should Be Equal    ${i}[connected_interface][ip_addresses][0][address]    ${t}[spoke_gw]/30
+        IF    $t['firewall']
+            ${d}=    Nautobot Graphql    { interfaces(device:["${t}[hub]"], name:"${t}[hub_if]") { enabled ip_addresses { address parent { prefix } } connected_interface { name device { name } ip_addresses { address } } } }
+            ${h}=    Set Variable    ${d}[interfaces][0]
+            Should Be Equal    ${h}[ip_addresses][0][address]    ${t}[hub_wan]/30
+            Should Be Equal    ${h}[connected_interface][device][name]    ${t}[firewall]
+            Should Be Equal    ${h}[connected_interface][name]    ${t}[fw_hub_if]
+        END
     END
     ${d}=    Nautobot Graphql    { interfaces(device:[${ROUTER_GQL}], description:"unwired") { device { name } name enabled } }
     FOR    ${i}    IN    @{d}[interfaces]
@@ -40,7 +49,7 @@ WAN links are modelled as cables between the hub and spoke ports with /30 addres
     END
 
 The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spoke pair, hub/spoke endpoints
-    ${d}=    Nautobot Graphql    { vpns(name:"${VPN_NAME}") { name service_type status { name } vpn_profile { name } vpn_tunnels { name tunnel_id encapsulation status { name } vpn_profile { name } endpoint_a { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } endpoint_z { device { name } role { name } source_interface { name } source_ipaddress { address } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } } } }
+    ${d}=    Nautobot Graphql    { vpns(name:"${VPN_NAME}") { name service_type status { name } vpn_profile { name } vpn_tunnels { name tunnel_id encapsulation status { name } vpn_profile { name } endpoint_a { device { name } role { name } source_interface { name } source_ipaddress { address interfaces { name } } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } endpoint_z { device { name } role { name } source_interface { name } source_ipaddress { address interfaces { name } } tunnel_interface { name type ip_addresses { address } } protected_prefixes { prefix } } } } }
     Length Should Be    ${d}[vpns]    1
     ${vpn}=    Set Variable    ${d}[vpns][0]
     Should Be Equal    ${vpn}[service_type]    IPSEC
@@ -59,7 +68,9 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spok
         # endpoint A = hub: source GiN with the WAN address, tunnel interface TunnelN, protects its LAN + loopback
         ${a}=    Set Variable    ${t}[endpoint_a]
         Should Be Equal    ${a}[role][name]    hub
-        Should Be Equal    ${a}[source_interface][name]    ${x}[hub_if]
+        # a headend behind a firewall sources every tunnel from one WAN interface: the endpoint carries the address, the interface follows from it
+        ${a_src}=    Set Variable If    $a['source_interface']    ${a}[source_interface][name]    ${a}[source_ipaddress][interfaces][0][name]
+        Should Be Equal    ${a_src}    ${x}[hub_if]
         Should Be Equal    ${a}[source_ipaddress][address]    ${x}[hub_wan]/30
         Should Be Equal    ${a}[tunnel_interface][name]    Tunnel${x}[id]
         Should Be Equal    ${a}[tunnel_interface][type]    TUNNEL
@@ -77,7 +88,7 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spok
         Should Be Equal    ${pfx}    ${{ sorted([$ROUTERS[$s]['router_id'] + '/32', $ROUTERS[$s]['lan']]) }}
         # each router's tunnel destination is exactly the other endpoint's source address in the model
         ${cfg}=    Show    ${h}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode
-        Should Contain    ${cfg}    tunnel source ${a}[source_interface][name]
+        Should Contain    ${cfg}    tunnel source ${a_src}
         Should Contain    ${cfg}    tunnel destination ${{ $z['source_ipaddress']['address'].split('/')[0] }}
         Should Contain    ${cfg}    tunnel mode ipsec ipv4
         ${cfg}=    Show    ${s}    show run interface Tunnel${x}[id] | include tunnel destination|tunnel source|tunnel mode

@@ -11,9 +11,12 @@ the state the portal left it in.
 ```
                     east-headend            central-headend          west-headend
    headends         AS 65200 · East         AS 65204 · Central       AS 65206 · West
-                    Gi2–Gi9 spoke ports     Gi2–Gi9                  Gi2–Gi9
-                        │ │ │                  │ │ │ │ │                │ │ │ │ │
-   13 IPsec VTIs        │ │ │   one p2p /30 WAN link + one TunnelN per (headend, spoke)
+                    Gi2 = WAN 100.64.1.2    Gi2 = WAN 100.64.2.2     Gi2 = WAN 100.64.3.2
+                        │ eth1                  │ eth1                   │ eth1
+   firewalls        fw-east (VyOS)          fw-central (VyOS)        fw-west (VyOS)
+   (one per hub)    forward filter: only IKEv2 udp/500+4500, ESP, ICMP and established/related cross; rest dropped + logged
+                        │ eth2..                │ eth2..                 │ eth2..
+   13 IPsec VTIs        │ │ │   one p2p /30 link per (firewall, spoke); one TunnelN per (headend, spoke) through the firewall
                         │ │ │                  │ │ │ │ │                │ │ │ │ │
    spokes           spoke1 (East)  spoke2 (Central)  spoke3 (West)  spoke4 (Central)  spoke5 (West)
                     → all three    → all three       → all three    → central + west  → central + west
@@ -37,6 +40,16 @@ the state the portal left it in.
 
 Everyday operation happens in the portal: **http://192.168.50.231:8090** (LAN) / http://localhost:8090.
 Nautobot: **http://192.168.50.231:8080** (admin / admin).
+
+### The firewalls
+Each headend sits behind a **VyOS** firewall (1 vCPU / 1 GB, built once from the rolling ISO by
+`tools/vyos_install.py` into `images/vyos-base.qcow2`, overlays per node, day-0 over the serial console).
+The headend's single WAN interface faces its firewall; every spoke link terminates on the firewall's
+eth2–eth8; static routes on both sides go through it (rendered from Nautobot like everything else). The
+firewalls are Nautobot devices too (platform `vyos`, cables, addresses) and their configuration —
+interfaces plus the forward-filter policy from the config context — is rendered and pushed by
+`nautobot/render_vyos.py` (`./lab.sh nautobot vyos [--check]`) as a pipeline step before Terraform.
+Robot suite 07 proves they filter: ESP counters move, and an SSH attempt from a spoke to a headend is dropped.
 
 ## The VPN provisioning portal
 
@@ -148,9 +161,9 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 27 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 32 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
-Terraform drift**; and the Nautobot model — devices and serials, cables, VPN objects (every router's
+Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering); and the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
 compliant. Each run keeps pre/post config backups and a diff under `results/`.

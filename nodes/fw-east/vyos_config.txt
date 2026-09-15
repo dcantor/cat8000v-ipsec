@@ -1,0 +1,9 @@
+# VyOS day-0 (console): identity and out-of-band management only; everything else is rendered from Nautobot
+set system host-name fw-east
+set system domain-name lab.local
+set interfaces ethernet eth0 address 10.2.0.21/24
+set interfaces ethernet eth0 description 'OOB management'
+set protocols static route 10.0.0.0/8 next-hop 10.2.0.1
+set service ssh port 22
+set service lldp interface all
+set system login user vyos authentication plaintext-password vyos
