@@ -99,8 +99,11 @@ KPIs, a **rendered topology** (headends on top, spokes grouped by region, one li
 by live health, tooltips, links into Nautobot), **headend capacity** with two constraints per headend —
 tunnels terminated (50, custom field `vpn_tunnel_capacity` on the hub) and the **bandwidth of the firewall
 in front of it** (custom field `firewall_bandwidth_mbps`: fw-east 40, fw-central 50, fw-west 90 Mbps; every
-tunnel commits `capacity.bandwidth_per_tunnel_mbps` = 8 Mbps) — with an **aggregate** bar showing the tighter
-of the two and the effective free slots (this is what the wizard and the deploy validation check), and a
+tunnel commits `capacity.bandwidth_per_tunnel_mbps` = 8 Mbps) — plus the live **control-plane CPU** of each
+headend (`show platform resources`, against the platform's warning threshold; data-plane QFP CPU and DRAM
+alongside) — with an **aggregate** bar showing the tightest of the three and the effective free slots (the
+model constraints set the slots, the wizard and deploy validation check them; a headend at its CPU threshold
+has none), and a
 per-tunnel report joining the Nautobot model with live IKEv2 / VTI / eBGP / ESP state collected from the
 headends; **Export CSV** (tunnels plus a headend-capacity block).
 

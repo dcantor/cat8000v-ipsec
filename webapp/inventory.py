@@ -129,7 +129,7 @@ class Inventory:
                          "in_rate_bps": ifc.get("in_bps"), "out_rate_bps": ifc.get("out_bps"), "last_input": ifc.get("last_input"), "last_output": ifc.get("last_output")}
             up = t["live"]["ike_status"] == "READY" and t["live"]["line_protocol"] == "up" and str(t["live"]["bgp_state"] or "").isdigit()
             t["live"]["health"] = "up" if up else ("degraded" if t["live"]["ike_status"] == "READY" else "down")
-        return {h: {"error": s["error"]} if "error" in s else {"collected": s["collected"], "ike_sessions": len(s["ike"])} for h, s in out.items()}
+        return {h: {"error": s["error"]} if "error" in s else {"collected": s["collected"], "ike_sessions": len(s["ike"]), **s["resources"]} for h, s in out.items()}
 
     def collect_headend(self, host):
         from netmiko import ConnectHandler
@@ -139,6 +139,7 @@ class Inventory:
             brief = c.send_command("show ip interface brief | include Tunnel", read_timeout=30)
             bgp_out = c.send_command("show bgp ipv4 unicast summary | begin Neighbor", read_timeout=30)
             ipsec_out = c.send_command("show crypto ipsec sa", read_timeout=60)
+            res_out = c.send_command("show platform resources", read_timeout=30)   # control-plane CPU, data-plane (QFP) CPU, DRAM with the platform's own thresholds
             ifaces = {}
             for line in brief.splitlines():
                 m = re.match(r"^(Tunnel\d+)\s+\S+\s+YES\s+\S+\s+(\S+(?: \S+)?)\s+(up|down)\s*$", line)
@@ -163,7 +164,14 @@ class Inventory:
             enc = re.search(r"#pkts encaps: (\d+)", block); dec = re.search(r"#pkts decaps: (\d+)", block)
             se = re.search(r"#send errors (\d+)", block); rcv = re.search(r"#recv errors (\d+)", block)
             ipsec[m[1]] = {"encaps": int(enc[1]) if enc else None, "decaps": int(dec[1]) if dec else None, "send_err": int(se[1]) if se else None, "recv_err": int(rcv[1]) if rcv else None}
-        return {"collected": time.time(), "ike": ike, "ifaces": ifaces, "bgp": bgp, "ipsec": ipsec}
+        res = {}
+        m = re.search(r"^\s*Control Processor\s+([\d.]+)%\s+\S+\s+(\d+)%\s+(\d+)%\s+(\S+)", res_out, re.M)
+        if m: res["cpu_pct"] = float(m[1]); res["cpu_warning_pct"] = int(m[2]); res["cpu_critical_pct"] = int(m[3]); res["cpu_state"] = {"H": "healthy", "W": "warning", "C": "critical"}.get(m[4], m[4])
+        m = re.search(r"^\s*CPU Utilization\s+([\d.]+)%\s+\S+\s+(\d+)%\s+(\d+)%", res_out, re.M)
+        if m: res["qfp_cpu_pct"] = float(m[1]); res["qfp_cpu_warning_pct"] = int(m[2])
+        m = re.search(r"^\s*DRAM\s+\d+MB\((\d+)%\)\s+(\d+)MB\s+(\d+)%", res_out, re.M)
+        if m: res["dram_pct"] = int(m[1]); res["dram_mb"] = int(m[2]); res["dram_warning_pct"] = int(m[3])
+        return {"collected": time.time(), "ike": ike, "ifaces": ifaces, "bgp": bgp, "ipsec": ipsec, "resources": res}
 
     # ---- public --------------------------------------------------------------
     def get(self, refresh=False, with_live=True):
@@ -174,13 +182,24 @@ class Inventory:
             for h in inv["headends"]:
                 h["live"] = inv["live_sources"].get(h["name"])
                 h["tunnels_up"] = sum(1 for t in inv["tunnels"] if t["headend"] == h["name"] and (t["live"] or {}).get("health") == "up")
+                # third metric, live: control-plane CPU of the headend (show platform resources). It joins the aggregate: a headend above the
+                # platform's warning threshold has no free slots whatever the model says; below it the model constraints decide.
+                cpu = (h["live"] or {}).get("cpu_pct"); warn = (h["live"] or {}).get("cpu_warning_pct") or 80
+                h["cpu_pct"] = cpu; h["cpu_warning_pct"] = warn; h["cpu_utilisation"] = round(100 * cpu / warn, 1) if cpu is not None else None
+                h["qfp_cpu_pct"] = (h["live"] or {}).get("qfp_cpu_pct"); h["dram_pct"] = (h["live"] or {}).get("dram_pct")
+                if h["cpu_utilisation"] is not None:
+                    if h["cpu_utilisation"] > (h["aggregate_utilisation"] or 0): h["binding"] = "cpu"
+                    h["aggregate_utilisation"] = max(h["aggregate_utilisation"] or 0, h["cpu_utilisation"])
+                    if cpu >= warn: h["effective_free"] = 0
             inv["generated"] = time.time()
             inv["summary"] = {"vpns": len(inv["vpns"]), "tunnels": len(inv["tunnels"]), "headends": len(inv["headends"]),
                               "tunnels_up": sum(1 for t in inv["tunnels"] if (t["live"] or {}).get("health") == "up"),
                               "tunnels_down": sum(1 for t in inv["tunnels"] if (t["live"] or {}).get("health") in ("down", "degraded")),
                               "capacity": sum(h["capacity"] for h in inv["headends"]), "free": sum(h["free"] for h in inv["headends"]),
                               "effective_capacity": sum(h.get("effective_capacity") or 0 for h in inv["headends"]), "effective_free": sum(h.get("effective_free") or 0 for h in inv["headends"]),
-                              "bandwidth_mbps": sum(h.get("bandwidth_mbps") or 0 for h in inv["headends"]), "bandwidth_used_mbps": sum(h.get("bandwidth_used_mbps") or 0 for h in inv["headends"])}
+                              "bandwidth_mbps": sum(h.get("bandwidth_mbps") or 0 for h in inv["headends"]), "bandwidth_used_mbps": sum(h.get("bandwidth_used_mbps") or 0 for h in inv["headends"]),
+                              "cpu_pct_max": max((h["cpu_pct"] for h in inv["headends"] if h.get("cpu_pct") is not None), default=None),
+                              "cpu_pct_avg": (lambda v: round(sum(v) / len(v), 1) if v else None)([h["cpu_pct"] for h in inv["headends"] if h.get("cpu_pct") is not None])}
             self._cache = inv
             return inv
 
@@ -206,9 +225,10 @@ def to_csv(inv):
         w.writerow(row)
     # headend capacity block: tunnels and firewall bandwidth, and the aggregate (the tighter of the two)
     w.writerow([]); w.writerow(["headend", "tunnels", "tunnel_capacity", "tunnel_free", "tunnel_utilisation_pct", "firewall", "bandwidth_mbps", "bandwidth_per_tunnel_mbps", "bandwidth_used_mbps",
-                                "bandwidth_free_mbps", "bandwidth_utilisation_pct", "binding_constraint", "aggregate_utilisation_pct", "effective_capacity", "effective_free"])
+                                "bandwidth_free_mbps", "bandwidth_utilisation_pct", "cpu_pct", "cpu_warning_pct", "qfp_cpu_pct", "dram_pct", "binding_constraint", "aggregate_utilisation_pct", "effective_capacity", "effective_free"])
     for h in inv["headends"]:
         w.writerow([h["name"], h["tunnels"], h["capacity"], h["free"], h["utilisation"], h.get("firewall") or "", h.get("bandwidth_mbps") or "", h.get("bandwidth_per_tunnel_mbps") or "",
-                    h.get("bandwidth_used_mbps") or "", h.get("bandwidth_free_mbps", ""), h.get("bandwidth_utilisation", ""), h.get("binding") or "", h.get("aggregate_utilisation", ""),
+                    h.get("bandwidth_used_mbps") or "", h.get("bandwidth_free_mbps", ""), h.get("bandwidth_utilisation", ""), h.get("cpu_pct", ""), h.get("cpu_warning_pct", ""), h.get("qfp_cpu_pct", ""), h.get("dram_pct", ""),
+                    h.get("binding") or "", h.get("aggregate_utilisation", ""),
                     h.get("effective_capacity", ""), h.get("effective_free", "")])
     return buf.getvalue()

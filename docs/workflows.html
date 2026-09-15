@@ -286,7 +286,7 @@ flowchart TD
   C --&gt; D["for each headend in parallel: SSH show commands"]
   D --&gt; E["join per tunnel on far source IP / tunnel interface / tunnel IP"]
   E --&gt; F["health: IKE READY ∧ VTI up ∧ BGP Established → up; IKE READY only → degraded; else down"]
-  F --&gt; G["capacity per headend: tunnels / cf_vpn_tunnel_capacity and (tunnels × bandwidth_per_tunnel_mbps) / cf_firewall_bandwidth_mbps of its firewall; aggregate = tighter of the two, effective free slots"]
+  F --&gt; G["capacity per headend: tunnels / cf_vpn_tunnel_capacity and (tunnels × bandwidth_per_tunnel_mbps) / cf_firewall_bandwidth_mbps of its firewall; live control-plane CPU / warning threshold (show platform resources); aggregate = tightest of the three, effective free slots (0 when CPU ≥ threshold)"]
   G --&gt; Z
 </pre></div>
 </div>
@@ -512,7 +512,7 @@ flowchart TD
 <tr><td><code>GET /api/runs</code></td><td>—</td><td>last 30 runs without logs (memory + <code>webapp/runs/*.json</code>)</td></tr>
 <tr><td><code>GET /api/runs/{id}?since=N</code></td><td>log offset</td><td>Run + <code>log[{t,line}]</code> from N, <code>log_offset</code>, tests (suites → tests with status/message/elapsed), results_dir, devices, resume_of</td></tr>
 <tr><td><code>POST /api/runs/{id}/resume</code></td><td>—</td><td>new Run with carried-over successes; 404/409</td></tr>
-<tr><td><code>GET /api/vpn-inventory?refresh=&live=</code></td><td>flags</td><td>tunnels (model + live), headends (capacity, used, free, utilisation, live status), devices (role, region, site, mgmt IP, AS, LAN, serial), vpns, summary, generated</td></tr>
+<tr><td><code>GET /api/vpn-inventory?refresh=&live=</code></td><td>flags</td><td>tunnels (model + live), headends (capacity, used, free, utilisation, firewall bandwidth, live CPU / QFP / DRAM, binding, aggregate, effective free, live status), devices (role, region, site, mgmt IP, AS, LAN, serial), vpns, summary, generated</td></tr>
 <tr><td><code>GET /api/vpn-inventory.csv</code></td><td>—</td><td>CSV, one row per tunnel (35 columns)</td></tr>
 <tr><td><code>/results/…</code></td><td>path</td><td>static Robot reports, logs, config backups</td></tr>
 </table>

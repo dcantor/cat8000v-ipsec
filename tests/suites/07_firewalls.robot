@@ -75,6 +75,22 @@ Firewall bandwidth is modelled in Nautobot and bounds the headend capacity toget
         Should Be True    ${row}[bandwidth_used_mbps] <= ${row}[bandwidth_mbps]    msg=${h}: tunnels commit more than the firewall carries
     END
 
+Headend CPU is collected live and joins the aggregate capacity
+    [Documentation]    The portal reads `show platform resources` on every headend: control-plane CPU against the platform's
+    ...    warning threshold, data-plane (QFP) CPU and DRAM. Aggregate utilisation is the tightest of tunnels, bandwidth and CPU.
+    ${inv}=    Portal Inventory    live=${True}
+    FOR    ${h}    IN    @{HUBS}
+        ${row}=    Evaluate    [x for x in $inv["headends"] if x["name"] == $h][0]
+        Should Not Be Equal    ${row}[cpu_pct]    ${None}    msg=${h}: no CPU reading (${row}[live])
+        Should Be True    0 <= ${row}[cpu_pct] <= 100
+        Should Be True    0 < ${row}[cpu_warning_pct] <= 100
+        Should Be True    0 <= ${row}[qfp_cpu_pct] <= 100
+        Should Be True    0 <= ${row}[dram_pct] <= 100
+        ${agg}=    Evaluate    max($row["utilisation"], $row["bandwidth_utilisation"], $row["cpu_utilisation"])
+        Should Be Equal As Numbers    ${row}[aggregate_utilisation]    ${agg}    msg=${h}: aggregate must include the CPU utilisation
+        Run Keyword If    ${row}[cpu_pct] >= ${row}[cpu_warning_pct]    Should Be Equal As Integers    ${row}[effective_free]    0    msg=${h} is above its CPU threshold and must have no free slots
+    END
+
 Non-VPN traffic from a spoke to a headend is dropped by the firewall
     ${t}=    Set Variable    ${TUNNEL_LIST}[0]
     ${before}=    Drop Counter    ${t}[firewall]

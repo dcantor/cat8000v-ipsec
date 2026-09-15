@@ -21,6 +21,7 @@
   .cap-head { padding:10px 0; border-bottom:1px solid var(--line) } .cap-title { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px }
   .cap.sub { padding:4px 0; border:0 } .cap-l { width:230px; padding-left:14px; color:var(--muted); font-size:13px } .cap-r { width:360px; font-size:13px }
   .cap.agg .cap-l, .cap.agg .cap-r { color:var(--ink) } .cap.agg .bar { height:16px; outline:1px solid var(--ink); outline-offset:1px }
+  .cap .bar { position:relative; overflow:visible } .cap .bar > div { border-radius:4px } .bar .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--bad); opacity:.7 }
   .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:var(--ink) } .pill.warn { background:#fef3c7 } .pill.fail { background:#fee2e2 }
   .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
   .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
@@ -186,7 +187,7 @@
     <div id="inv-topo" style="overflow-x:auto"></div>
   </div>
   <div class="card">
-    <h2>Headend capacity <small>two constraints per headend: tunnels terminated (custom field <code>vpn_tunnel_capacity</code> on the hub) and the bandwidth of the firewall in front of it (custom field <code>firewall_bandwidth_mbps</code>; every tunnel commits <span id="inv-per-tunnel">?</span> Mbps). The aggregate is the tighter of the two, and it is what the wizard checks.</small></h2>
+    <h2>Headend capacity <small>two constraints per headend: tunnels terminated (custom field <code>vpn_tunnel_capacity</code> on the hub) and the bandwidth of the firewall in front of it (custom field <code>firewall_bandwidth_mbps</code>; every tunnel commits <span id="inv-per-tunnel">?</span> Mbps) — plus the live control-plane <b>CPU</b> of the headend (<code>show platform resources</code>, measured against the platform's warning threshold). The aggregate is the tightest of the three; the model constraints set the free slots, a headend at or above its CPU threshold has none.</small></h2>
     <div id="inv-capacity"></div>
   </div>
   <div class="card">
@@ -520,6 +521,7 @@ async function loadInventory(refresh) {
   $('inv-kpis').innerHTML = [
     ['VPN services', s.vpns, ''], ['Tunnels', s.tunnels, ''], ['Tunnels up', s.tunnels_up, s.tunnels_up === s.tunnels ? 'ok' : 'warn'], ['Tunnels down / degraded', s.tunnels_down, s.tunnels_down ? 'bad' : 'ok'],
     ['Headends', s.headends, ''], ['Tunnel slots', `${s.capacity - s.free} / ${s.capacity}`, ''], ['Firewall bandwidth (Mbps)', `${s.bandwidth_used_mbps} / ${s.bandwidth_mbps}`, s.bandwidth_used_mbps >= s.bandwidth_mbps ? 'bad' : ''],
+    ['Headend CPU (max / avg)', s.cpu_pct_max == null ? '–' : `${s.cpu_pct_max}% / ${s.cpu_pct_avg}%`, s.cpu_pct_max == null ? '' : s.cpu_pct_max >= 80 ? 'bad' : s.cpu_pct_max >= 60 ? 'warn' : 'ok'],
     ['Aggregate free slots', s.effective_free, s.effective_free === 0 ? 'bad' : (s.effective_free <= 5 ? 'warn' : 'ok')]
   ].map(([l, n, c]) => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
   $('inv-per-tunnel').textContent = (d.headends.find(h => h.bandwidth_per_tunnel_mbps) || {}).bandwidth_per_tunnel_mbps || '?';
@@ -536,7 +538,11 @@ async function loadInventory(refresh) {
         <span class="pill ${barCls(h.aggregate_utilisation)}">binding: ${h.binding}</span></div>
       ${bar('tunnels', h.tunnels, h.capacity, 'tunnels', h.utilisation, `${h.free} free`)}
       ${bw}
-      ${bar('aggregate', h.tunnels, h.effective_capacity, 'tunnels', h.aggregate_utilisation, `<b>${h.effective_free}</b> free slot${h.effective_free === 1 ? '' : 's'} once both constraints apply`, true)}</div>`; }).join('') || '<div class="hint">no headends</div>';
+      ${h.cpu_pct != null ? `<div class="cap sub"><div class="cap-l">CPU <span class="hint">(control plane, live)</span></div>
+      <div class="bar" title="warning at ${h.cpu_warning_pct}%"><div class="${barCls(h.cpu_utilisation)}" style="width:${Math.min(100, h.cpu_pct)}%"></div><i class="thr" style="left:${h.cpu_warning_pct}%"></i></div>
+      <div class="cap-r"><b>${h.cpu_pct}%</b> (${h.cpu_utilisation}% of the ${h.cpu_warning_pct}% warning threshold) · ${esc(h.live.cpu_state || '')}${h.qfp_cpu_pct != null ? ' · data plane (QFP) ' + h.qfp_cpu_pct + '%' : ''}${h.dram_pct != null ? ' · DRAM ' + h.dram_pct + '%' : ''}</div></div>`
+                         : `<div class="cap sub"><div class="cap-l">CPU <span class="hint">(control plane, live)</span></div><div class="hint">no live data${h.live && h.live.error ? ': ' + esc(h.live.error) : ' (refresh live data)'}</div></div>`}
+      ${bar('aggregate', h.tunnels, h.effective_capacity, 'tunnels', h.aggregate_utilisation, `<b>${h.effective_free}</b> free slot${h.effective_free === 1 ? '' : 's'} once all constraints apply`, true)}</div>`; }).join('') || '<div class="hint">no headends</div>';
   $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
     <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
     <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>

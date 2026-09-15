@@ -117,10 +117,10 @@ class LabLib:
         return r.returncode
 
     @keyword
-    def portal_inventory(self):
-        """The VPN Provisioning Portal's inventory (model only, no live collection) as parsed JSON."""
+    def portal_inventory(self, live=False):
+        """The VPN Provisioning Portal's inventory as parsed JSON; `live=True` collects state (incl. CPU) from the headends now."""
         url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090")
-        r = requests.get(f"{url}/api/vpn-inventory", params={"live": "false"}, timeout=120)
+        r = requests.get(f"{url}/api/vpn-inventory", params={"live": "true" if live else "false", "refresh": "true" if live else "false"}, timeout=300)
         logger.info(f"GET {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
         return r.json()
 
