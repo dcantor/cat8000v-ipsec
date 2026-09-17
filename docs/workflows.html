@@ -38,7 +38,8 @@
 <tr><td><b>lab.conf</b> + <b>libvirt</b><br><span class="small"><code>lab.sh</code></span></td><td>Lab host, <code>qemu:///system</code></td><td><b>VM facts</b>: node names, node index (MACs, UDP ports), console ports, management IPs, physical wiring (<code>LINKS</code>), tunnel numbers, hub/spoke port counts; domain XML, overlay disks, day-0 ISOs under <code>nodes/</code></td><td>libvirt (virsh), routers' serial consoles (raw TCP, <code>tools/console.py</code>)</td></tr>
 <tr><td><b>Nautobot 3.2</b> (+ bgp-models, golden-config, device-onboarding, Gitea)<br><span class="small">NMS VM 10.0.0.10</span></td><td>Docker Compose on the NMS jumphost</td><td><b>Source of truth</b>: locations (lab site → Region → Branch), devices, interfaces, cables, prefixes/IPs with roles, core VPN app objects (VPN, tunnels, endpoints, profile, Phase 1/2 policies), BGP AS/routing instances/peerings, config contexts, custom fields, saved GraphQL query, Golden Config settings/compliance; Gitea holds backups, intended configs, Jinja templates</td><td>Routers (SSH for onboarding/backups), seed/renderer/portal (REST + GraphQL), Gitea (git)</td></tr>
 <tr><td><b>Network-as-Code</b><br><span class="small"><code>nac/</code>: module <code>netascode/nac-iosxe</code>, provider <code>CiscoDevNet/iosxe</code> 0.15</span></td><td>Lab host, Terraform CLI</td><td><code>global.nac.yaml</code> (hand-written baseline), <b>generated</b> <code>devices.nac.yaml</code> and <code>device_groups.nac.yaml</code> (PSK variables), Terraform state (<code>terraform.tfstate</code>)</td><td>Routers over RESTCONF (HTTPS 443, YANG native models); a <code>cisco-ia:save-config</code> RPC after apply</td></tr>
-<tr><td><b>Catalyst 8000v routers</b></td><td>libvirt VMs on the lab host</td><td>Running/startup configuration; live IKEv2/IPsec/BGP state</td><td>Each other (UDP-tunnelled p2p links, IPsec VTIs, eBGP), NMS via OOB network 10.2.0.0/24 (Mgmt-vrf)</td></tr>
+<tr><td><b>Catalyst 8000v routers</b></td><td>libvirt VMs on the lab host</td><td>Running/startup configuration; live IKEv2/IPsec/BGP state; platform CPU / DRAM (capacity dashboard)</td><td>Each other (UDP-tunnelled p2p links, IPsec VTIs, eBGP), NMS via OOB network 10.2.0.0/24 (Mgmt-vrf)</td></tr>
+<tr><td><b>VyOS firewalls</b> fw-east / fw-central / fw-west<br><span class="small">1 vCPU / 1 GiB, overlays on <code>images/vyos-base.qcow2</code></span></td><td>libvirt VMs on the lab host, one in front of each headend</td><td>Running configuration rendered from Nautobot (<code>nautobot/render_vyos.py</code>): eth1 to the headend, eth2.. to the spokes, forward filter (IKE / ESP / ICMP allowed, default drop + log), LLDP; static <code>bandwidth_mbps</code> in the intent → custom field <code>firewall_bandwidth_mbps</code></td><td>Headend and spokes (UDP-tunnelled links, all WAN /30s terminate on the firewall), NMS via OOB, renderer/tests over SSH (netmiko <code>vyos</code>), console day-0 (<code>tools/vyos_console.py</code>)</td></tr>
 <tr><td><b>Robot Framework</b><br><span class="small"><code>tests/</code></span></td><td>Lab host venv</td><td>Results per run under <code>results/&lt;date&gt;_&lt;time&gt;/</code> (report, log, pre/post config backups, diff)</td><td>Routers (SSH via netmiko, RESTCONF), Nautobot (REST/GraphQL), Terraform (plan exit code), renderer (<code>--check</code>), Gitea (raw backups)</td></tr>
 </table>
 
@@ -68,6 +69,10 @@ flowchart LR
   subgraph RTS["C8000v routers (VMs)"]
     RT["RESTCONF · SSH · console"]
   end
+  subgraph FWS["VyOS firewalls (VMs)"]
+    FW["SSH · console"]
+  end
+  RV["render_vyos.py"]
   U -- "JSON" --&gt; P
   P -- "save" --&gt; I
   P -- "add / remove node" --&gt; LC
@@ -78,6 +83,9 @@ flowchart LR
   NB -- "SSH discovery" --&gt; RT
   I -- "seed.py" --&gt; NB
   NB -- "GraphQL" --&gt; R
+  NB -- "GraphQL" --&gt; RV
+  RV -- "set / delete + commit (SSH)" --&gt; FW
+  FW --- RT
   I -- "PSKs" --&gt; R
   R --&gt; N
   N --&gt; TF
@@ -103,7 +111,9 @@ flowchart LR
 <tr><td>Terraform → routers</td><td>RESTCONF (HTTPS, YANG <code>Cisco-IOS-XE-native</code>)</td><td>One resource per config object; PATCH on create/update, DELETE on destroy; <code>-parallelism=1</code> to avoid datastore lock races; <code>cisco-ia:save-config</code> RPC per router after apply</td></tr>
 <tr><td>Golden Config → routers / Gitea</td><td>SSH (nornir-netmiko), git</td><td>Backup: running-config → <code>config-backups/&lt;device&gt;.cfg</code>; Intended: Jinja2 <code>c8000v-ipsec.j2</code> rendered from GraphQL (<code>golden-config-lab</code> query) → <code>intended-configs/</code>; Compliance: per-feature diff rows (17 features × N devices)</td></tr>
 <tr><td>Robot → everything</td><td>SSH / RESTCONF / REST / GraphQL / subprocess</td><td>Assertions on live state vs the intent (<code>lab_vars.py</code>), on Nautobot objects, on Terraform drift (exit code), on renderer round-trip, on Golden Config compliance</td></tr>
-<tr><td>Portal inventory → headends</td><td>SSH (netmiko)</td><td><code>show crypto ikev2 sa</code>, <code>show ip interface brief</code>, <code>show interfaces TunnelN</code>, <code>show bgp ipv4 unicast summary</code>, <code>show crypto ipsec sa</code> → per-tunnel health, SA age, BGP state/prefixes, ESP counters, rates</td></tr>
+<tr><td>Portal inventory → headends</td><td>SSH (netmiko)</td><td><code>show crypto ikev2 sa</code>, <code>show ip interface brief</code>, <code>show interfaces TunnelN</code>, <code>show bgp ipv4 unicast summary</code>, <code>show crypto ipsec sa</code>, <code>show platform resources</code> → per-tunnel health, SA age, BGP state/prefixes, ESP counters, rates; control-plane CPU vs the platform's warning threshold, QFP CPU, DRAM</td></tr>
+<tr><td>render_vyos.py → firewalls</td><td>SSH (netmiko <code>vyos</code>)</td><td>Per firewall from Nautobot (devices with role <code>vpn-firewall</code>, interfaces + cables + addresses, config context <code>firewall</code> policy): <code>delete</code> + <code>set</code> for eth1..eth8 (address, description, unwired = disabled), the forward filter rules, LLDP — in one commit; <code>--check</code> compares the running <code>set</code> lines, <code>--dry-run</code> prints</td></tr>
+<tr><td>Headend capacity (portal)</td><td>computed</td><td>Per headend: tunnels vs <code>vpn_tunnel_capacity</code>; bandwidth used (tunnels × <code>bandwidth_per_tunnel_mbps</code> from the VPN's extra attributes) vs the firewall's <code>firewall_bandwidth_mbps</code>; live control-plane CPU vs threshold. Aggregate = the tightest; effective free slots = min of the modelled constraints (0 when CPU ≥ threshold); same math in <code>intent.headend_capacity()</code> for the wizard and validation</td></tr>
 </table>
 
 <h2 class="brk">3. The intent document</h2>
@@ -132,6 +142,8 @@ sequenceDiagram
   participant S as seed.py
   participant NB as Nautobot
   participant R as render_nac.py
+  participant RV as render_vyos.py
+  participant FW as VyOS firewalls
   B-&gt;&gt;P: POST /api/runs {mode, intent, options}
   P-&gt;&gt;P: intent.validate() → 422 with problems if invalid
   P--&gt;&gt;B: run id (queued)
@@ -147,6 +159,10 @@ sequenceDiagram
   R-&gt;&gt;NB: POST /api/graphql (saved query)
   R-&gt;&gt;I: read per-spoke PSKs
   R--&gt;&gt;P: devices.nac.yaml + device_groups.nac.yaml written
+  P-&gt;&gt;RV: ./lab.sh nautobot vyos (step "firewalls")
+  RV-&gt;&gt;NB: POST /api/graphql: vpn-firewall devices, interfaces, cables, addresses, firewall policy context
+  RV-&gt;&gt;FW: delete + set lines, commit, save (SSH) — "no changes" when already in sync
+  RV--&gt;&gt;P: per firewall: applied / no changes
 </pre>
 <p class="small"><b>Phase 2 — plan, apply, verify</b></p>
 <pre class="mermaid">
@@ -524,14 +540,15 @@ flowchart TD
 <tr><td>03 IPsec VTI</td><td>tunnel config lines, up/up, IKEv2 SAs READY with the modelled suite, DPD, ESP counters advance (encryption proven), sessions per headend = its tunnels</td><td>routers vs intent</td></tr>
 <tr><td>04 Routing</td><td>eBGP Established headend↔spoke, spokes peer only with their headends, every site learnt, spoke-to-spoke AS path via a headend, LAN reachability, traceroute first hop is a headend</td><td>routers vs intent</td></tr>
 <tr><td>05 NAC compliance</td><td><code>terraform plan</code> exit code 0 (no drift)</td><td>routers vs NAC data</td></tr>
+<tr><td>07 Firewalls</td><td>one VyOS firewall per headend reachable over OOB; interface addresses and LLDP neighbours as modelled; rendered configuration == running (<code>render_vyos.py --check</code>); only IKE/ESP/ICMP cross (ESP counters advance through the firewall), non-VPN traffic is dropped and logged; <code>firewall_bandwidth_mbps</code> equals the intent and the portal's capacity math (tunnels, bandwidth, CPU, aggregate) matches <code>intent.headend_capacity()</code></td><td>firewalls vs Nautobot vs intent vs portal</td></tr>
 <tr><td>06 Nautobot</td><td>devices/serials/locations, cables and /30s, VPN app objects and that each router's tunnel destination equals the far endpoint's source address, crypto policies vs routers, BGP model vs live sessions, <code>render --check</code> round-trip, Golden Config backups in Gitea and every compliance row compliant</td><td>Nautobot vs routers vs committed NAC data</td></tr>
 </table>
 
 <h2>18. File map</h2>
 <table><tr><th style="width:34%">Path</th><th>Purpose</th></tr>
-<tr><td><code>lab.conf</code>, <code>lab.sh</code>, <code>tools/console.py</code>, <code>nodes/</code></td><td>VM facts and libvirt controller (up/down/bootstrap/rebuild/clean/rename/status/nac/nautobot/test/webapp), console automation, day-0 template and per-node files</td></tr>
+<tr><td><code>lab.conf</code>, <code>lab.sh</code>, <code>tools/console.py</code>, <code>tools/vyos_console.py</code>, <code>tools/vyos_install.py</code>, <code>nodes/</code></td><td>VM facts and libvirt controller (up/down/bootstrap/rebuild/clean/rename/status/nac/nautobot/test/webapp), IOS-XE and VyOS console automation, the one-off VyOS base-image installer, day-0 template and per-node files (<code>vyos_config.txt</code> for the firewalls)</td></tr>
 <tr><td><code>lab-intent.json</code>, <code>nautobot/intent.py</code></td><td>The intent document; load/upgrade/validate/save, wiring & VM facts, region distance, nearest headends, PSK generation</td></tr>
-<tr><td><code>nautobot/onboard.py</code>, <code>seed.py</code>, <code>render_nac.py</code>, <code>golden_config.py</code>, <code>rename_node.py</code>, <code>nac-c8000v-ipsec-model.graphql</code>, <code>golden-config-templates/c8000v-ipsec.j2</code></td><td>Nautobot integration: discovery, intent → objects, objects → NAC data, Golden Config setting/template/jobs, rename tool, the saved query, the Jinja template</td></tr>
+<tr><td><code>nautobot/onboard.py</code>, <code>seed.py</code>, <code>render_nac.py</code>, <code>render_vyos.py</code>, <code>golden_config.py</code>, <code>rename_node.py</code>, <code>nac-c8000v-ipsec-model.graphql</code>, <code>golden-config-templates/c8000v-ipsec.j2</code></td><td>Nautobot integration: discovery, intent → objects, objects → NAC data, Golden Config setting/template/jobs, rename tool, the saved query, the Jinja template</td></tr>
 <tr><td><code>nac/main.tf</code>, <code>versions.tf</code>, <code>data/*.nac.yaml</code></td><td>Terraform root: module + provider pins, baseline, generated device model and PSK variables</td></tr>
 <tr><td><code>tests/</code></td><td>Robot suites 01–06, <code>LabLib.py</code> keywords, <code>lab_vars.py</code> (derived from the intent), <code>run.sh</code>, config capture</td></tr>
 <tr><td><code>webapp/app.py</code>, <code>schemas.py</code>, <code>spokes.py</code>, <code>inventory.py</code>, <code>static/index.html</code>, <code>runs/</code>, <code>demo/</code></td><td>Portal API + pipeline runner, OpenAPI models, spoke/headend allocation and removal, inventory collector, UI, run records, demo recorders</td></tr>
