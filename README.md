@@ -189,6 +189,10 @@ compliant. Each run keeps pre/post config backups and a diff under `results/`.
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |
 
+The portal's run engine (steps, streamed log, resume, Robot reports) is the shared
+[lab-portal](https://github.com/dcantor/lab-portal) package, which also serves the **lab hub** at
+http://192.168.50.231:8088 — every lab on the host with its VMs, portal health, last tests and links.
+
 ## Running the portal as a service
 
 `webapp/lab-webapp.service` is a systemd *user* unit (`systemctl --user enable --now lab-webapp`,

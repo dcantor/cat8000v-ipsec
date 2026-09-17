@@ -11,9 +11,10 @@ runs the pipeline behind the scenes and streams its progress:
 Runs are executed one at a time in a background thread; state is kept in memory and mirrored to runs/<id>.json.
 Start with ./lab.sh webapp (uvicorn on 0.0.0.0:8090).
 """
-import json, os, re, subprocess, sys, threading, time, uuid, xml.etree.ElementTree as ET
+import json, os, re, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
+from labportal import RunBase, RunRegistry, install_runs_api
 
 from fastapi import FastAPI, HTTPException, Query, Path as PathParam
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -52,7 +53,7 @@ app = FastAPI(title="VPN Provisioning Portal API", version="1.0",
                           "Runs are asynchronous: `POST /api/runs` returns a run id, poll `GET /api/runs/{id}`.\n\n"
                           "Portal UI: [/](/) · this page: [/docs](/docs) · ReDoc: [/redoc](/redoc) · OpenAPI JSON: [/openapi.json](/openapi.json)",
               openapi_tags=TAGS, docs_url="/docs", redoc_url="/redoc")
-runs, runs_lock, worker_lock = {}, threading.Lock(), threading.Lock()
+registry = RunRegistry(RUNS_DIR)
 inventory_svc = None   # created lazily (needs the Nautobot token)
 
 
@@ -63,19 +64,19 @@ def nautobot_token():
     return tok
 
 
-class Run:
+class Run(RunBase):
+    STEP_TITLES = STEP_TITLES
+    EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal"}
+
     def __init__(self, mode, intent, options, spoke=None, resume_of=None):
-        self.id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "-" + uuid.uuid4().hex[:4]
-        self.mode, self.intent, self.options, self.spoke = mode, intent, options, spoke
-        self.started, self.finished, self.status = time.time(), None, "queued"
-        self.steps = [{"name": s, "title": STEP_TITLES[s], "status": "pending", "started": None, "finished": None, "summary": ""} for s in self.plan()]
-        self.log, self.tests, self.results_dir, self.error, self.resume_of, self.removal = [], None, None, None, resume_of, None
-        if resume_of:   # steps that succeeded in the interrupted/failed run are carried over, everything from the failure on is redone
-            done = {st["name"]: st for st in resume_of["steps"] if st["status"] == "success"}
-            for st in self.steps:
-                if st["name"] not in done: break
-                st.update({"status": "success", "summary": f"(from run {resume_of['id']}) {done[st['name']]['summary']}", "started": done[st["name"]]["started"], "finished": done[st["name"]]["finished"]})
-            if self.mode == "remove" and "rm_validate" in done: self.removal = resume_of.get("removal")
+        self.intent, self.spoke = intent, spoke
+        self.site, self.vpn = intent.get("site", {}).get("name"), intent.get("vpn", {}).get("name"); self.change_ticket = intent.get("vpn", {}).get("change_ticket")
+        self.devices = [d["name"] for d in intent.get("devices", [])]
+        self.removal = (resume_of or {}).get("removal") if mode == "remove" and resume_of and any(st["name"] == "rm_validate" and st["status"] == "success" for st in resume_of["steps"]) else None
+        super().__init__(mode, options, resume_of, runs_dir=RUNS_DIR, cwd=LAB)
+
+    def sh(self, cmd, cwd=None, env=None, timeout=3600, check=False):   # this portal inspects exit codes itself (terraform's -detailed-exitcode)
+        return super().sh(cmd, cwd=cwd, env=env, timeout=timeout, check=check)
 
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
@@ -100,49 +101,6 @@ class Run:
         if self.options.get("golden", True): steps.append("golden")
         if self.options.get("test", True): steps.append("test")
         return steps
-
-    def to_dict(self, with_log=True):
-        d = {"id": self.id, "mode": self.mode, "status": self.status, "started": self.started, "finished": self.finished, "steps": self.steps,
-             "tests": self.tests, "results_dir": self.results_dir, "error": self.error, "options": self.options,
-             "site": self.intent.get("site", {}).get("name"), "vpn": self.intent.get("vpn", {}).get("name"), "change_ticket": self.intent.get("vpn", {}).get("change_ticket"),
-             "devices": [d["name"] for d in self.intent.get("devices", [])], "spoke": self.spoke, "resume_of": self.resume_of and self.resume_of["id"],
-             "removal": getattr(self, "removal", None)}
-        if with_log: d["log"] = self.log
-        return d
-
-    def say(self, line):
-        self.log.append({"t": time.time(), "line": line.rstrip("\n")})
-
-    def persist(self):
-        (RUNS_DIR / f"{self.id}.json").write_text(json.dumps(self.to_dict(), indent=1))
-
-    def step(self, name):
-        return next(s for s in self.steps if s["name"] == name)
-
-    def sh(self, cmd, cwd=LAB, env=None, timeout=3600):
-        """Run a command, streaming stdout+stderr into the run log; returns the exit code."""
-        self.say(f"$ {' '.join(cmd)}")
-        proc = subprocess.Popen(cmd, cwd=cwd, env={**os.environ, **(env or {})}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in proc.stdout:
-            self.say(line)
-        proc.wait(timeout=timeout); return proc.returncode
-
-    def execute(self):
-        self.status = "running"; self.persist()
-        try:
-            for s in self.steps:
-                if s["status"] == "success": continue   # carried over from the run being resumed
-                s["status"], s["started"] = "running", time.time(); self.persist()
-                getattr(self, "do_" + s["name"])(s)
-                s["status"], s["finished"] = "success", time.time(); self.persist()
-            self.status = "success"
-        except Exception as e:  # noqa: BLE001 - any failure ends the run
-            cur = next((s for s in self.steps if s["status"] == "running"), None)
-            if cur: cur["status"], cur["finished"] = "failed", time.time(); cur["summary"] = cur["summary"] or str(e)
-            for s in self.steps:
-                if s["status"] == "pending": s["status"] = "skipped"
-            self.error = str(e); self.status = "failed"; self.say(f"!! {e}")
-        self.finished = time.time(); self.persist()
 
     # ---- spoke provisioning steps ---------------------------------------------
     def do_spoke_validate(self, s):
@@ -341,18 +299,7 @@ class Run:
         elif rc: raise RuntimeError(f"tests failed to run (rc={rc})")
 
 
-def parse_robot(path):
-    root = ET.parse(path).getroot(); suites = []
-    for suite in root.iter("suite"):
-        tests = suite.findall("test")
-        if not tests: continue
-        rows = []
-        for t in tests:
-            st = t.find("status"); rows.append({"name": t.get("name"), "status": st.get("status"), "message": (st.text or "").strip()[:800],
-                                                "elapsed": st.get("elapsed"), "start": st.get("start")})
-        suites.append({"name": suite.get("name"), "tests": rows, "passed": sum(r["status"] == "PASS" for r in rows), "failed": sum(r["status"] == "FAIL" for r in rows)})
-    total = sum(len(s["tests"]) for s in suites); failed = sum(s["failed"] for s in suites)
-    return {"suites": suites, "total": total, "passed": total - failed, "failed": failed}
+from labportal import parse_robot   # noqa: E402
 
 
 # ---- API -------------------------------------------------------------------
@@ -475,68 +422,17 @@ def start_run(body: S.RunRequest):
         intent = body.get("intent") if mode != "test" else intent_mod.load()
         problems = intent_mod.validate(intent or {})
         if problems: raise HTTPException(422, {"problems": problems})
-    with runs_lock:
-        if any(r.status in ("queued", "running") for r in runs.values()): raise HTTPException(409, "a run is already in progress")
-        run = Run(mode, intent, body.get("options") or {}, spoke); runs[run.id] = run
-    def work():
-        with worker_lock: run.execute()
-    threading.Thread(target=work, daemon=True).start()
-    return run.to_dict(with_log=False)
+    try: return registry.start(Run(mode, intent, body.get("options") or {}, spoke))
+    except RuntimeError as e: raise HTTPException(409, str(e))
 
 
-@app.post("/api/runs/{run_id}/resume", tags=["runs"], summary="Resume a failed or interrupted run", response_model=S.Run, response_model_exclude_none=True,
-          responses={404: {"description": "no such run"}, 409: {"description": "run not failed/interrupted, or another run is in progress"}})
-def resume_run(run_id: str = PathParam(..., description="id of the failed / interrupted run")):
-    """Starts a new run that keeps the successful steps of the given run and redoes everything from the failed step on."""
-    old = runs.get(run_id); d = old.to_dict() if old else (json.loads((RUNS_DIR / f"{run_id}.json").read_text()) if (RUNS_DIR / f"{run_id}.json").exists() else None)
-    if d is None: raise HTTPException(404, "no such run")
-    if d["status"] not in ("failed", "interrupted"): raise HTTPException(409, f"run is {d['status']}")
-    f = RUNS_DIR / f"{run_id}.intent.json"
+def _resume(d):
+    f = RUNS_DIR / f"{d['id']}.intent.json"
     intent = json.loads(f.read_text()) if (f.exists() and d["mode"] in ("deploy", "plan")) else intent_mod.load()
-    with runs_lock:
-        if any(r.status in ("queued", "running") for r in runs.values()): raise HTTPException(409, "a run is already in progress")
-        run = Run(d["mode"], intent, d.get("options") or {}, d.get("spoke"), resume_of=d); runs[run.id] = run
-    def work():
-        with worker_lock: run.execute()
-    threading.Thread(target=work, daemon=True).start()
-    return run.to_dict(with_log=False)
+    return Run(d["mode"], intent, d.get("options") or {}, d.get("spoke"), resume_of=d)
 
 
-@app.on_event("startup")
-def mark_interrupted():
-    """Runs that were in progress when the server stopped are marked so they can be resumed."""
-    for f in RUNS_DIR.glob("*.json"):
-        if f.name.endswith(".intent.json"): continue
-        try: d = json.loads(f.read_text())
-        except ValueError: continue
-        if d.get("status") in ("running", "queued"):
-            for st in d["steps"]:
-                if st["status"] == "running": st["status"] = "failed"; st["summary"] = st["summary"] or "interrupted (server restarted)"
-                elif st["status"] == "pending": st["status"] = "skipped"
-            d["status"], d["error"], d["finished"] = "interrupted", "interrupted: the portal was restarted", time.time(); f.write_text(json.dumps(d, indent=1))
-
-
-@app.get("/api/runs", tags=["runs"], summary="Recent runs (newest first, without logs)", response_model=list[S.Run], response_model_exclude_none=True)
-def list_runs():
-    items = [r.to_dict(with_log=False) for r in runs.values()]
-    seen = {r["id"] for r in items}
-    for f in sorted(RUNS_DIR.glob("*.json"), reverse=True):
-        if f.name.endswith(".intent.json") or f.stem in seen: continue
-        try:
-            d = json.loads(f.read_text()); d.pop("log", None); items.append(d)
-        except ValueError: pass
-    return sorted(items, key=lambda r: r["started"], reverse=True)[:30]
-
-
-@app.get("/api/runs/{run_id}", tags=["runs"], summary="Run status, steps, log and test report", response_model=S.Run, response_model_exclude_none=True,
-         responses={404: {"description": "no such run"}})
-def get_run(run_id: str = PathParam(..., description="run id"), since: int = Query(0, description="return log lines from this offset (for incremental polling)")):
-    run = runs.get(run_id)
-    if run:
-        d = run.to_dict(); d["log"] = d["log"][since:]; d["log_offset"] = since; return d
-    f = RUNS_DIR / f"{run_id}.json"
-    if not f.exists(): raise HTTPException(404, "no such run")
-    d = json.loads(f.read_text()); d["log"] = d.get("log", [])[since:]; d["log_offset"] = since; return d
+install_runs_api(app, registry, resume_factory=_resume)
 
 
 app.mount("/results", StaticFiles(directory=str(RESULTS), html=True), name="results")
