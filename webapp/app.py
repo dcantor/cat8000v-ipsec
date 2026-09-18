@@ -65,6 +65,7 @@ def nautobot_token():
 
 
 class Run(RunBase):
+    LAB = "cat8000v-ipsec"
     STEP_TITLES = STEP_TITLES
     EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal"}
 
