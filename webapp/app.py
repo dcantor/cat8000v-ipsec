@@ -14,7 +14,7 @@ Start with ./lab.sh webapp (uvicorn on 0.0.0.0:8090).
 import json, os, re, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
-from labportal import RunBase, RunRegistry, install_runs_api
+from labportal import RunBase, RunRegistry, install_runs_api, metric_line, run_metrics, exposition, metrics_generated
 
 from fastapi import FastAPI, HTTPException, Query, Path as PathParam
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -306,6 +306,28 @@ from labportal import parse_robot   # noqa: E402
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(Path(__file__).resolve().parent / "static" / "index.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/metrics", tags=["monitoring"], summary="Prometheus metrics: VMs running per role, run outcomes, last test results", response_class=PlainTextResponse)
+def prometheus_metrics():
+    """Scraped by the Prometheus on the NMS (lab-portal/monitoring). The routers themselves are not scraped: IOS-XE has no
+    Prometheus exporter; the VyOS firewalls get node-exporter / frr-exporter when the lab is next brought up."""
+    out = metrics_generated("cat8000v-ipsec")
+    out += ["# HELP lab_vm_running 1 if the lab VM is running (virsh)", "# TYPE lab_vm_running gauge"]
+    for (node, role), st in _vm_states().items(): out.append(metric_line("lab_vm_running", {"lab": "cat8000v-ipsec", "node": node, "role": role}, int(st == "running")))
+    return PlainTextResponse(exposition(out + run_metrics("cat8000v-ipsec", registry.list())), media_type="text/plain; version=0.0.4")
+
+
+@app.get("/api/sd", tags=["monitoring"], summary="Prometheus HTTP service discovery: this portal (and the firewalls' exporters once configured)")
+def prometheus_sd():
+    return [{"targets": [f"{os.environ.get('LAB_HOST_IP', '10.2.0.1')}:{os.environ.get('WEBAPP_PORT', '8090')}"], "labels": {"lab": "cat8000v-ipsec", "job": "portal", "role": "portal"}}]
+
+
+def _vm_states():
+    """virsh state per lab VM (a stopped lab is a normal state, not an error)."""
+    try: running = set(subprocess.run(["sg", "libvirt", "-c", "virsh list --name"], capture_output=True, text=True, timeout=20).stdout.split())
+    except Exception: running = set()  # noqa: BLE001
+    return {(n["node"], n["role"]): ("running" if n["node"] in running else "shut off") for n in intent_mod.nodes().values()}
 
 
 @app.get("/api/intent", tags=["intent"], summary="Current intent + wiring facts")
