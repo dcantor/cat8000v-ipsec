@@ -167,15 +167,17 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
   `cisco-ia:save-config` after apply; crypto profiles are applied first on a new router and the apply
   step re-asserts once after an IOS-XE datastore re-sync (see `webapp/README.md`).
 
-## Connected to the SRv6 core
-Each headend's `GigabitEthernet3` is cabled (a UDP link, like every other link here) to a PE of the
+## Connecting to the SRv6 core (optional, currently detached)
+Each headend's `GigabitEthernet3` can be cabled (a UDP link, like every other link here) to a PE of the
 [srv6-core](https://github.com/dcantor/srv6-core) lab and runs eBGP to it inside that core's VRF *tenant-a*
 (`172.19.n.0/30`, headend `.1`, PE `.2`, PE AS 65000). The headend announces its site LAN and the branch LANs it learns
 over the tunnels; the core hands back the data-centre LANs, so every branch reaches every data-centre host through IPsec
 → headend → SRv6 → PE → CE → host. The attachment is **declared in the SRv6 lab** (`EXT_NODES` / `LINKS` in its
 `lab.conf`) and **modelled on the headend by that lab's Nautobot seed** (Gi3 address, cable, BGP peering); this lab's
 pipeline then renders and pushes it like anything else — `render_nac.py` turns the enabled, cabled Gi3 and the peering
-into NaC data, `./lab.sh nac apply` configures the router, Golden Config stays compliant. The seed here treats a port
+into NaC data, `./lab.sh nac apply` configures the router, Golden Config stays compliant. Detaching is the reverse: the
+SRv6 seed hands Gi3 back as unwired, and the next `render` / `nac apply` here removes the interface address and neighbour
+(the routers are currently off, so that apply is pending for the next bring-up). The seed here treats a port
 cabled to a device outside this lab as *foreign-wired* and never touches it. Test `04_routing` allows exactly one such
 core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12_interconnect`.
 
