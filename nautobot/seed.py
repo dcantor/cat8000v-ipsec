@@ -190,6 +190,15 @@ ensure_prefix(I["oob"]["prefix"], prole["oob-management"], "cat8000v-ipsec OOB m
 devs, gi = {}, {}
 # devices are matched by management address (set by onboarding), so the hostname is free to change
 by_mgmt = {x["primary_ip4"]["address"].split("/")[0]: x["id"] for x in requests.get(f"{a.url}/api/dcim/devices/", params={"location": SITE, "depth": 1, "limit": 100}, headers=H, timeout=30).json()["results"] if x.get("primary_ip4")}
+def foreign_wired(dev, name):
+    """True if the interface is cabled to a device that is not part of this lab (another lab attaches to it, e.g. the
+    SRv6 core on a headend's GigabitEthernet3): its description, state, address and cable belong to that lab's seed."""
+    itf = nb.dcim.interfaces.get(device=dev.id, name=name)
+    if itf is None or not itf.cable: return False
+    cur = requests.get(f"{a.url}/api/dcim/interfaces/{itf.id}/", params={"depth": 2}, headers=H, timeout=30).json()
+    far = ((cur.get("cable_peer") or {}).get("device") or {}).get("name")   # REST: cable_peer (connected_interface is GraphQL-only)
+    return bool(far) and far not in DEV
+
 for r in ROUTERS:
     d = DEV[r]
     dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
@@ -202,6 +211,8 @@ for r in ROUTERS:
     ensure_ip(g1, f"{d['mgmt_ip']}/24", primary_of=dev)
     for port in PORTS[d["role"]]:  # wired ports get description/enabled from the links; set here so one update suffices
         wired = WIRED.get((r, port))
+        if not wired and foreign_wired(dev, f"GigabitEthernet{port}"):   # cabled by another lab (the SRv6 core's attachment on a headend): theirs, leave it alone
+            gi[(r, port)] = nb.dcim.interfaces.get(device=dev.id, name=f"GigabitEthernet{port}"); continue
         gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
         if not wired:   # a port that lost its link (re-wiring) must not keep an address
             for x in nb.ipam.ip_address_to_interface.filter(interface=gi[(r, port)].id): x.delete(); created.append(f"unassigned address from unwired {r}/GigabitEthernet{port}")

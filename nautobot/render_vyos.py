@@ -19,7 +19,7 @@ p.add_argument("names", nargs="*")
 a = p.parse_args(); H = {"Authorization": f"Token {a.token}"}
 SITE = intent_mod.load()["site"]["name"]
 Q = """{ devices(location: ["%s"], role: ["vpn-firewall"]) { name primary_ip4 { address } config_context
-          interfaces { name enabled description mgmt_only ip_addresses { address } connected_interface { name device { name role { name } } } } } }""" % SITE
+          interfaces { name enabled description mgmt_only mac_address ip_addresses { address } connected_interface { name device { name role { name } } } } } }""" % SITE
 r = requests.post(f"{a.url}/api/graphql/", json={"query": Q}, headers=H, timeout=60); r.raise_for_status()
 fws = [d for d in r.json()["data"]["devices"] if not a.names or d["name"] in a.names]
 
@@ -29,6 +29,7 @@ def commands(dev):
     for i in sorted(dev["interfaces"], key=lambda x: int(x["name"][3:]) if x["name"].startswith("eth") and x["name"][3:].isdigit() else 999):
         if not i["name"].startswith("eth") or i["mgmt_only"] or i["name"] == "eth0": continue
         out.append(f"delete interfaces ethernet {i['name']}")
+        if i.get("mac_address"): out.append(f"set interfaces ethernet {i['name']} hw-id {i['mac_address'].lower()}")   # pins the name to the NIC across reboots (VyOS renames unmatched NICs)
         if i["enabled"] and i["ip_addresses"]:
             ci = i.get("connected_interface") or {}
             out += [f"set interfaces ethernet {i['name']} address {i['ip_addresses'][0]['address']}",

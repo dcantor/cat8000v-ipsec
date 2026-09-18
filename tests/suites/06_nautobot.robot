@@ -181,15 +181,18 @@ BGP model: one AS per site, eBGP peerings over the tunnel addresses matching the
         Should Be Equal As Integers    ${ri}[autonomous_system][asn]    ${ROUTERS}[${r}][asn]
         Should Be Equal    ${ri}[router_id][address]    ${ROUTERS}[${r}][router_id]/32
         ${expected}=    Evaluate    len($HUB_TUNNELS.get($r, [])) or len($SPOKE_TUNNELS.get($r, []))
-        Length Should Be    ${ri}[endpoints]    ${expected}
+        ${foreign}=    Evaluate    [e for e in $ri["endpoints"] if e["peer"] and e["peer"]["routing_instance"]["device"]["name"] not in $ROUTERS]    # another lab's attachment (the SRv6 core on a headend)
+        Should Be True    len($foreign) <= 1    msg=${r}: more than one foreign peering
+        Length Should Be    ${ri}[endpoints]    ${{ $expected + len($foreign) }}
         ${sum}=    Show    ${r}    show bgp ipv4 unicast summary | begin Neighbor
         FOR    ${ep}    IN    @{ri}[endpoints]
             Should Be Equal As Integers    ${ep}[autonomous_system][asn]    ${ROUTERS}[${r}][asn]
             ${peer}=    Set Variable    ${ep}[peer][routing_instance][device][name]
             Should Not Be Equal As Integers    ${ep}[peer][autonomous_system][asn]    ${ROUTERS}[${r}][asn]    msg=peering must be eBGP
-            Should Be Equal As Integers    ${ep}[peer][autonomous_system][asn]    ${ROUTERS}[${peer}][asn]
+            ${peer_asn}=    Evaluate    $ROUTERS[$peer]["asn"] if $peer in $ROUTERS else $ep["peer"]["autonomous_system"]["asn"]
+            Should Be Equal As Integers    ${ep}[peer][autonomous_system][asn]    ${peer_asn}
             ${peer_ip}=    Fetch From Left    ${ep}[peer][source_ip][address]    /
-            Should Match Regexp    ${sum}    (?m)^${peer_ip}\\s+4\\s+${ROUTERS}[${peer}][asn]\\s+.*\\s\\d+\\s*$    msg=${r}: session to ${peer_ip} not Established
+            Should Match Regexp    ${sum}    (?m)^${peer_ip}\\s+4\\s+${peer_asn}\\s+.*\\s\\d+\\s*$    msg=${r}: session to ${peer_ip} (${peer}) not Established
         END
     END
 

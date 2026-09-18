@@ -168,7 +168,12 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          shutdown: true
+          description: 'tenant-a: pe2 eth5 (srv6-core)'
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 172.19.2.1
+            address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
           shutdown: true
@@ -270,6 +275,9 @@ iosxe:
           - ip: 172.17.7.2
             remote_as: 65205
             description: eBGP spoke4 (Tunnel7)
+          - ip: 172.19.2.2
+            remote_as: 65000
+            description: eBGP pe2 (tenant-a) - SRv6 core attachment
           address_family:
             ipv4_unicast:
               neighbors:
@@ -282,6 +290,8 @@ iosxe:
               - ip: 172.17.6.2
                 activate: true
               - ip: 172.17.7.2
+                activate: true
+              - ip: 172.19.2.2
                 activate: true
               networks:
               - network: 10.255.1.5
@@ -389,7 +399,12 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          shutdown: true
+          description: 'tenant-a: pe1 eth5 (srv6-core)'
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 172.19.1.1
+            address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
           shutdown: true
@@ -465,6 +480,9 @@ iosxe:
           - ip: 172.17.3.2
             remote_as: 65203
             description: eBGP spoke3 (Tunnel3)
+          - ip: 172.19.1.2
+            remote_as: 65000
+            description: eBGP pe1 (tenant-a) - SRv6 core attachment
           address_family:
             ipv4_unicast:
               neighbors:
@@ -473,6 +491,8 @@ iosxe:
               - ip: 172.17.2.2
                 activate: true
               - ip: 172.17.3.2
+                activate: true
+              - ip: 172.19.1.2
                 activate: true
               networks:
               - network: 10.255.1.1
@@ -1415,7 +1435,12 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          shutdown: true
+          description: 'tenant-a: pe3 eth5 (srv6-core)'
+          shutdown: false
+          cdp: true
+          ipv4:
+            address: 172.19.3.1
+            address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '4'
           shutdown: true
@@ -1517,6 +1542,9 @@ iosxe:
           - ip: 172.17.9.2
             remote_as: 65202
             description: eBGP spoke2 (Tunnel9)
+          - ip: 172.19.3.2
+            remote_as: 65000
+            description: eBGP pe3 (tenant-a) - SRv6 core attachment
           address_family:
             ipv4_unicast:
               neighbors:
@@ -1529,6 +1557,8 @@ iosxe:
               - ip: 172.17.8.2
                 activate: true
               - ip: 172.17.9.2
+                activate: true
+              - ip: 172.19.3.2
                 activate: true
               networks:
               - network: 10.255.1.7
