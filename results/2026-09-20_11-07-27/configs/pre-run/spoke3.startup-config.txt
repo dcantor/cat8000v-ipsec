@@ -1,0 +1,322 @@
+! spoke3 (10.2.0.14) show startup-config captured 2026-09-20 11:07:28
+Using 5841 out of 33554432 bytes
+!
+! Last configuration change at 05:11:42 UTC Fri Sep 18 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname spoke3
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-3120729236
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-3120729236
+ revocation-check none
+ rsakeypair TP-self-signed-3120729236
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+!
+crypto pki certificate chain TP-self-signed-3120729236
+ certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01 nvram:CiscoLicensi#1CA.cer
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 9PX1ZVPGZF6
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$fRmRZw36yi4Mu.$5B/1hsJdFAsqm2W4MmbXNCUJWW01aSq9y8yapPrioXA
+!
+username admin privilege 15 secret 9 $9$kudJ88wWHZZFJU$kSj4hS1THKOZQRLNvnThqxKL4kd2VWSNzNTjq/NqSGY
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer central-headend
+  address 100.64.2.2
+  pre-shared-key lnytgPFb6IhXRBXRgB5WPCmB
+ !
+ peer east-headend
+  address 100.64.1.2
+  pre-shared-key lnytgPFb6IhXRBXRgB5WPCmB
+ !
+ peer west-headend
+  address 100.64.3.2
+  pre-shared-key lnytgPFb6IhXRBXRgB5WPCmB
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2
+ match identity remote address 0.0.0.0 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.4 255.255.255.255
+!
+interface Loopback10
+ description site LAN
+ ip address 192.168.13.1 255.255.255.0
+!
+interface Tunnel3
+ description IPsec VTI to east-headend
+ ip address 172.17.3.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.1.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface Tunnel6
+ description IPsec VTI to central-headend
+ ip address 172.17.6.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet3
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.2.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface Tunnel10
+ description IPsec VTI to west-headend
+ ip address 172.17.10.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet4
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.3.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.14 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to fw-east eth4
+ ip address 100.65.3.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ description WAN to fw-central eth4
+ ip address 100.65.6.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet4
+ description WAN to fw-west eth4
+ ip address 100.65.10.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet5
+ no ip address
+ shutdown
+ negotiation auto
+!
+router bgp 65203
+ bgp router-id 10.255.1.4
+ bgp log-neighbor-changes
+ neighbor 172.17.3.1 remote-as 65200
+ neighbor 172.17.3.1 description eBGP east-headend (Tunnel3)
+ neighbor 172.17.6.1 remote-as 65204
+ neighbor 172.17.6.1 description eBGP central-headend (Tunnel6)
+ neighbor 172.17.10.1 remote-as 65206
+ neighbor 172.17.10.1 description eBGP west-headend (Tunnel10)
+ !
+ address-family ipv4
+  network 10.255.1.4 mask 255.255.255.255
+  network 192.168.13.0
+  neighbor 172.17.3.1 activate
+  neighbor 172.17.6.1 activate
+  neighbor 172.17.10.1 activate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route 100.64.1.2 255.255.255.255 100.65.3.1 name via-fw-east
+ip route 100.64.2.2 255.255.255.255 100.65.6.1 name via-fw-central
+ip route 100.64.3.2 255.255.255.255 100.65.10.1 name via-fw-west
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

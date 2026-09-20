@@ -125,6 +125,16 @@ Everything the UI does is an API call — typed and documented with Swagger at *
   (28 pages, 25 diagrams; source `docs/workflows.html`).
 - `webapp/README.md` — portal internals, run modes, resuming, platform quirks.
 
+### Monitoring (Prometheus + Grafana on the NMS)
+The portal's `/metrics` is scraped by the shared monitoring stack ([lab-portal/monitoring](https://github.com/dcantor/lab-portal)).
+Besides the VM / run gauges it exports the **live tunnel inventory** while the headends run: per tunnel `lab_tunnel_health`
+(2 up = IKEv2 READY + VTI up + eBGP Established, 1 degraded, 0 down), IKE SA age, prefixes from the spoke, ESP encaps /
+decaps / error counters and VTI rates; per headend tunnels modelled / up, capacity and free slots after every constraint,
+utilisation of the binding constraint (`lab_headend_binding{binding=tunnels|bandwidth|cpu}`), control-plane / QFP CPU,
+DRAM, IKE sessions, bandwidth committed vs the firewall's. The **C8000v IPsec overview** dashboard
+(http://192.168.50.231:3001/d/cat8000v-ipsec-overview) draws all of it; alerts `TunnelDown`, `HeadendUnreachable`,
+`HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run.
+
 ## Nautobot: the source of truth
 
 Nothing about the topology is hard-coded in templates: the renderer and the Golden Config template

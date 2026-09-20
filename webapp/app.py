@@ -313,10 +313,68 @@ def index():
 def prometheus_metrics():
     """Scraped by the Prometheus on the NMS (lab-portal/monitoring). The routers themselves are not scraped: IOS-XE has no
     Prometheus exporter; the VyOS firewalls get node-exporter / frr-exporter when the lab is next brought up."""
-    out = metrics_generated("cat8000v-ipsec")
+    out = metrics_generated("cat8000v-ipsec"); L = "cat8000v-ipsec"
     out += ["# HELP lab_vm_running 1 if the lab VM is running (virsh)", "# TYPE lab_vm_running gauge"]
-    for (node, role), st in _vm_states().items(): out.append(metric_line("lab_vm_running", {"lab": "cat8000v-ipsec", "node": node, "role": role}, int(st == "running")))
-    return PlainTextResponse(exposition(out + run_metrics("cat8000v-ipsec", registry.list())), media_type="text/plain; version=0.0.4")
+    states = _vm_states()
+    for (node, role), st in states.items(): out.append(metric_line("lab_vm_running", {"lab": L, "node": node, "role": role}, int(st == "running")))
+    # tunnels and headends: the live inventory (IKEv2 SA / VTI / eBGP / ESP counters from every headend over SSH, cached by the
+    # inventory service for its TTL) — only while the headends run, so a powered-off lab costs nothing and raises no alert
+    hubs_up = any(st == "running" for (node, role), st in states.items() if role == "hub")
+    if hubs_up:
+        try: out += tunnel_metrics(inv().get(with_live=True), L)
+        except Exception as e:  # noqa: BLE001
+            out += ["# HELP lab_inventory_error 1 if the tunnel inventory could not be collected", "# TYPE lab_inventory_error gauge", metric_line("lab_inventory_error", {"lab": L, "error": e.__class__.__name__}, 1)]
+    return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
+
+
+def tunnel_metrics(data, L):
+    """Per tunnel: health (2 up / 1 degraded = IKE READY but VTI or BGP not / 0 down), IKE SA age, BGP prefixes, ESP packet and
+    error counters, VTI rates. Per headend: tunnels modelled / up, capacity and free slots (model, effective), utilisation
+    (the binding constraint), CPU / QFP / DRAM, IKE sessions, bandwidth. Summary: totals."""
+    H = {"up": 2, "degraded": 1, "down": 0}
+    out = ["# HELP lab_tunnel_health 2 = up (IKE READY, VTI up, eBGP Established), 1 = degraded (IKE up, VTI or BGP not), 0 = down", "# TYPE lab_tunnel_health gauge",
+           "# HELP lab_tunnel_ike_sa_age_seconds Age of the IKEv2 SA", "# TYPE lab_tunnel_ike_sa_age_seconds gauge",
+           "# HELP lab_tunnel_bgp_prefixes Prefixes received from the spoke over the tunnel's eBGP session", "# TYPE lab_tunnel_bgp_prefixes gauge",
+           "# HELP lab_tunnel_esp_encaps_packets_total ESP packets encapsulated on the headend's VTI", "# TYPE lab_tunnel_esp_encaps_packets_total counter",
+           "# HELP lab_tunnel_esp_decaps_packets_total ESP packets decapsulated on the headend's VTI", "# TYPE lab_tunnel_esp_decaps_packets_total counter",
+           "# HELP lab_tunnel_esp_send_errors_total ESP send errors on the headend's VTI", "# TYPE lab_tunnel_esp_send_errors_total counter",
+           "# HELP lab_tunnel_esp_recv_errors_total ESP receive errors on the headend's VTI", "# TYPE lab_tunnel_esp_recv_errors_total counter",
+           "# HELP lab_tunnel_in_bps VTI input rate on the headend (5-minute average, bit/s)", "# TYPE lab_tunnel_in_bps gauge",
+           "# HELP lab_tunnel_out_bps VTI output rate on the headend (5-minute average, bit/s)", "# TYPE lab_tunnel_out_bps gauge"]
+    for t in data["tunnels"]:
+        lv = t.get("live") or {}
+        if not lv or "error" in lv: continue
+        lab = {"lab": L, "tunnel": t["name"], "tunnel_id": t["tunnel_id"], "headend": t["headend"], "spoke": t["spoke"], "vpn": t["vpn"], "region": t.get("spoke_region") or ""}
+        out.append(metric_line("lab_tunnel_health", lab, H.get(lv.get("health"), 0)))
+        for key, name in (("ike_active_s", "lab_tunnel_ike_sa_age_seconds"), ("bgp_prefixes", "lab_tunnel_bgp_prefixes"), ("encaps", "lab_tunnel_esp_encaps_packets_total"), ("decaps", "lab_tunnel_esp_decaps_packets_total"),
+                          ("send_errors", "lab_tunnel_esp_send_errors_total"), ("recv_errors", "lab_tunnel_esp_recv_errors_total"), ("in_rate_bps", "lab_tunnel_in_bps"), ("out_rate_bps", "lab_tunnel_out_bps")):
+            if lv.get(key) is not None: out.append(metric_line(name, lab, lv[key]))
+    out += ["# HELP lab_headend_tunnels Tunnels modelled on the headend", "# TYPE lab_headend_tunnels gauge",
+            "# HELP lab_headend_tunnels_up Tunnels of the headend that are up (IKE + VTI + BGP)", "# TYPE lab_headend_tunnels_up gauge",
+            "# HELP lab_headend_capacity Tunnel capacity of the headend (model)", "# TYPE lab_headend_capacity gauge",
+            "# HELP lab_headend_effective_free Free tunnel slots after the tunnel, bandwidth and CPU constraints", "# TYPE lab_headend_effective_free gauge",
+            "# HELP lab_headend_utilisation_pct Utilisation of the binding constraint (tunnels, bandwidth or CPU)", "# TYPE lab_headend_utilisation_pct gauge",
+            "# HELP lab_headend_cpu_pct Control-plane CPU of the headend (show platform resources)", "# TYPE lab_headend_cpu_pct gauge",
+            "# HELP lab_headend_qfp_cpu_pct QFP (data-plane) CPU of the headend", "# TYPE lab_headend_qfp_cpu_pct gauge",
+            "# HELP lab_headend_dram_pct DRAM in use on the headend", "# TYPE lab_headend_dram_pct gauge",
+            "# HELP lab_headend_ike_sessions IKEv2 SAs on the headend", "# TYPE lab_headend_ike_sessions gauge",
+            "# HELP lab_headend_bandwidth_used_mbps Bandwidth committed by the headend's tunnels", "# TYPE lab_headend_bandwidth_used_mbps gauge",
+            "# HELP lab_headend_bandwidth_mbps Bandwidth of the firewall in front of the headend", "# TYPE lab_headend_bandwidth_mbps gauge",
+            "# HELP lab_headend_collect_error 1 if the live state of the headend could not be collected", "# TYPE lab_headend_collect_error gauge",
+            "# HELP lab_headend_binding The constraint that binds the headend's capacity (tunnels, bandwidth or cpu) as a label", "# TYPE lab_headend_binding gauge"]
+    for h in data["headends"]:
+        lab = {"lab": L, "headend": h["name"], "region": h.get("region") or ""}; lv = h.get("live") or {}
+        out.append(metric_line("lab_headend_collect_error", {"lab": L, "headend": h["name"]}, int("error" in lv)))
+        out.append(metric_line("lab_headend_binding", {**lab, "binding": h.get("binding") or "unknown"}, 1))
+        for key, name in (("tunnels", "lab_headend_tunnels"), ("tunnels_up", "lab_headend_tunnels_up"), ("capacity", "lab_headend_capacity"), ("effective_free", "lab_headend_effective_free"),
+                          ("aggregate_utilisation", "lab_headend_utilisation_pct"), ("cpu_pct", "lab_headend_cpu_pct"), ("qfp_cpu_pct", "lab_headend_qfp_cpu_pct"), ("dram_pct", "lab_headend_dram_pct"),
+                          ("bandwidth_used_mbps", "lab_headend_bandwidth_used_mbps"), ("bandwidth_mbps", "lab_headend_bandwidth_mbps")):
+            if h.get(key) is not None: out.append(metric_line(name, lab, h[key]))
+        if lv.get("ike_sessions") is not None: out.append(metric_line("lab_headend_ike_sessions", lab, lv["ike_sessions"]))
+    sm = data.get("summary") or {}
+    out += ["# HELP lab_tunnels_total Tunnels modelled in Nautobot", "# TYPE lab_tunnels_total gauge", metric_line("lab_tunnels_total", {"lab": L}, sm.get("tunnels", 0)),
+            "# HELP lab_tunnels_up Tunnels up (IKE + VTI + BGP)", "# TYPE lab_tunnels_up gauge", metric_line("lab_tunnels_up", {"lab": L}, sm.get("tunnels_up", 0))]
+    return out
 
 
 @app.get("/api/sd", tags=["monitoring"], summary="Prometheus HTTP service discovery: this portal (and the firewalls' exporters once configured)")
