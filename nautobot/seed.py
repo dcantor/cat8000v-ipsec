@@ -267,10 +267,15 @@ def ensure_endpoint(r, t, other):
     src_if = None if shared else src.id
     protect = [nb.ipam.prefixes.get(prefix=DEV[r]["lan"], namespace=ns.id).id, nb.ipam.prefixes.get(prefix=f"{DEV[r]['router_id']}/32", namespace=ns.id).id]
     ep = nb.vpn.vpn_tunnel_endpoints.get(tunnel_interface=t.id)
+    # the endpoint's device is an explicit field: without a source interface (shared WAN) the VPN app has nothing to derive it from,
+    # and the NaC renderer needs the far end's device for the keyring peers
     if ep is None:
-        ep = nb.vpn.vpn_tunnel_endpoints.create(**({"source_interface": src_if} if src_if else {}), source_ipaddress=src_ip.id, tunnel_interface=t.id, vpn_profile=prof.id,
+        ep = nb.vpn.vpn_tunnel_endpoints.create(**({"source_interface": src_if} if src_if else {}), device=devs[r].id, source_ipaddress=src_ip.id, tunnel_interface=t.id, vpn_profile=prof.id,
                                                 role=vrole[DEV[r]["role"]].id, protected_prefixes=protect); created.append(f"vpn-endpoint:{r}/{t.name} via {src.name}")
     else:
+        if getattr(ep.device, "id", None) != devs[r].id:
+            requests.patch(f"{a.url}/api/vpn/vpn-tunnel-endpoints/{ep.id}/", json={"device": devs[r].id}, headers=H, timeout=30).raise_for_status(); created.append(f"endpoint {r}/{t.name}: device set")
+            ep = nb.vpn.vpn_tunnel_endpoints.get(ep.id)
         if shared and getattr(ep.source_interface, "id", None):
             requests.patch(f"{a.url}/api/vpn/vpn-tunnel-endpoints/{ep.id}/", json={"source_interface": None}, headers=H, timeout=30).raise_for_status(); created.append(f"endpoint {r}/{t.name}: source interface cleared (shared WAN)")
             ep = nb.vpn.vpn_tunnel_endpoints.get(ep.id)

@@ -166,7 +166,10 @@ The Inventory page starts with a rendered topology in one of two views:
 
 Both views draw one curved line per IPsec tunnel coloured by live health (green up / amber degraded / red down / grey
 no data); hovering a line shows ports, addresses, IKE/VTI/BGP state and ESP counters, clicking a node or a line opens
-the object in Nautobot. The **spoke filter** (one chip per spoke, plus *all* / *none*) hides spokes and their tunnels
+the object in Nautobot. The **Add spoke** wizard asks for the **city** (a catalogue of US cities, `GET /api/cities`, fills the
+coordinates; any other name takes lat / lon typed in); the suggestion picks an unused city of the chosen region, validation
+refuses a spoke without one, the run writes it into `lab-intent.json` and the seed into the Nautobot location — so the new
+spoke appears on the map at its city as soon as the run's Nautobot step is done. The **spoke filter** (one chip per spoke, plus *all* / *none*) hides spokes and their tunnels
 in either view and is remembered per browser. Plain SVG generated in the browser from `GET /api/vpn-inventory`.
 
 ### Resuming runs

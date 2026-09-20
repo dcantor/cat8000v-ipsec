@@ -217,6 +217,10 @@
         <div><label>Management IP <span class="suggest">suggested</span></label><input id="sp.mgmt_ip"></div>
         <div><label>Region <span class="hint">(picks the nearest headends)</span></label><select id="sp.region"></select></div>
         <div><label>Site (branch location in Nautobot) <span class="suggest">suggested</span></label><input id="sp.site"></div>
+        <div><label>City <span class="hint">(placed on the map; stored as the Nautobot location's coordinates)</span> <span class="suggest">suggested</span></label>
+          <input id="sp.city" list="city-list" placeholder="pick a city, or type any name and give lat / lon" autocomplete="off"><datalist id="city-list"></datalist>
+          <div class="hint" id="sp.city-hint"></div></div>
+        <div><label>Coordinates <span class="hint">(lat / lon — filled in for a catalogue city)</span></label><div style="display:flex;gap:6px"><input id="sp.lat" type="number" step="0.0001" placeholder="lat" style="width:50%"><input id="sp.lon" type="number" step="0.0001" placeholder="lon" style="width:50%"></div></div>
         <div><label>Site code</label><input id="sp.site_code"></div>
         <div><label>Contact</label><input id="sp.contact"></div>
         <div><label>Pre-shared key <span class="suggest">generated</span></label><input id="sp.psk" autocomplete="off"></div>
@@ -405,13 +409,26 @@ $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
 // ---- add-spoke wizard -------------------------------------------------------
 let wizStep = 1, wizSpec = null;
-const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'site_code', 'contact', 'psk', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'city', 'lat', 'lon', 'site_code', 'contact', 'psk', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+// the city catalogue (GET /api/cities): a known city fills the coordinates, anything else needs them typed; the hint shows where it lands
+let CITIES = [];
+async function loadCities() { if (!CITIES.length) { try { CITIES = await (await fetch('/api/cities')).json(); } catch { CITIES = []; } } fillCityList(); }
+function fillCityList() {
+  const region = $('sp.region').value; const inRegion = CITIES.filter(c => c.region === region), others = CITIES.filter(c => c.region !== region);
+  $('city-list').innerHTML = [...inRegion, ...others].map(c => `<option value="${esc(c.city)}">${esc(c.region)}</option>`).join('');
+}
+function cityChanged() {
+  const v = $('sp.city').value.trim().toLowerCase(); const c = CITIES.find(x => x.city.toLowerCase() === v || x.city.split(',')[0].toLowerCase() === v);
+  if (c) { $('sp.city').value = c.city; $('sp.lat').value = c.lat; $('sp.lon').value = c.lon; $('sp.city-hint').textContent = `${c.lat}, ${c.lon} · ${c.region}${c.region !== $('sp.region').value ? ' (the site stays in region ' + $('sp.region').value + ')' : ''}`; }
+  else $('sp.city-hint').textContent = v ? 'not in the catalogue — enter its coordinates' : '';
+}
 const LINK_FIELDS = ['hub_port', 'spoke_port', 'wan_prefix', 'tunnel_id', 'tunnel_prefix'];
 async function openWizard() {
   const r = await fetch('/api/spokes/suggest'); if (!r.ok) { alert('cannot suggest a spoke: ' + (await r.text())); return; }
   wizSpec = await r.json();
   $('sp.region').innerHTML = wizSpec.context.regions.map(r => `<option>${esc(r)}</option>`).join('');
   SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = wizSpec[k] ?? ''; });
+  loadCities().then(cityChanged);
   $('sp.ram').textContent = wizSpec.ram_mib; renderHubChoices();
   wizStep = 1; showWiz(); $('wiz').hidden = false;
 }
@@ -424,6 +441,7 @@ async function regionChanged() {
   const r = await (await fetch('/api/spokes/suggest?region=' + encodeURIComponent($('sp.region').value))).json();
   wizSpec.context = r.context; wizSpec.links = r.links; renderHubChoices();
   $('sp.site_code').value = r.site_code; $('sp.contact').value = r.contact;
+  $('sp.city').value = r.city || ''; $('sp.lat').value = r.lat ?? ''; $('sp.lon').value = r.lon ?? ''; fillCityList(); cityChanged();
 }
 function selectedHubs() { return [...document.querySelectorAll('.sp-hub:checked')].map(c => c.value); }
 async function refreshLinks() {
@@ -438,7 +456,7 @@ async function refreshLinks() {
 }
 function wizCollect() {
   const spec = { ...wizSpec };
-  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) spec[k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
+  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) spec[k] = el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value.trim(); });
   spec.links = (wizSpec.links || []).map(l => ({ ...l, spoke: spec.name }));
   document.querySelectorAll('#sp\\.links input[data-l]').forEach(el => { spec.links[el.dataset.l][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
   return spec;
@@ -453,7 +471,7 @@ async function wizNext() {
     await refreshLinks();
     const spec = wizCollect();
     const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
-    const mine = v.problems.filter(p => /hostname|management IP|memory|intent|exists/.test(p));
+    const mine = v.problems.filter(p => /hostname|management IP|memory|intent|exists|city|lat/.test(p));
     if (mine.length) { $('wiz-problems').textContent = '• ' + mine.join('\n• '); return; }
     wizStep = 2; showWiz(); return;
   }
@@ -466,7 +484,7 @@ async function wizNext() {
         ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}${l.spoke.route ? ' · ' + esc(l.spoke.route) : ''}</dd>`).join('')}
         <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
         <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)})</dd>
-        <dt>Location</dt><dd>${esc(spec.region)} / ${esc(spec.site)} (${esc(spec.site_code || '-')}, ${esc(spec.contact || '-')})</dd>
+        <dt>Location</dt><dd>${esc(spec.region)} / ${esc(spec.site)} (${esc(spec.site_code || '-')}, ${esc(spec.contact || '-')}) · <b>${esc(spec.city || '?')}</b> ${spec.lat != null ? `(${spec.lat}, ${spec.lon}) — Nautobot location coordinates, shown on the map` : ''}</dd>
         <dt>PSK</dt><dd>unique to this spoke (${spec.psk.length} chars) — added to every headend's keyring</dd>
         <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
       ${h.links.map(l => `<div class="box"><h4>Hub ${esc(l.hub)}${l.firewall ? ' + firewall ' + esc(l.firewall) : ''} (coordinated configuration)</h4><dl>
@@ -481,7 +499,7 @@ async function wizNext() {
   if (!r.ok) { const e = await r.json(); $('wiz-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
   const run = await r.json(); $('wiz').hidden = true; watch(run.id);
 }
-$('add-spoke').onclick = openWizard; $('sp.region').onchange = regionChanged; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
+$('add-spoke').onclick = openWizard; $('sp.region').onchange = regionChanged; $('sp.city').onchange = cityChanged; $('sp.city').oninput = cityChanged; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
 $('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
 
 // ---- remove-spoke dialog ------------------------------------------------------

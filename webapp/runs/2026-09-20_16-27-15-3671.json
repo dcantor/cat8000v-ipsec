@@ -1,0 +1,799 @@
+{
+ "id": "2026-09-20_16-27-15-3671",
+ "mode": "spoke",
+ "status": "failed",
+ "started": 1789936035.3551793,
+ "finished": 1789936707.0226765,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1789936035.4238834,
+   "finished": 1789936035.4480023,
+   "summary": "spoke6 (10.2.0.19), AS 65208: central-headend fw-central eth7 / Tunnel14; east-headend fw-east eth5 / Tunnel15"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "success",
+   "started": 1789936035.4485898,
+   "finished": 1789936035.4691062,
+   "summary": "lab.conf updated (central-headend:7 <-> spoke6:2, east-headend:5 <-> spoke6:3), nodes/spoke6/iosxe_config.txt written"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "success",
+   "started": 1789936035.4694076,
+   "finished": 1789936036.7925508,
+   "summary": "VM spoke6 defined and started (console 127.0.0.1:5212)"
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "success",
+   "started": 1789936036.7928255,
+   "finished": 1789936500.2413313,
+   "summary": "spoke6 reachable: ssh admin@10.2.0.19, RESTCONF up"
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "success",
+   "started": 1789936500.241832,
+   "finished": 1789936533.2865937,
+   "summary": "spoke6 discovered by Nautobot (Sync Devices From Network)"
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "success",
+   "started": 1789936533.2870202,
+   "finished": 1789936533.305005,
+   "summary": "intent now has 12 devices / 15 tunnels; central-headend gets fw-central eth7 100.65.14.1/30, Tunnel14, neighbor 172.17.14.2 remote-as 65208; east-headend gets fw-east eth5 100.65.15.1/30, Tunnel15, neighbor 172.17.15.2 remote-as 65208"
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "success",
+   "started": 1789936533.3053675,
+   "finished": 1789936703.7145038,
+   "summary": "seed complete: 73 changes:"
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "failed",
+   "started": 1789936703.7150285,
+   "finished": 1789936707.0226617,
+   "summary": "render failed (rc=1)"
+  },
+  {
+   "name": "firewalls",
+   "title": "VyOS firewalls rendered from Nautobot and pushed",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "render failed (rc=1)",
+ "options": {
+  "golden": true,
+  "test": true,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4",
+  "spoke5"
+ ],
+ "spoke": {
+  "name": "spoke6",
+  "mgmt_ip": "10.2.0.19",
+  "node_idx": 12,
+  "console_port": 5212,
+  "router_id": "10.255.1.9",
+  "lan": "192.168.18.0/24",
+  "asn": 65208,
+  "role": "spoke",
+  "comments": "",
+  "region": "East",
+  "site": "branch-6",
+  "site_code": "EA-6",
+  "contact": "noc-east@lab.local",
+  "city": "Philadelphia, PA",
+  "lat": 39.9526,
+  "lon": -75.1652,
+  "psk": "rtm2nX4u62MaFJwZpmhyVnC4",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "links": [
+   {
+    "hub": "central-headend",
+    "edge": "fw-central",
+    "edge_if": "eth7",
+    "hub_port": 7,
+    "spoke_port": 2,
+    "tunnel_id": 14,
+    "wan_prefix": "100.65.14.0/30",
+    "tunnel_prefix": "172.17.14.0/30",
+    "hub_wan_ip": "100.65.14.1",
+    "spoke_wan_ip": "100.65.14.2",
+    "hub_tunnel_ip": "172.17.14.1",
+    "spoke_tunnel_ip": "172.17.14.2",
+    "hub_ports_free": [
+     7,
+     8
+    ],
+    "hub_tunnels": 5,
+    "spoke": "spoke6"
+   },
+   {
+    "hub": "east-headend",
+    "edge": "fw-east",
+    "edge_if": "eth5",
+    "hub_port": 5,
+    "spoke_port": 3,
+    "tunnel_id": 15,
+    "wan_prefix": "100.65.15.0/30",
+    "tunnel_prefix": "172.17.15.0/30",
+    "hub_wan_ip": "100.65.15.1",
+    "spoke_wan_ip": "100.65.15.2",
+    "hub_tunnel_ip": "172.17.15.1",
+    "spoke_tunnel_ip": "172.17.15.2",
+    "hub_ports_free": [
+     5,
+     6,
+     7,
+     8
+    ],
+    "hub_tunnels": 3,
+    "spoke": "spoke6"
+   }
+  ],
+  "context": {
+   "hubs": [
+    {
+     "name": "central-headend",
+     "region": "Central",
+     "distance": 1,
+     "tunnels": 5,
+     "capacity": 50,
+     "edge": "fw-central",
+     "headroom": {
+      "tunnels": 5,
+      "tunnel_capacity": 50,
+      "tunnel_free": 45,
+      "tunnel_utilisation": 10,
+      "firewall": "fw-central",
+      "bandwidth_mbps": 50,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 40,
+      "bandwidth_free_mbps": 10,
+      "bandwidth_utilisation": 80,
+      "bandwidth_tunnel_capacity": 6,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 80,
+      "effective_capacity": 6,
+      "effective_free": 1
+     },
+     "ports_free": [
+      7,
+      8
+     ]
+    },
+    {
+     "name": "east-headend",
+     "region": "East",
+     "distance": 0,
+     "tunnels": 3,
+     "capacity": 50,
+     "edge": "fw-east",
+     "headroom": {
+      "tunnels": 3,
+      "tunnel_capacity": 50,
+      "tunnel_free": 47,
+      "tunnel_utilisation": 6,
+      "firewall": "fw-east",
+      "bandwidth_mbps": 40,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 24,
+      "bandwidth_free_mbps": 16,
+      "bandwidth_utilisation": 60,
+      "bandwidth_tunnel_capacity": 5,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 60,
+      "effective_capacity": 5,
+      "effective_free": 2
+     },
+     "ports_free": [
+      5,
+      6,
+      7,
+      8
+     ]
+    },
+    {
+     "name": "west-headend",
+     "region": "West",
+     "distance": 2,
+     "tunnels": 5,
+     "capacity": 50,
+     "edge": "fw-west",
+     "headroom": {
+      "tunnels": 5,
+      "tunnel_capacity": 50,
+      "tunnel_free": 45,
+      "tunnel_utilisation": 10,
+      "firewall": "fw-west",
+      "bandwidth_mbps": 90,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 40,
+      "bandwidth_free_mbps": 50,
+      "bandwidth_utilisation": 44.4,
+      "bandwidth_tunnel_capacity": 11,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 44.4,
+      "effective_capacity": 11,
+      "effective_free": 6
+     },
+     "ports_free": [
+      7,
+      8
+     ]
+    }
+   ],
+   "regions": [
+    "East",
+    "Central",
+    "West"
+   ],
+   "nearest": [
+    "east-headend",
+    "central-headend"
+   ],
+   "capacity": 50,
+   "spoke_ports": [
+    2,
+    3,
+    4,
+    5
+   ]
+  }
+ },
+ "removal": null,
+ "log": [
+  {
+   "t": 1789936035.4479947,
+   "line": "spoke6 (10.2.0.19), AS 65208: central-headend fw-central eth7 / Tunnel14; east-headend fw-east eth5 / Tunnel15"
+  },
+  {
+   "t": 1789936035.4479985,
+   "line": "central-headend will get: fw-central eth7 100.65.14.1/30, Tunnel14 172.17.14.1/30 -> 100.65.14.2, neighbor 172.17.14.2 remote-as 65208"
+  },
+  {
+   "t": 1789936035.448,
+   "line": "east-headend will get: fw-east eth5 100.65.15.1/30, Tunnel15 172.17.15.1/30 -> 100.65.15.2, neighbor 172.17.15.2 remote-as 65208"
+  },
+  {
+   "t": 1789936035.4691036,
+   "line": "lab.conf updated (central-headend:7 <-> spoke6:2, east-headend:5 <-> spoke6:3), nodes/spoke6/iosxe_config.txt written"
+  },
+  {
+   "t": 1789936035.4696665,
+   "line": "$ ./lab.sh up spoke6"
+  },
+  {
+   "t": 1789936035.5562007,
+   "line": "[spoke6] creating overlay disk on c8000v-universalk9_16G_serial.17.15.06.qcow2"
+  },
+  {
+   "t": 1789936035.5835364,
+   "line": "[spoke6] building day-0 config ISO"
+  },
+  {
+   "t": 1789936036.791173,
+   "line": "[spoke6] started (console: 127.0.0.1:5212)"
+  },
+  {
+   "t": 1789936036.7929807,
+   "line": "this takes 6-10 minutes: first boot, day-0 config, license boot level reload, RESTCONF"
+  },
+  {
+   "t": 1789936036.7929869,
+   "line": "$ ./lab.sh bootstrap spoke6"
+  },
+  {
+   "t": 1789936036.814164,
+   "line": "[spoke6] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
+  },
+  {
+   "t": 1789936187.1590219,
+   "line": "[spoke6] applying config + generating SSH keys"
+  },
+  {
+   "t": 1789936203.4675372,
+   "line": "[spoke6] license boot level not active yet: reloading once"
+  },
+  {
+   "t": 1789936500.2398689,
+   "line": "[spoke6] ready: ssh admin@10.2.0.19 (admin), RESTCONF up"
+  },
+  {
+   "t": 1789936500.2421033,
+   "line": "$ ./lab.sh nautobot onboard 10.2.0.19"
+  },
+  {
+   "t": 1789936533.188219,
+   "line": "==> running 'Sync Devices From Network' for ['10.2.0.19']"
+  },
+  {
+   "t": 1789936533.1882217,
+   "line": "==> SUCCESS  http://10.0.0.10:8080/extras/job-results/754d3385-b7f2-49ec-8c7c-928ca2fab6a4/"
+  },
+  {
+   "t": 1789936533.1882224,
+   "line": "   central-headend: C8000V cisco_xe serial=9VLVE6B4PJL primary=10.2.0.15/24"
+  },
+  {
+   "t": 1789936533.1882231,
+   "line": "   east-headend: C8000V cisco_xe serial=9PAYH2PJ27Z primary=10.2.0.11/24"
+  },
+  {
+   "t": 1789936533.188224,
+   "line": "   fw-central: VyOS vyos serial= primary=10.2.0.22/24"
+  },
+  {
+   "t": 1789936533.1882246,
+   "line": "   fw-east: VyOS vyos serial= primary=10.2.0.21/24"
+  },
+  {
+   "t": 1789936533.188225,
+   "line": "   fw-west: VyOS vyos serial= primary=10.2.0.23/24"
+  },
+  {
+   "t": 1789936533.1882255,
+   "line": "   spoke1: C8000V cisco_xe serial=99CTNJ95DE8 primary=10.2.0.12/24"
+  },
+  {
+   "t": 1789936533.1882257,
+   "line": "   spoke2: C8000V cisco_xe serial=98LHKUH591K primary=10.2.0.13/24"
+  },
+  {
+   "t": 1789936533.1882262,
+   "line": "   spoke3: C8000V cisco_xe serial=9PX1ZVPGZF6 primary=10.2.0.14/24"
+  },
+  {
+   "t": 1789936533.1882272,
+   "line": "   spoke4: C8000V cisco_xe serial=9FX1X5UWCIP primary=10.2.0.16/24"
+  },
+  {
+   "t": 1789936533.1882277,
+   "line": "   spoke5: C8000V cisco_xe serial=9EFJ5HGSWVY primary=10.2.0.18/24"
+  },
+  {
+   "t": 1789936533.1882281,
+   "line": "   spoke6: C8000V cisco_xe serial=9KXCC0IJAXD primary=10.2.0.19/24"
+  },
+  {
+   "t": 1789936533.1882284,
+   "line": "   west-headend: C8000V cisco_xe serial=97V0EMCQETK primary=10.2.0.17/24"
+  },
+  {
+   "t": 1789936533.3049798,
+   "line": "intent now has 12 devices / 15 tunnels; central-headend gets fw-central eth7 100.65.14.1/30, Tunnel14, neighbor 172.17.14.2 remote-as 65208; east-headend gets fw-east eth5 100.65.15.1/30, Tunnel15, neighbor 172.17.15.2 remote-as 65208"
+  },
+  {
+   "t": 1789936533.3056612,
+   "line": "$ ./lab.sh nautobot seed"
+  },
+  {
+   "t": 1789936703.6702652,
+   "line": "seed complete: 73 changes:"
+  },
+  {
+   "t": 1789936703.6702676,
+   "line": "  locations:branch-6"
+  },
+  {
+   "t": 1789936703.670304,
+   "line": "  updated branch-6: description, latitude, longitude"
+  },
+  {
+   "t": 1789936703.6703048,
+   "line": "  custom fields on branch-6"
+  },
+  {
+   "t": 1789936703.6703055,
+   "line": "  updated spoke6: role, location"
+  },
+  {
+   "t": 1789936703.6703062,
+   "line": "  custom fields on spoke6"
+  },
+  {
+   "t": 1789936703.670307,
+   "line": "  vrf-device:spoke6"
+  },
+  {
+   "t": 1789936703.670308,
+   "line": "  updated GigabitEthernet1: type, description, vrf, mac_address"
+  },
+  {
+   "t": 1789936703.6703088,
+   "line": "  interface:spoke6/GigabitEthernet2"
+  },
+  {
+   "t": 1789936703.6703093,
+   "line": "  updated GigabitEthernet2: description, mac_address"
+  },
+  {
+   "t": 1789936703.6703107,
+   "line": "  interface:spoke6/GigabitEthernet3"
+  },
+  {
+   "t": 1789936703.6703112,
+   "line": "  updated GigabitEthernet3: description, mac_address"
+  },
+  {
+   "t": 1789936703.6703117,
+   "line": "  interface:spoke6/GigabitEthernet4"
+  },
+  {
+   "t": 1789936703.6703122,
+   "line": "  updated GigabitEthernet4: description, enabled, mac_address"
+  },
+  {
+   "t": 1789936703.6703126,
+   "line": "  interface:spoke6/GigabitEthernet5"
+  },
+  {
+   "t": 1789936703.6703131,
+   "line": "  updated GigabitEthernet5: description, enabled, mac_address"
+  },
+  {
+   "t": 1789936703.6703143,
+   "line": "  interface:spoke6/Loopback0"
+  },
+  {
+   "t": 1789936703.670315,
+   "line": "  updated Loopback0: description"
+  },
+  {
+   "t": 1789936703.6703153,
+   "line": "  prefix:10.255.1.9/32"
+  },
+  {
+   "t": 1789936703.6703162,
+   "line": "  updated 10.255.1.9/32: Global: role, description"
+  },
+  {
+   "t": 1789936703.6703172,
+   "line": "  tag bgp:advertise on 10.255.1.9/32"
+  },
+  {
+   "t": 1789936703.6703176,
+   "line": "  ip:10.255.1.9/32"
+  },
+  {
+   "t": 1789936703.6703184,
+   "line": "  interface:spoke6/Loopback10"
+  },
+  {
+   "t": 1789936703.6703188,
+   "line": "  updated Loopback10: description"
+  },
+  {
+   "t": 1789936703.6703193,
+   "line": "  prefix:192.168.18.0/24"
+  },
+  {
+   "t": 1789936703.6703196,
+   "line": "  updated 192.168.18.0/24: Global: role, description"
+  },
+  {
+   "t": 1789936703.6703203,
+   "line": "  tag bgp:advertise on 192.168.18.0/24"
+  },
+  {
+   "t": 1789936703.6703207,
+   "line": "  ip:192.168.18.1/24"
+  },
+  {
+   "t": 1789936703.6703212,
+   "line": "  updated eth7: description, enabled"
+  },
+  {
+   "t": 1789936703.6703222,
+   "line": "  updated eth5: description, enabled"
+  },
+  {
+   "t": 1789936703.6703227,
+   "line": "  prefix:100.65.14.0/30"
+  },
+  {
+   "t": 1789936703.670323,
+   "line": "  updated 100.65.14.0/30: Global: role, description"
+  },
+  {
+   "t": 1789936703.670324,
+   "line": "  ip:100.65.14.1/30"
+  },
+  {
+   "t": 1789936703.6703246,
+   "line": "  ip:100.65.14.2/30"
+  },
+  {
+   "t": 1789936703.670326,
+   "line": "  cable:fw-central:eth7-spoke6:GigabitEthernet2"
+  },
+  {
+   "t": 1789936703.6703262,
+   "line": "  prefix:100.65.15.0/30"
+  },
+  {
+   "t": 1789936703.6703267,
+   "line": "  updated 100.65.15.0/30: Global: role, description"
+  },
+  {
+   "t": 1789936703.6703272,
+   "line": "  ip:100.65.15.1/30"
+  },
+  {
+   "t": 1789936703.670328,
+   "line": "  ip:100.65.15.2/30"
+  },
+  {
+   "t": 1789936703.6703284,
+   "line": "  cable:fw-east:eth5-spoke6:GigabitEthernet3"
+  },
+  {
+   "t": 1789936703.6703286,
+   "line": "  prefix:172.17.14.0/30"
+  },
+  {
+   "t": 1789936703.670329,
+   "line": "  updated 172.17.14.0/30: Global: role, description"
+  },
+  {
+   "t": 1789936703.6703298,
+   "line": "  interface:central-headend/Tunnel14"
+  },
+  {
+   "t": 1789936703.67033,
+   "line": "  updated Tunnel14: description"
+  },
+  {
+   "t": 1789936703.6703305,
+   "line": "  ip:172.17.14.1/30"
+  },
+  {
+   "t": 1789936703.6703317,
+   "line": "  vpn-endpoint:central-headend/Tunnel14 via GigabitEthernet2"
+  },
+  {
+   "t": 1789936703.6703331,
+   "line": "  interface:spoke6/Tunnel14"
+  },
+  {
+   "t": 1789936703.6703339,
+   "line": "  updated Tunnel14: description"
+  },
+  {
+   "t": 1789936703.670334,
+   "line": "  ip:172.17.14.2/30"
+  },
+  {
+   "t": 1789936703.6703348,
+   "line": "  vpn-endpoint:spoke6/Tunnel14 via GigabitEthernet2"
+  },
+  {
+   "t": 1789936703.6703353,
+   "line": "  vpn-tunnels:central-headend-spoke6"
+  },
+  {
+   "t": 1789936703.6703358,
+   "line": "  updated central-headend-spoke6: description"
+  },
+  {
+   "t": 1789936703.6703362,
+   "line": "  prefix:172.17.15.0/30"
+  },
+  {
+   "t": 1789936703.6703367,
+   "line": "  updated 172.17.15.0/30: Global: role, description"
+  },
+  {
+   "t": 1789936703.670337,
+   "line": "  interface:east-headend/Tunnel15"
+  },
+  {
+   "t": 1789936703.6703377,
+   "line": "  updated Tunnel15: description"
+  },
+  {
+   "t": 1789936703.6703384,
+   "line": "  ip:172.17.15.1/30"
+  },
+  {
+   "t": 1789936703.6703386,
+   "line": "  vpn-endpoint:east-headend/Tunnel15 via GigabitEthernet2"
+  },
+  {
+   "t": 1789936703.6703393,
+   "line": "  interface:spoke6/Tunnel15"
+  },
+  {
+   "t": 1789936703.67034,
+   "line": "  updated Tunnel15: description"
+  },
+  {
+   "t": 1789936703.6703405,
+   "line": "  ip:172.17.15.2/30"
+  },
+  {
+   "t": 1789936703.670341,
+   "line": "  vpn-endpoint:spoke6/Tunnel15 via GigabitEthernet3"
+  },
+  {
+   "t": 1789936703.670342,
+   "line": "  vpn-tunnels:east-headend-spoke6"
+  },
+  {
+   "t": 1789936703.6703424,
+   "line": "  updated east-headend-spoke6: description"
+  },
+  {
+   "t": 1789936703.670343,
+   "line": "  autonomous-systems:65208"
+  },
+  {
+   "t": 1789936703.6703434,
+   "line": "  bgp-ri:spoke6"
+  },
+  {
+   "t": 1789936703.670344,
+   "line": "  bgp-af:spoke6"
+  },
+  {
+   "t": 1789936703.6703446,
+   "line": "  bgp-peering:central-headend<->spoke6 (Tunnel14)"
+  },
+  {
+   "t": 1789936703.6703458,
+   "line": "  bgp-endpoint-af:central-headend/Tunnel14"
+  },
+  {
+   "t": 1789936703.670346,
+   "line": "  bgp-endpoint-af:spoke6/Tunnel14"
+  },
+  {
+   "t": 1789936703.6703467,
+   "line": "  bgp-peering:east-headend<->spoke6 (Tunnel15)"
+  },
+  {
+   "t": 1789936703.6703472,
+   "line": "  bgp-endpoint-af:east-headend/Tunnel15"
+  },
+  {
+   "t": 1789936703.6703477,
+   "line": "  bgp-endpoint-af:spoke6/Tunnel15"
+  },
+  {
+   "t": 1789936703.6703484,
+   "line": "  graphql-query updated"
+  },
+  {
+   "t": 1789936703.7154088,
+   "line": "$ ./lab.sh nautobot render"
+  },
+  {
+   "t": 1789936706.9805133,
+   "line": "Traceback (most recent call last):"
+  },
+  {
+   "t": 1789936706.9830134,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/nautobot/render_nac.py\", line 159, in <module>"
+  },
+  {
+   "t": 1789936706.983018,
+   "line": "    rendered = [render(d) for d in devices]"
+  },
+  {
+   "t": 1789936706.9830198,
+   "line": "                ~~~~~~^^^"
+  },
+  {
+   "t": 1789936706.9830205,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/nautobot/render_nac.py\", line 155, in render"
+  },
+  {
+   "t": 1789936706.983022,
+   "line": "    **({\"crypto\": crypto_model(next(iter(profiles.values())), dev)} if profiles else {}),"
+  },
+  {
+   "t": 1789936706.9830234,
+   "line": "                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+  },
+  {
+   "t": 1789936706.983024,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/nautobot/render_nac.py\", line 106, in crypto_model"
+  },
+  {
+   "t": 1789936706.9830244,
+   "line": "    \"keyrings\": [{\"name\": ios[\"ikev2_keyring\"], \"peers\": keyring_peers(dev)}],"
+  },
+  {
+   "t": 1789936706.983025,
+   "line": "                                                         ~~~~~~~~~~~~~^^^^^"
+  },
+  {
+   "t": 1789936706.9830256,
+   "line": "  File \"/home/dcantor/cat8000v-ipsec/nautobot/render_nac.py\", line 94, in keyring_peers"
+  },
+  {
+   "t": 1789936706.9830263,
+   "line": "    far_dev = far[\"device\"][\"name\"]; is_hub = norm((ep.get(\"role\") or {}).get(\"name\", \"\")) == \"HUB\""
+  },
+  {
+   "t": 1789936706.9830267,
+   "line": "              ~~~~~~~~~~~~~^^^^^^^^"
+  },
+  {
+   "t": 1789936706.983033,
+   "line": "TypeError: 'NoneType' object is not subscriptable"
+  },
+  {
+   "t": 1789936707.0226731,
+   "line": "!! render failed (rc=1)"
+  }
+ ]
+}

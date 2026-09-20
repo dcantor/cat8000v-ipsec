@@ -5,31 +5,41 @@ LIBVIRT_URI="qemu:///system"
 C8000V_IMAGE="$LAB_DIR/c8000v-universalk9_16G_serial.17.15.06.qcow2"
 C8000V_VCPU=2
 C8000V_RAM_MIB=4096
+# VyOS firewalls (one per headend site, between the headend and its spokes): base image built once from the
+# rolling ISO (tools/vyos_install.py), overlays per node; console day-0 from nodes/<fw>/vyos_config.txt
+VYOS_IMAGE="$LAB_DIR/images/vyos-base.qcow2"
+VYOS_VCPU=1
+VYOS_RAM_MIB=1024
 
 # OOB management network (libvirt bridge, host is 10.2.0.1; the shared NMS/Nautobot joins as 10.2.0.10)
 OOB_NET="ipsec-oob"
 OOB_GATEWAY="10.2.0.1"
 
 # hub with one point-to-point WAN link per spoke (UDP tunnels between the VMs, no shared segment)
-declare -A ROLE=(    [east-headend]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke [central-headend]=hub [spoke4]=spoke [hub3]=hub [spoke5]=spoke )
-declare -A MGMT_IP=( [east-headend]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 [central-headend]=10.2.0.15 [spoke4]=10.2.0.16 [hub3]=10.2.0.17 [spoke5]=10.2.0.18 )
-declare -A BGP_AS=(  [east-headend]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 [central-headend]=65204 [spoke4]=65205 [hub3]=65206 [spoke5]=65207 )
-declare -A LAN=(     [east-headend]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 [central-headend]=192.168.14.0/24 [spoke4]=192.168.15.0/24 [hub3]=192.168.16.0/24 [spoke5]=192.168.17.0/24 )
-# WAN links: "node:port node:port  prefix"  (port = GigabitEthernet number); first end gets .1, second .2
+declare -A ROLE=(    [east-headend]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke [central-headend]=hub [spoke4]=spoke [west-headend]=hub [spoke5]=spoke [fw-east]=firewall [fw-central]=firewall [fw-west]=firewall )
+declare -A MGMT_IP=( [east-headend]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 [central-headend]=10.2.0.15 [spoke4]=10.2.0.16 [west-headend]=10.2.0.17 [spoke5]=10.2.0.18 [fw-east]=10.2.0.21 [fw-central]=10.2.0.22 [fw-west]=10.2.0.23 )
+declare -A BGP_AS=(  [east-headend]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 [central-headend]=65204 [spoke4]=65205 [west-headend]=65206 [spoke5]=65207 [fw-east]=- [fw-central]=- [fw-west]=- )
+declare -A LAN=(     [east-headend]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 [central-headend]=192.168.14.0/24 [spoke4]=192.168.15.0/24 [west-headend]=192.168.16.0/24 [spoke5]=192.168.17.0/24 [fw-east]=- [fw-central]=- [fw-west]=- )
+# WAN links: "node:port node:port  prefix"; first end gets .1, second .2. The first end anchors the UDP socket pair.
+# Firewalls are always the first end: eth1 <-> its headend's Gi2 (the headend's WAN / tunnel source), eth2.. <-> spokes.
+# (port = GigabitEthernet number on routers, ethN number on firewalls)
 LINKS=(
-  "east-headend:2 spoke1:2 100.65.1.0/30"
-  "east-headend:3 spoke2:2 100.65.2.0/30"
-  "east-headend:4 spoke3:2 100.65.3.0/30"
-  "central-headend:2 spoke1:3 100.65.4.0/30"
-  "central-headend:3 spoke2:3 100.65.5.0/30"
-  "central-headend:4 spoke3:3 100.65.6.0/30"
-  "central-headend:5 spoke4:2 100.65.7.0/30"
-  "hub3:2 spoke1:4 100.65.8.0/30"
-  "hub3:3 spoke2:4 100.65.9.0/30"
-  "hub3:4 spoke3:4 100.65.10.0/30"
-  "hub3:5 spoke4:3 100.65.11.0/30"
-  "central-headend:6 spoke5:2 100.65.12.0/30"
-  "hub3:6 spoke5:3 100.65.13.0/30"
+  "fw-east:1 east-headend:2 100.64.1.0/30"
+  "fw-central:1 central-headend:2 100.64.2.0/30"
+  "fw-west:1 west-headend:2 100.64.3.0/30"
+  "fw-east:2 spoke1:2 100.65.1.0/30"
+  "fw-east:3 spoke2:2 100.65.2.0/30"
+  "fw-east:4 spoke3:2 100.65.3.0/30"
+  "fw-central:2 spoke1:3 100.65.4.0/30"
+  "fw-central:3 spoke2:3 100.65.5.0/30"
+  "fw-central:4 spoke3:3 100.65.6.0/30"
+  "fw-central:5 spoke4:2 100.65.7.0/30"
+  "fw-central:6 spoke5:2 100.65.12.0/30"
+  "fw-west:2 spoke1:4 100.65.8.0/30"
+  "fw-west:3 spoke2:4 100.65.9.0/30"
+  "fw-west:4 spoke3:4 100.65.10.0/30"
+  "fw-west:5 spoke4:3 100.65.11.0/30"
+  "fw-west:6 spoke5:3 100.65.13.0/30"
 )
 # IPsec VTI tunnels over those links: "hub-tunnel spoke tunnel-prefix"
 TUNNELS=(
@@ -40,22 +50,23 @@ TUNNELS=(
   "5 central-headend spoke2 172.17.5.0/30"
   "6 central-headend spoke3 172.17.6.0/30"
   "7 central-headend spoke4 172.17.7.0/30"
-  "8 hub3 spoke1 172.17.8.0/30"
-  "9 hub3 spoke2 172.17.9.0/30"
-  "10 hub3 spoke3 172.17.10.0/30"
-  "11 hub3 spoke4 172.17.11.0/30"
+  "8 west-headend spoke1 172.17.8.0/30"
+  "9 west-headend spoke2 172.17.9.0/30"
+  "10 west-headend spoke3 172.17.10.0/30"
+  "11 west-headend spoke4 172.17.11.0/30"
   "12 central-headend spoke5 172.17.12.0/30"
-  "13 hub3 spoke5 172.17.13.0/30"
+  "13 west-headend spoke5 172.17.13.0/30"
 )
 
-declare -A CONSOLE_PORT=( [east-headend]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [central-headend]=5205 [spoke4]=5206 [hub3]=5207 [spoke5]=5208 )
-declare -A NODE_IDX=( [east-headend]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 [central-headend]=5 [spoke4]=6 [hub3]=7 [spoke5]=8 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
+declare -A CONSOLE_PORT=( [east-headend]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [central-headend]=5205 [spoke4]=5206 [west-headend]=5207 [spoke5]=5208 [fw-east]=5209 [fw-central]=5210 [fw-west]=5211 )
+declare -A NODE_IDX=( [east-headend]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 [central-headend]=5 [spoke4]=6 [west-headend]=7 [spoke5]=8 [fw-east]=9 [fw-central]=10 [fw-west]=11 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
 MAC_OUI="52:54:00:c7"
 UDP_BASE=22000
 # spoke-facing ports: the hub has Gi2..Gi(1+HUB_PORTS) so spokes can be added without touching the hub VM;
 # a link's UDP socket pair is anchored on its first end (the hub), so the hub's definition never changes
 HUB_PORTS=8
 SPOKE_PORTS=4
+FW_PORTS=8        # eth1 = headend side, eth2..eth8 = up to 7 spokes per headend
 
-ROUTERS=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 hub3 spoke5)
-ALL_NODES=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 hub3 spoke5)
+ROUTERS=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend spoke5)
+ALL_NODES=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend spoke5 fw-east fw-central fw-west)

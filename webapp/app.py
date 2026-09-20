@@ -27,6 +27,7 @@ import spokes
 
 LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB / "nautobot")); import intent as intent_mod   # noqa: E402
+import cities  # noqa: E402
 RUNS_DIR = Path(__file__).resolve().parent / "runs"; RUNS_DIR.mkdir(exist_ok=True)
 RESULTS = LAB / "results"
 NAUTOBOT_URL = os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080")
@@ -447,6 +448,12 @@ def spoke_suggest(hubs: str = Query("", description="comma-separated headends to
     """Hostname, management IP, VM index/console port, router-id, LAN, AS, site/site code/contact, a generated PSK, and per-headend
     link allocations (hub port, spoke port, WAN /30, tunnel number, tunnel /30). Everything is editable; POST it to `/api/runs` with mode `spoke`."""
     return spokes.suggest([h for h in hubs.split(",") if h] or None, region or None)
+
+
+@app.get("/api/cities", tags=["provisioning"], summary="US cities a site can be placed in (name, lat, lon, region) — the map places sites by these coordinates")
+def cities_list():
+    I = intent_mod.load(); regions = I.get("regions") or []
+    return [{"city": c, "lat": ll[0], "lon": ll[1], "region": cities.region_of(ll[1], regions)} for c, ll in cities.CITIES.items()]
 
 
 @app.get("/api/hubs/suggest", tags=["provisioning"], summary="Suggest a new headend")

@@ -111,6 +111,8 @@ class SpokeSpec(BaseModel):
     node_idx: int = Field(..., description="VM index (MACs, UDP ports); from suggest"); console_port: int = Field(..., description="serial console TCP port; from suggest")
     router_id: str; lan: str; asn: int
     region: str = Field(..., examples=["West"]); site: str = Field(..., examples=["branch-6"]); site_code: str = ""; contact: str = ""
+    city: str = Field("", description="where the branch is (a catalogue city, GET /api/cities, or any name with lat / lon); shown on the portal's map", examples=["Denver, CO"])
+    lat: Optional[float] = Field(None, description="site latitude (filled from the catalogue for a known city)"); lon: Optional[float] = None
     psk: str = Field(..., description="the spoke's own pre-shared key (8-64 chars)")
     comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
     role: Literal["spoke"] = "spoke"
@@ -123,6 +125,7 @@ class HubSpec(BaseModel):
     name: str = Field(..., examples=["north-headend"]); mgmt_ip: str; node_idx: int; console_port: int
     router_id: str; lan: str; asn: int
     region: str; site: str; site_code: str = ""; contact: str = ""
+    city: str = ""; lat: Optional[float] = None; lon: Optional[float] = None
     comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
     role: Literal["hub"] = "hub"
     connect_spokes: list[str] = Field(default_factory=list)
