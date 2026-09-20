@@ -390,6 +390,41 @@ def _vm_states():
     return {(n["node"], n["role"]): ("running" if n["node"] in running else "shut off") for n in intent_mod.nodes().values()}
 
 
+@app.get("/api/tools", tags=["monitoring"], summary="The Tools page: every tool's URL, and how to reach each router / firewall (lab credentials)")
+def tools():
+    """LAN-side URLs of the shared tools (the NMS services are relayed on the lab host's LAN address) and, per lab VM, the
+    management address, SSH / RESTCONF / console access and the credentials. Lab infrastructure: the credentials are the
+    well-known lab defaults, which is why this is fine to show here and never would be anywhere else."""
+    lan = os.environ.get("LAB_LAN_HOST", "192.168.50.231"); ios_u, ios_p = os.environ.get("IOSXE_USERNAME", "admin"), os.environ.get("IOSXE_PASSWORD", "admin")
+    vy_u, vy_p = os.environ.get("VYOS_USERNAME", "vyos"), os.environ.get("VYOS_PASSWORD", "vyos")
+    tools = [
+        {"name": "Lab hub", "url": f"http://{lan}:8088", "what": "every lab on this host at a glance; links to all of the below", "login": "none"},
+        {"name": "This portal", "url": f"http://{lan}:8090", "what": "VPN provisioning (C8000v IPsec lab); REST API at /docs", "login": "none"},
+        {"name": "SRv6 core portal", "url": f"http://{lan}:8091", "what": "the SRv6 lab's tenant provisioning portal", "login": "none"},
+        {"name": "Nautobot", "url": NAUTOBOT_PUBLIC_URL, "what": "source of truth: devices, locations (with coordinates), VPN app, BGP, Golden Config", "login": "superuser — see NAUTOBOT_SUPERUSER_* in lab@10.0.0.10:/opt/nautobot/.env"},
+        {"name": "Grafana", "url": f"http://{lan}:3001", "what": "dashboards (C8000v IPsec overview, SRv6 core overview, node detail, fleet); anonymous viewing", "login": "admin / admin (edit)"},
+        {"name": "Grafana: IPsec overview", "url": f"http://{lan}:3001/d/cat8000v-ipsec-overview", "what": "tunnels, headend capacity / CPU, the lab host", "login": "none"},
+        {"name": "Prometheus", "url": f"http://{lan}:9091", "what": "scrapes the portals, exporters and the lab host; alert rules at /alerts (9090 on the host is Cockpit)", "login": "none"},
+        {"name": "VictoriaMetrics", "url": f"http://{lan}:8428/vmui", "what": "long-term metrics (Prometheus remote-write, Telegraf)", "login": "none"},
+        {"name": "VictoriaLogs", "url": f"http://{lan}:9428/select/vmui", "what": "syslog from the routers, sFlow flows", "login": "none"},
+        {"name": "Gitea", "url": f"http://{lan}:3000", "what": "Golden Config backups (lab/c8000v-ipsec-configs, lab/srv6-core-configs), CI mirror + runs", "login": "lab — see GITEA_PASSWORD in lab@10.0.0.10:/opt/nautobot/.env"},
+        {"name": "GitHub", "url": "https://github.com/dcantor/cat8000v-ipsec", "what": "this lab's repository (srv6-core and lab-portal alongside)", "login": "public"},
+    ]
+    I = intent_mod.load(); nodes = {v["node"]: v for v in intent_mod.nodes().values()}
+    devices = []
+    for d in sorted(I["devices"], key=lambda x: ({"hub": 0, "firewall": 1, "spoke": 2}.get(x["role"], 3), x["name"])):
+        n = nodes.get(d["name"], {}); ios = d["role"] in ("hub", "spoke")
+        devices.append({"name": d["name"], "role": d["role"], "platform": "Cisco C8000v (IOS-XE)" if ios else "VyOS", "mgmt_ip": d["mgmt_ip"], "region": d.get("region"), "site": d.get("site"), "city": d.get("city"),
+                        "ssh": f"ssh {ios_u if ios else vy_u}@{d['mgmt_ip']}", "username": ios_u if ios else vy_u, "password": ios_p if ios else vy_p,
+                        "restconf": f"https://{d['mgmt_ip']}/restconf/" if ios else None, "netconf": f"{d['mgmt_ip']}:830" if ios else None,
+                        "console_port": n.get("console"), "console": f"./lab.sh console {d['name']}" + (f"  (or: telnet 127.0.0.1 {n['console']} on the host)" if n.get("console") else ""),
+                        "lan": d.get("lan"), "asn": d.get("asn") if ios else None})
+    return {"disclaimer": "LAB INFRASTRUCTURE — NOT PRODUCTION. Everything here is a simulated environment on one KVM host: the addresses are private, the credentials are lab defaults shared by every device, and nothing on this page may be reused for, or connected to, a production network.",
+            "lan_host": lan, "oob": {"prefix": I["oob"]["prefix"], "gateway": I["oob"]["gateway"], "note": f"the OOB network is reachable from the lab host only (ssh {os.environ.get('USER', 'dcantor')}@{lan} first, or through the portal / Nautobot)"},
+            "host": {"ssh": f"ssh {os.environ.get('USER', 'dcantor')}@{lan}", "lab_dir": str(LAB), "console_note": "serial consoles are raw TCP on the host's 127.0.0.1 (./lab.sh console <node> wraps them)"},
+            "tools": tools, "devices": devices}
+
+
 @app.get("/api/intent", tags=["intent"], summary="Current intent + wiring facts")
 def get_intent():
     """The saved `lab-intent.json` plus the physical wiring and VM facts from `lab.conf` (the form cannot change those)."""

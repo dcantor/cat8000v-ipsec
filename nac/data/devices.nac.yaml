@@ -15,12 +15,6 @@ iosxe:
   - name: mss_central-headend_tunnel7
     type: cli
     content: "interface Tunnel7\n ip tcp adjust-mss 1360\n"
-  - name: mss_central-headend_tunnel12
-    type: cli
-    content: "interface Tunnel12\n ip tcp adjust-mss 1360\n"
-  - name: mss_central-headend_tunnel14
-    type: cli
-    content: "interface Tunnel14\n ip tcp adjust-mss 1360\n"
   - name: mss_east-headend_tunnel1
     type: cli
     content: "interface Tunnel1\n ip tcp adjust-mss 1360\n"
@@ -30,9 +24,6 @@ iosxe:
   - name: mss_east-headend_tunnel3
     type: cli
     content: "interface Tunnel3\n ip tcp adjust-mss 1360\n"
-  - name: mss_east-headend_tunnel15
-    type: cli
-    content: "interface Tunnel15\n ip tcp adjust-mss 1360\n"
   - name: mss_spoke1_tunnel1
     type: cli
     content: "interface Tunnel1\n ip tcp adjust-mss 1360\n"
@@ -66,18 +57,6 @@ iosxe:
   - name: mss_spoke4_tunnel11
     type: cli
     content: "interface Tunnel11\n ip tcp adjust-mss 1360\n"
-  - name: mss_spoke5_tunnel12
-    type: cli
-    content: "interface Tunnel12\n ip tcp adjust-mss 1360\n"
-  - name: mss_spoke5_tunnel13
-    type: cli
-    content: "interface Tunnel13\n ip tcp adjust-mss 1360\n"
-  - name: mss_spoke6_tunnel14
-    type: cli
-    content: "interface Tunnel14\n ip tcp adjust-mss 1360\n"
-  - name: mss_spoke6_tunnel15
-    type: cli
-    content: "interface Tunnel15\n ip tcp adjust-mss 1360\n"
   - name: mss_west-headend_tunnel8
     type: cli
     content: "interface Tunnel8\n ip tcp adjust-mss 1360\n"
@@ -90,9 +69,6 @@ iosxe:
   - name: mss_west-headend_tunnel11
     type: cli
     content: "interface Tunnel11\n ip tcp adjust-mss 1360\n"
-  - name: mss_west-headend_tunnel13
-    type: cli
-    content: "interface Tunnel13\n ip tcp adjust-mss 1360\n"
   devices:
   - name: central-headend
     host: 10.2.0.15
@@ -104,8 +80,6 @@ iosxe:
     - mss_central-headend_tunnel5
     - mss_central-headend_tunnel6
     - mss_central-headend_tunnel7
-    - mss_central-headend_tunnel12
-    - mss_central-headend_tunnel14
     variables:
       router_id: 10.255.1.5
       bgp_asn: 65204
@@ -130,14 +104,6 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
-            - name: spoke5
-              ipv4_address: 100.65.12.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke5}
-            - name: spoke6
-              ipv4_address: 100.65.14.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke6}
             - name: spoke1
               ipv4_address: 100.65.4.2
               ipv4_mask: 255.255.255.255
@@ -256,38 +222,12 @@ iosxe:
           tunnel_destination_ipv4: 100.65.7.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '12'
-          description: IPsec VTI to spoke5
-          ipv4:
-            address: 172.17.12.1
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.12.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '14'
-          description: IPsec VTI to spoke6
-          ipv4:
-            address: 172.17.14.1
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.14.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
         bgp:
           as_number: 65204
           router_id: 10.255.1.5
           log_neighbor_changes: true
           neighbors:
-          - ip: 172.17.12.2
-            remote_as: 65207
-            description: eBGP spoke5 (Tunnel12)
-          - ip: 172.17.14.2
-            remote_as: 65208
-            description: eBGP spoke6 (Tunnel14)
           - ip: 172.17.4.2
             remote_as: 65201
             description: eBGP spoke1 (Tunnel4)
@@ -303,10 +243,6 @@ iosxe:
           address_family:
             ipv4_unicast:
               neighbors:
-              - ip: 172.17.12.2
-                activate: true
-              - ip: 172.17.14.2
-                activate: true
               - ip: 172.17.4.2
                 activate: true
               - ip: 172.17.5.2
@@ -340,16 +276,6 @@ iosxe:
           next_hops:
           - ip: 100.64.2.1
             name: via-fw-central
-        - prefix: 100.65.12.0
-          mask: 255.255.255.252
-          next_hops:
-          - ip: 100.64.2.1
-            name: via-fw-central
-        - prefix: 100.65.14.0
-          mask: 255.255.255.252
-          next_hops:
-          - ip: 100.64.2.1
-            name: via-fw-central
   - name: east-headend
     host: 10.2.0.11
     protocol: restconf
@@ -359,7 +285,6 @@ iosxe:
     - mss_east-headend_tunnel1
     - mss_east-headend_tunnel2
     - mss_east-headend_tunnel3
-    - mss_east-headend_tunnel15
     variables:
       router_id: 10.255.1.1
       bgp_asn: 65200
@@ -388,10 +313,6 @@ iosxe:
               ipv4_address: 100.65.1.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke1}
-            - name: spoke6
-              ipv4_address: 100.65.15.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke6}
             - name: spoke2
               ipv4_address: 100.65.2.2
               ipv4_mask: 255.255.255.255
@@ -492,16 +413,6 @@ iosxe:
           tunnel_destination_ipv4: 100.65.3.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '15'
-          description: IPsec VTI to spoke6
-          ipv4:
-            address: 172.17.15.1
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.15.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
         bgp:
           as_number: 65200
@@ -511,9 +422,6 @@ iosxe:
           - ip: 172.17.1.2
             remote_as: 65201
             description: eBGP spoke1 (Tunnel1)
-          - ip: 172.17.15.2
-            remote_as: 65208
-            description: eBGP spoke6 (Tunnel15)
           - ip: 172.17.2.2
             remote_as: 65202
             description: eBGP spoke2 (Tunnel2)
@@ -524,8 +432,6 @@ iosxe:
             ipv4_unicast:
               neighbors:
               - ip: 172.17.1.2
-                activate: true
-              - ip: 172.17.15.2
                 activate: true
               - ip: 172.17.2.2
                 activate: true
@@ -547,11 +453,6 @@ iosxe:
           - ip: 100.64.1.1
             name: via-fw-east
         - prefix: 100.65.3.0
-          mask: 255.255.255.252
-          next_hops:
-          - ip: 100.64.1.1
-            name: via-fw-east
-        - prefix: 100.65.15.0
           mask: 255.255.255.252
           next_hops:
           - ip: 100.64.1.1
@@ -1242,304 +1143,6 @@ iosxe:
           next_hops:
           - ip: 100.65.11.1
             name: via-fw-west
-  - name: spoke5
-    host: 10.2.0.18
-    protocol: restconf
-    device_groups:
-    - IPSEC_VPN
-    templates:
-    - mss_spoke5_tunnel12
-    - mss_spoke5_tunnel13
-    variables:
-      router_id: 10.255.1.8
-      bgp_asn: 65207
-    configuration:
-      system:
-        hostname: spoke5
-        ip_domain_name: lab.local
-      crypto:
-        ikev2:
-          proposals:
-          - name: VPN-PROP
-            encryption:
-            - aes_cbc_256
-            integrity:
-            - sha256
-            group:
-            - '14'
-          policies:
-          - name: VPN-POL
-            proposals:
-            - VPN-PROP
-          keyrings:
-          - name: VPN-KEYRING
-            peers:
-            - name: central-headend
-              ipv4_address: 100.64.2.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke5}
-            - name: west-headend
-              ipv4_address: 100.64.3.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke5}
-          profiles:
-          - name: VPN-IKEV2
-            match_identity_remote_ipv4_addresses:
-            - address: 0.0.0.0
-            authentication_local_pre_share: true
-            authentication_remote_pre_share: true
-            keyring_local: VPN-KEYRING
-            dpd_interval: 20
-            dpd_retry: 3
-            dpd_query: on-demand
-        ipsec_transform_sets:
-        - name: VPN-TS
-          esp: esp-256-aes
-          esp_hmac: esp-sha256-hmac
-        ipsec_profiles:
-        - name: VPN-IPSEC
-          set_transform_set:
-          - VPN-TS
-          set_ikev2_profile: VPN-IKEV2
-      interfaces:
-        ethernets:
-        - type: GigabitEthernet
-          id: '2'
-          description: WAN to fw-central eth6
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.12.2
-            address_mask: 255.255.255.252
-        - type: GigabitEthernet
-          id: '3'
-          description: WAN to fw-west eth6
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.13.2
-            address_mask: 255.255.255.252
-        - type: GigabitEthernet
-          id: '4'
-          shutdown: true
-        - type: GigabitEthernet
-          id: '5'
-          shutdown: true
-        loopbacks:
-        - id: 0
-          description: Router ID
-          ipv4:
-            address: 10.255.1.8
-            address_mask: 255.255.255.255
-        - id: 10
-          description: site LAN
-          ipv4:
-            address: 192.168.17.1
-            address_mask: 255.255.255.0
-        tunnels:
-        - name: '12'
-          description: IPsec VTI to central-headend
-          ipv4:
-            address: 172.17.12.2
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.64.2.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '13'
-          description: IPsec VTI to west-headend
-          ipv4:
-            address: 172.17.13.2
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.64.3.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
-      routing:
-        bgp:
-          as_number: 65207
-          router_id: 10.255.1.8
-          log_neighbor_changes: true
-          neighbors:
-          - ip: 172.17.12.1
-            remote_as: 65204
-            description: eBGP central-headend (Tunnel12)
-          - ip: 172.17.13.1
-            remote_as: 65206
-            description: eBGP west-headend (Tunnel13)
-          address_family:
-            ipv4_unicast:
-              neighbors:
-              - ip: 172.17.12.1
-                activate: true
-              - ip: 172.17.13.1
-                activate: true
-              networks:
-              - network: 10.255.1.8
-                mask: 255.255.255.255
-              - network: 192.168.17.0
-        static_routes:
-        - prefix: 100.64.2.2
-          mask: 255.255.255.255
-          next_hops:
-          - ip: 100.65.12.1
-            name: via-fw-central
-        - prefix: 100.64.3.2
-          mask: 255.255.255.255
-          next_hops:
-          - ip: 100.65.13.1
-            name: via-fw-west
-  - name: spoke6
-    host: 10.2.0.19
-    protocol: restconf
-    device_groups:
-    - IPSEC_VPN
-    templates:
-    - mss_spoke6_tunnel14
-    - mss_spoke6_tunnel15
-    variables:
-      router_id: 10.255.1.9
-      bgp_asn: 65208
-    configuration:
-      system:
-        hostname: spoke6
-        ip_domain_name: lab.local
-      crypto:
-        ikev2:
-          proposals:
-          - name: VPN-PROP
-            encryption:
-            - aes_cbc_256
-            integrity:
-            - sha256
-            group:
-            - '14'
-          policies:
-          - name: VPN-POL
-            proposals:
-            - VPN-PROP
-          keyrings:
-          - name: VPN-KEYRING
-            peers:
-            - name: east-headend
-              ipv4_address: 100.64.1.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke6}
-            - name: central-headend
-              ipv4_address: 100.64.2.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke6}
-          profiles:
-          - name: VPN-IKEV2
-            match_identity_remote_ipv4_addresses:
-            - address: 0.0.0.0
-            authentication_local_pre_share: true
-            authentication_remote_pre_share: true
-            keyring_local: VPN-KEYRING
-            dpd_interval: 20
-            dpd_retry: 3
-            dpd_query: on-demand
-        ipsec_transform_sets:
-        - name: VPN-TS
-          esp: esp-256-aes
-          esp_hmac: esp-sha256-hmac
-        ipsec_profiles:
-        - name: VPN-IPSEC
-          set_transform_set:
-          - VPN-TS
-          set_ikev2_profile: VPN-IKEV2
-      interfaces:
-        ethernets:
-        - type: GigabitEthernet
-          id: '2'
-          description: WAN to fw-central eth7
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.14.2
-            address_mask: 255.255.255.252
-        - type: GigabitEthernet
-          id: '3'
-          description: WAN to fw-east eth5
-          shutdown: false
-          cdp: true
-          ipv4:
-            address: 100.65.15.2
-            address_mask: 255.255.255.252
-        - type: GigabitEthernet
-          id: '4'
-          shutdown: true
-        - type: GigabitEthernet
-          id: '5'
-          shutdown: true
-        loopbacks:
-        - id: 0
-          description: Router ID
-          ipv4:
-            address: 10.255.1.9
-            address_mask: 255.255.255.255
-        - id: 10
-          description: site LAN
-          ipv4:
-            address: 192.168.18.1
-            address_mask: 255.255.255.0
-        tunnels:
-        - name: '14'
-          description: IPsec VTI to central-headend
-          ipv4:
-            address: 172.17.14.2
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.64.2.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '15'
-          description: IPsec VTI to east-headend
-          ipv4:
-            address: 172.17.15.2
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet3
-          tunnel_destination_ipv4: 100.64.1.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
-      routing:
-        bgp:
-          as_number: 65208
-          router_id: 10.255.1.9
-          log_neighbor_changes: true
-          neighbors:
-          - ip: 172.17.14.1
-            remote_as: 65204
-            description: eBGP central-headend (Tunnel14)
-          - ip: 172.17.15.1
-            remote_as: 65200
-            description: eBGP east-headend (Tunnel15)
-          address_family:
-            ipv4_unicast:
-              neighbors:
-              - ip: 172.17.14.1
-                activate: true
-              - ip: 172.17.15.1
-                activate: true
-              networks:
-              - network: 10.255.1.9
-                mask: 255.255.255.255
-              - network: 192.168.18.0
-        static_routes:
-        - prefix: 100.64.1.2
-          mask: 255.255.255.255
-          next_hops:
-          - ip: 100.65.15.1
-            name: via-fw-east
-        - prefix: 100.64.2.2
-          mask: 255.255.255.255
-          next_hops:
-          - ip: 100.65.14.1
-            name: via-fw-central
   - name: west-headend
     host: 10.2.0.17
     protocol: restconf
@@ -1550,7 +1153,6 @@ iosxe:
     - mss_west-headend_tunnel9
     - mss_west-headend_tunnel10
     - mss_west-headend_tunnel11
-    - mss_west-headend_tunnel13
     variables:
       router_id: 10.255.1.7
       bgp_asn: 65206
@@ -1583,10 +1185,6 @@ iosxe:
               ipv4_address: 100.65.11.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke4}
-            - name: spoke5
-              ipv4_address: 100.65.13.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke5}
             - name: spoke1
               ipv4_address: 100.65.8.2
               ipv4_mask: 255.255.255.255
@@ -1697,16 +1295,6 @@ iosxe:
           tunnel_destination_ipv4: 100.65.11.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
-        - name: '13'
-          description: IPsec VTI to spoke5
-          ipv4:
-            address: 172.17.13.1
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.13.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC
       routing:
         bgp:
           as_number: 65206
@@ -1719,9 +1307,6 @@ iosxe:
           - ip: 172.17.11.2
             remote_as: 65205
             description: eBGP spoke4 (Tunnel11)
-          - ip: 172.17.13.2
-            remote_as: 65207
-            description: eBGP spoke5 (Tunnel13)
           - ip: 172.17.8.2
             remote_as: 65201
             description: eBGP spoke1 (Tunnel8)
@@ -1734,8 +1319,6 @@ iosxe:
               - ip: 172.17.10.2
                 activate: true
               - ip: 172.17.11.2
-                activate: true
-              - ip: 172.17.13.2
                 activate: true
               - ip: 172.17.8.2
                 activate: true
@@ -1762,11 +1345,6 @@ iosxe:
           - ip: 100.64.3.1
             name: via-fw-west
         - prefix: 100.65.11.0
-          mask: 255.255.255.252
-          next_hops:
-          - ip: 100.64.3.1
-            name: via-fw-west
-        - prefix: 100.65.13.0
           mask: 255.255.255.252
           next_hops:
           - ip: 100.64.3.1

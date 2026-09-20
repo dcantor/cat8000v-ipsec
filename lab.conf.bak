@@ -16,10 +16,10 @@ OOB_NET="ipsec-oob"
 OOB_GATEWAY="10.2.0.1"
 
 # hub with one point-to-point WAN link per spoke (UDP tunnels between the VMs, no shared segment)
-declare -A ROLE=(    [east-headend]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke [central-headend]=hub [spoke4]=spoke [west-headend]=hub [spoke5]=spoke [fw-east]=firewall [fw-central]=firewall [fw-west]=firewall )
-declare -A MGMT_IP=( [east-headend]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 [central-headend]=10.2.0.15 [spoke4]=10.2.0.16 [west-headend]=10.2.0.17 [spoke5]=10.2.0.18 [fw-east]=10.2.0.21 [fw-central]=10.2.0.22 [fw-west]=10.2.0.23 )
-declare -A BGP_AS=(  [east-headend]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 [central-headend]=65204 [spoke4]=65205 [west-headend]=65206 [spoke5]=65207 [fw-east]=- [fw-central]=- [fw-west]=- )
-declare -A LAN=(     [east-headend]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 [central-headend]=192.168.14.0/24 [spoke4]=192.168.15.0/24 [west-headend]=192.168.16.0/24 [spoke5]=192.168.17.0/24 [fw-east]=- [fw-central]=- [fw-west]=- )
+declare -A ROLE=(    [east-headend]=hub          [spoke1]=spoke     [spoke2]=spoke [spoke3]=spoke [central-headend]=hub [spoke4]=spoke [west-headend]=hub [fw-east]=firewall [fw-central]=firewall [fw-west]=firewall [spoke6]=spoke )
+declare -A MGMT_IP=( [east-headend]=10.2.0.11    [spoke1]=10.2.0.12 [spoke2]=10.2.0.13 [spoke3]=10.2.0.14 [central-headend]=10.2.0.15 [spoke4]=10.2.0.16 [west-headend]=10.2.0.17 [fw-east]=10.2.0.21 [fw-central]=10.2.0.22 [fw-west]=10.2.0.23 [spoke6]=10.2.0.19 )
+declare -A BGP_AS=(  [east-headend]=65200        [spoke1]=65201     [spoke2]=65202 [spoke3]=65203 [central-headend]=65204 [spoke4]=65205 [west-headend]=65206 [fw-east]=- [fw-central]=- [fw-west]=- [spoke6]=65208 )
+declare -A LAN=(     [east-headend]=192.168.11.0/24 [spoke1]=192.168.12.0/24 [spoke2]=192.168.13.0/24 [spoke3]=192.168.13.0/24 [central-headend]=192.168.14.0/24 [spoke4]=192.168.15.0/24 [west-headend]=192.168.16.0/24 [fw-east]=- [fw-central]=- [fw-west]=- [spoke6]=192.168.18.0/24 )
 # WAN links: "node:port node:port  prefix"; first end gets .1, second .2. The first end anchors the UDP socket pair.
 # Firewalls are always the first end: eth1 <-> its headend's Gi2 (the headend's WAN / tunnel source), eth2.. <-> spokes.
 # (port = GigabitEthernet number on routers, ethN number on firewalls)
@@ -34,12 +34,12 @@ LINKS=(
   "fw-central:3 spoke2:3 100.65.5.0/30"
   "fw-central:4 spoke3:3 100.65.6.0/30"
   "fw-central:5 spoke4:2 100.65.7.0/30"
-  "fw-central:6 spoke5:2 100.65.12.0/30"
   "fw-west:2 spoke1:4 100.65.8.0/30"
   "fw-west:3 spoke2:4 100.65.9.0/30"
   "fw-west:4 spoke3:4 100.65.10.0/30"
   "fw-west:5 spoke4:3 100.65.11.0/30"
-  "fw-west:6 spoke5:3 100.65.13.0/30"
+  "fw-central:7 spoke6:2 100.65.14.0/30"
+  "fw-east:5 spoke6:3 100.65.15.0/30"
 )
 # IPsec VTI tunnels over those links: "hub-tunnel spoke tunnel-prefix"
 TUNNELS=(
@@ -54,12 +54,12 @@ TUNNELS=(
   "9 west-headend spoke2 172.17.9.0/30"
   "10 west-headend spoke3 172.17.10.0/30"
   "11 west-headend spoke4 172.17.11.0/30"
-  "12 central-headend spoke5 172.17.12.0/30"
-  "13 west-headend spoke5 172.17.13.0/30"
+  "14 central-headend spoke6 172.17.14.0/30"
+  "15 east-headend spoke6 172.17.15.0/30"
 )
 
-declare -A CONSOLE_PORT=( [east-headend]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [central-headend]=5205 [spoke4]=5206 [west-headend]=5207 [spoke5]=5208 [fw-east]=5209 [fw-central]=5210 [fw-west]=5211 )
-declare -A NODE_IDX=( [east-headend]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 [central-headend]=5 [spoke4]=6 [west-headend]=7 [spoke5]=8 [fw-east]=9 [fw-central]=10 [fw-west]=11 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
+declare -A CONSOLE_PORT=( [east-headend]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [central-headend]=5205 [spoke4]=5206 [west-headend]=5207 [fw-east]=5209 [fw-central]=5210 [fw-west]=5211 [spoke6]=5212 )
+declare -A NODE_IDX=( [east-headend]=1 [spoke1]=2 [spoke2]=3 [spoke3]=4 [central-headend]=5 [spoke4]=6 [west-headend]=7 [fw-east]=9 [fw-central]=10 [fw-west]=11 [spoke6]=12 )      # MACs 52:54:00:c7:<idx>:<port> (hex), UDP ports 22000+idx*100+port
 MAC_OUI="52:54:00:c7"
 UDP_BASE=22000
 # spoke-facing ports: the hub has Gi2..Gi(1+HUB_PORTS) so spokes can be added without touching the hub VM;
@@ -68,5 +68,5 @@ HUB_PORTS=8
 SPOKE_PORTS=4
 FW_PORTS=8        # eth1 = headend side, eth2..eth8 = up to 7 spokes per headend
 
-ROUTERS=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend spoke5)
-ALL_NODES=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend spoke5 fw-east fw-central fw-west)
+ROUTERS=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend spoke6)
+ALL_NODES=(east-headend spoke1 spoke2 spoke3 central-headend spoke4 west-headend fw-east fw-central fw-west spoke6)

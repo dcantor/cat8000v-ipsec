@@ -190,6 +190,23 @@
       "city": "Denver, CO",
       "lat": 39.7392,
       "lon": -104.9903
+    },
+    {
+      "name": "spoke6",
+      "mgmt_ip": "10.2.0.19",
+      "role": "spoke",
+      "asn": 65208,
+      "router_id": "10.255.1.9",
+      "lan": "192.168.18.0/24",
+      "comments": "",
+      "region": "East",
+      "site": "branch-6",
+      "site_code": "EA-6",
+      "contact": "noc-east@lab.local",
+      "city": "Philadelphia, PA",
+      "lat": 39.9526,
+      "lon": -75.1652,
+      "psk": "rtm2nX4u62MaFJwZpmhyVnC4"
     }
   ],
   "links": [
@@ -290,6 +307,20 @@
       "b": "spoke4",
       "b_port": 3,
       "prefix": "100.65.11.0/30"
+    },
+    {
+      "a": "fw-central",
+      "a_port": 7,
+      "b": "spoke6",
+      "b_port": 2,
+      "prefix": "100.65.14.0/30"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 5,
+      "b": "spoke6",
+      "b_port": 3,
+      "prefix": "100.65.15.0/30"
     }
   ],
   "tunnels": [
@@ -358,6 +389,18 @@
       "hub": "west-headend",
       "spoke": "spoke4",
       "prefix": "172.17.11.0/30"
+    },
+    {
+      "id": 14,
+      "hub": "central-headend",
+      "spoke": "spoke6",
+      "prefix": "172.17.14.0/30"
+    },
+    {
+      "id": 15,
+      "hub": "east-headend",
+      "spoke": "spoke6",
+      "prefix": "172.17.15.0/30"
     }
   ],
   "oob": {

@@ -26,6 +26,8 @@
   .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
   .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
   .num { text-align:right; font-variant-numeric:tabular-nums }
+  .disclaimer { background:#fff7ed; border:1px solid #f59e0b; color:#7c2d12; border-radius:8px; padding:12px 16px; margin-bottom:14px; font-weight:600 } .disclaimer small { display:block; font-weight:400; color:#9a3412; margin-top:4px }
+  #tools-table td, #tools-devices td { vertical-align:top } .cred { font-family:ui-monospace,Menlo,monospace; background:#f1f5f9; padding:1px 6px; border-radius:4px }
   .topo { font:12px system-ui,sans-serif } .topo .node rect { fill:#fff; stroke:#94a3b8; stroke-width:1.2; rx:8 } .topo .node.hub rect { stroke:#9d174d; fill:#fff5f8 } .topo .node.spoke rect { stroke:#1e40af; fill:#f5f8ff }
   .topo .node text { fill:var(--ink) } .topo .node .nm { font-weight:600; font-size:13px } .topo .node .sub { fill:var(--muted); font-size:11px }
   .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:#cbd5e1; stroke-dasharray:6 4 }
@@ -83,7 +85,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#tools" data-view="tools">Tools</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span></div>
 </header>
 <main>
@@ -180,6 +182,19 @@
 </section>
 </main>
 
+<main id="view-tools" hidden style="grid-template-columns:1fr">
+  <div class="disclaimer" id="tools-disclaimer"></div>
+  <div class="card">
+    <h2>Tools <small>the shared services around this lab, on the host's LAN address</small></h2>
+    <table id="tools-table"><thead><tr><th>Tool</th><th>URL</th><th>What it is</th><th>Login</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card">
+    <h2>Access to the routers and firewalls <small>management (OOB) network, reachable from the lab host</small></h2>
+    <div class="hint" id="tools-oob" style="margin-bottom:10px"></div>
+    <div class="wide"><table id="tools-devices" style="min-width:1100px"><thead><tr><th>Device</th><th>Role</th><th>Platform</th><th>Where</th><th>Management IP</th><th>SSH</th><th>Username</th><th>Password</th><th>RESTCONF / NETCONF</th><th>Serial console</th></tr></thead><tbody></tbody></table></div>
+    <div class="hint" id="tools-host" style="margin-top:10px"></div>
+  </div>
+</main>
 <main id="view-inventory" hidden style="grid-template-columns:1fr">
 <section>
   <div class="card">
@@ -529,11 +544,23 @@ $('rm-go').onclick = async () => {
 function showView() {
   const v = (location.hash || '#provision').slice(1);
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory';
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools';
   document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v));
-  if (v === 'inventory') loadInventory(false);
+  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools();
 }
 window.addEventListener('hashchange', showView);
+
+// ---- tools: URLs of the shared services and how to reach every lab VM (lab credentials, with the disclaimer) -------------
+async function loadTools() {
+  const t = await (await fetch('/api/tools')).json();
+  $('tools-disclaimer').innerHTML = `⚠ ${esc(t.disclaimer)}`;
+  $('tools-table').querySelector('tbody').innerHTML = t.tools.map(x => `<tr><td><b>${esc(x.name)}</b></td><td><a href="${esc(x.url)}" target="_blank">${esc(x.url)}</a></td><td>${esc(x.what)}</td><td>${esc(x.login)}</td></tr>`).join('');
+  $('tools-oob').innerHTML = `OOB network <span class="cred">${esc(t.oob.prefix)}</span> (gateway ${esc(t.oob.gateway)}) — ${esc(t.oob.note)}.`;
+  $('tools-devices').querySelector('tbody').innerHTML = t.devices.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.role)}</td><td>${esc(d.platform)}</td><td>${esc(d.city || d.site || '')}<div class="hint">${esc(d.region || '')} / ${esc(d.site || '')}${d.lan ? ' · LAN ' + esc(d.lan) : ''}${d.asn ? ' · AS ' + esc(d.asn) : ''}</div></td>
+      <td class="cred">${esc(d.mgmt_ip)}</td><td class="cred">${esc(d.ssh)}</td><td class="cred">${esc(d.username)}</td><td class="cred">${esc(d.password)}</td>
+      <td>${d.restconf ? `<a href="${esc(d.restconf)}" target="_blank">${esc(d.restconf)}</a><div class="hint">NETCONF ${esc(d.netconf)}</div>` : '<span class="hint">n/a (VyOS: SSH only)</span>'}</td><td class="cred">${esc(d.console)}</td></tr>`).join('');
+  $('tools-host').innerHTML = `Lab host: <span class="cred">${esc(t.host.ssh)}</span>, lab directory <span class="cred">${esc(t.host.lab_dir)}</span> — ${esc(t.host.console_note)}. RESTCONF / NETCONF use the same credentials as SSH (self-signed certificate).`;
+}
 
 // ---- inventory --------------------------------------------------------------
 const age = s => s == null ? '' : s >= 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor(s % 86400 / 3600) + 'h' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : Math.floor(s / 60) + 'm';

@@ -151,6 +151,16 @@ Every step is idempotent, so a failed run can simply be started again.
   (`ip ssh version 2`, vty `exec-timeout 10 0`, the transform-set key size…). Default-valued attributes were
   removed from the NAC baseline, and the apply step re-plans and re-asserts once if drift remains.
 
+### Tools page
+
+The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,
+Grafana and the IPsec dashboard, Prometheus, VictoriaMetrics, VictoriaLogs, Gitea, GitHub) and, below, how to reach every
+router and firewall of the lab: management IP, the SSH command, username / password, RESTCONF / NETCONF for the C8000v,
+the serial console (`./lab.sh console <node>` or the raw TCP port on the host). The device list comes from
+`lab-intent.json` + `lab.conf`, so a spoke added or removed through the portal shows up at once. The page opens with a
+"lab infrastructure — not production" disclaimer: the credentials are the lab defaults (`IOSXE_USERNAME/PASSWORD`,
+`VYOS_USERNAME/PASSWORD`, admin/admin and vyos/vyos unless overridden) and are shown for exactly that reason.
+
 ### Topology map
 
 The Inventory page starts with a rendered topology in one of two views:
