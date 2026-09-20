@@ -169,6 +169,29 @@ is generated). The run (`mode: rotate`, `POST /api/runs` with `spoke: {name, psk
 
 Measured: 4 min 23 s for a spoke with three headends; each tunnel is down for a few seconds.
 
+### Per-spoke actions: Re-home
+
+**Re-home…** on a spoke row changes the set of headends the branch connects to — e.g. after capacity moved. The dialog lists every
+headend with its region, tunnels, bandwidth and free slots (the current ones ticked); ticking / unticking shows the plan
+(`GET /api/spokes/{name}/rehome?hubs=a,b`): for a headend to **add**, the allocation (the spoke's next free WAN port, the
+firewall's / hub's next free port, WAN and tunnel /30s, tunnel id, capacity after); for one to **drop**, what is released.
+At least two headends must remain. The run (`mode: rehome`, `spoke: {name, hubs}`):
+
+1. validate — headends exist, capacity and free ports for the additions, allocations made
+2. intent + `lab.conf` — new links / tunnels appended, dropped ones removed (the spoke stays; `lab.conf` first, the intent
+   validator checks the wiring there)
+3. Nautobot clean-up of dropped links — peering, VPN tunnel and endpoints, both TunnelN interfaces and addresses, WAN
+   addresses and cable, the two /30 prefixes
+4. **only when a headend is added**: the spoke VM is redefined with the new WAN NIC pair and rebooted (≈5 minutes; every tunnel
+   of the spoke is down meanwhile). Dropping a headend never touches the VM.
+5. seed → render → firewalls (the firewall port gains / loses its address and policy) → terraform plan / apply: tunnels, WAN
+   interfaces and eBGP created on the new hub and the spoke, destroyed on the dropped one
+6. verify — every new tunnel IKEv2 READY with eBGP Established on its headend, no SA left on a dropped headend (5-minute limit)
+7. Golden Config (default on); Robot suites optional (default off). Resumable at any step.
+
+Measured: drop east from spoke2 — 6 min, no reboot, 11 Nautobot objects and 11 terraform resources removed; add east to spoke4
+— 13 min including the reboot, Tunnel12 up on east-headend.
+
 ### Tools page
 
 The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,

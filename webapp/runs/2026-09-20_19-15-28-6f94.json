@@ -1,0 +1,199 @@
+{
+ "id": "2026-09-20_19-15-28-6f94",
+ "mode": "rehome",
+ "status": "failed",
+ "started": 1789946128.817861,
+ "finished": 1789946130.535566,
+ "steps": [
+  {
+   "name": "rh_validate",
+   "title": "Validate the re-homing (headends to add / drop, allocations)",
+   "status": "success",
+   "started": 1789945809.4031951,
+   "finished": 1789945809.4347684,
+   "summary": "(from run 2026-09-20_19-12-01-9511) (from run 2026-09-20_19-11-09-f22e) (from run 2026-09-20_19-10-09-e820) spoke2: east-headend, central-headend, west-headend -> central-headend, west-headend; add none; drop east-headend (Tunnel2)"
+  },
+  {
+   "name": "rh_intent",
+   "title": "Intent + lab.conf: new links and tunnels, dropped ones removed",
+   "status": "success",
+   "started": 1789946128.8653374,
+   "finished": 1789946128.887657,
+   "summary": "intent: 10 tunnels; lab.conf: +0 / -1 link(s)"
+  },
+  {
+   "name": "rh_nautobot",
+   "title": "Nautobot: dropped links cleaned up",
+   "status": "failed",
+   "started": 1789946128.887892,
+   "finished": 1789946130.5353427,
+   "summary": "delete east-headend Tunnel2 address: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: east-headend 172.17.2.1/30 (AS 65200) (65556545-b019-4d1d-9044-564b13c013a8)\"}"
+  },
+  {
+   "name": "rh_vm",
+   "title": "Spoke VM redefined with the new WAN link and rebooted",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "firewalls",
+   "title": "VyOS firewalls rendered from Nautobot and pushed",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rh_verify",
+   "title": "Verify: new tunnels READY + eBGP Established, dropped ones gone",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "delete east-headend Tunnel2 address: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: east-headend 172.17.2.1/30 (AS 65200) (65556545-b019-4d1d-9044-564b13c013a8)\"}",
+ "options": {
+  "golden": true,
+  "test": false,
+  "delete_disk": true
+ },
+ "resume_of": "2026-09-20_19-12-01-9511",
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke2",
+  "hubs": [
+   "central-headend",
+   "west-headend"
+  ]
+ },
+ "removal": null,
+ "rehome": {
+  "name": "spoke2",
+  "mgmt_ip": "10.2.0.13",
+  "asn": 65202,
+  "current": [
+   "east-headend",
+   "central-headend",
+   "west-headend"
+  ],
+  "wanted": [
+   "central-headend",
+   "west-headend"
+  ],
+  "add": [],
+  "drop": [
+   {
+    "hub": "east-headend",
+    "firewall": "fw-east",
+    "edge": "fw-east",
+    "hub_port": 3,
+    "spoke_port": 2,
+    "tunnel_id": 2,
+    "tunnel_prefix": "172.17.2.0/30",
+    "wan_prefix": "100.65.2.0/30"
+   }
+  ],
+  "reboot": false,
+  "headroom": {
+   "central-headend": {
+    "tunnels": 4,
+    "tunnel_capacity": 50,
+    "tunnel_free": 46,
+    "tunnel_utilisation": 8.0,
+    "firewall": "fw-central",
+    "bandwidth_mbps": 50,
+    "bandwidth_per_tunnel_mbps": 8,
+    "bandwidth_used_mbps": 32,
+    "bandwidth_free_mbps": 18,
+    "bandwidth_utilisation": 64.0,
+    "bandwidth_tunnel_capacity": 6,
+    "binding": "bandwidth",
+    "aggregate_utilisation": 64.0,
+    "effective_capacity": 6,
+    "effective_free": 2
+   },
+   "west-headend": {
+    "tunnels": 4,
+    "tunnel_capacity": 50,
+    "tunnel_free": 46,
+    "tunnel_utilisation": 8.0,
+    "firewall": "fw-west",
+    "bandwidth_mbps": 90,
+    "bandwidth_per_tunnel_mbps": 8,
+    "bandwidth_used_mbps": 32,
+    "bandwidth_free_mbps": 58,
+    "bandwidth_utilisation": 35.6,
+    "bandwidth_tunnel_capacity": 11,
+    "binding": "bandwidth",
+    "aggregate_utilisation": 35.6,
+    "effective_capacity": 11,
+    "effective_free": 7
+   }
+  }
+ },
+ "log": [
+  {
+   "t": 1789946130.5353513,
+   "line": "!! delete east-headend Tunnel2 address: 409 {\"detail\":\"Unable to delete object. 1 dependent objects were found: east-headend 172.17.2.1/30 (AS 65200) (65556545-b019-4d1d-9044-564b13c013a8)\"}"
+  }
+ ]
+}

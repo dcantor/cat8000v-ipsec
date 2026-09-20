@@ -1,0 +1,136 @@
+{
+ "id": "2026-09-20_19-11-09-f22e",
+ "mode": "rehome",
+ "status": "failed",
+ "started": 1789945869.884867,
+ "finished": 1789945869.91504,
+ "steps": [
+  {
+   "name": "rh_validate",
+   "title": "Validate the re-homing (headends to add / drop, allocations)",
+   "status": "success",
+   "started": 1789945809.4031951,
+   "finished": 1789945809.4347684,
+   "summary": "(from run 2026-09-20_19-10-09-e820) spoke2: east-headend, central-headend, west-headend -> central-headend, west-headend; add none; drop east-headend (Tunnel2)"
+  },
+  {
+   "name": "rh_intent",
+   "title": "Intent + lab.conf: new links and tunnels, dropped ones removed",
+   "status": "failed",
+   "started": 1789945869.9143758,
+   "finished": 1789945869.9150298,
+   "summary": "'Run' object has no attribute 'rehome'"
+  },
+  {
+   "name": "rh_nautobot",
+   "title": "Nautobot: dropped links cleaned up",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rh_vm",
+   "title": "Spoke VM redefined with the new WAN link and rebooted",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "firewalls",
+   "title": "VyOS firewalls rendered from Nautobot and pushed",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rh_verify",
+   "title": "Verify: new tunnels READY + eBGP Established, dropped ones gone",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "'Run' object has no attribute 'rehome'",
+ "options": {
+  "golden": true,
+  "test": false,
+  "delete_disk": true
+ },
+ "resume_of": "2026-09-20_19-10-09-e820",
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke2",
+  "hubs": [
+   "central-headend",
+   "west-headend"
+  ]
+ },
+ "removal": null,
+ "rehome": null,
+ "log": [
+  {
+   "t": 1789945869.9150379,
+   "line": "!! 'Run' object has no attribute 'rehome'"
+  }
+ ]
+}

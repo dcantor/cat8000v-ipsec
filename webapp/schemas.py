@@ -137,11 +137,11 @@ class RemoveSpec(BaseModel):
 
 class RunRequest(BaseModel):
     """Start a pipeline run. Which body fields matter depends on `mode`."""
-    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate"] = Field(..., description=(
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome"] = Field(..., description=(
         "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
         "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`)"))
     intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
-    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key}")
+    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]}")
     hub: Optional[HubSpec] = None
     options: RunOptions = RunOptions()
 

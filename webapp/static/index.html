@@ -267,6 +267,17 @@
   </div>
 </div>
 
+<div class="modal-bg" id="rh" hidden>
+  <div class="modal" style="width:min(760px,100%)">
+    <h2 style="margin:0 0 12px;font-size:16px">Re-home <span id="rh-name"></span> <small class="hint">— choose the headends this branch should connect to (at least two)</small></h2>
+    <div id="rh-hubs" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="rh-body" style="margin-top:12px"></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="rh-golden" checked style="width:auto"> Golden Config backup + compliance afterwards</label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px"><input type="checkbox" id="rh-test" style="width:auto"> run the Robot Framework suites afterwards (≈15 min)</label>
+    <div id="rh-problems" class="problems" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:16px"><button type="button" id="rh-cancel">Cancel</button><button type="button" class="primary" id="rh-go" style="margin-left:auto" disabled>Re-home</button></div>
+  </div>
+</div>
 <div class="modal-bg" id="rot" hidden>
   <div class="modal" style="width:min(720px,100%)">
     <h2 style="margin:0 0 12px;font-size:16px">Rotate pre-shared key <span id="rot-name"></span></h2>
@@ -325,7 +336,7 @@ function fill(I) {
       <td><input data-dev="${i}" data-k="router_id" value="${d.router_id}"></td><td><input data-dev="${i}" data-k="lan" value="${d.lan}"></td>
       <td>${d.role === 'spoke' ? `<input data-dev="${i}" data-k="psk" type="password" value="${esc(d.psk || '')}" style="min-width:90px" title="pre-shared key (click to reveal)" onfocus="this.type='text'" onblur="this.type='password'">` : ''}</td>
       <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>
-      <td style="white-space:nowrap">${d.role === 'spoke' ? `<button type="button" class="rot" data-name="${esc(d.name)}" title="Generate a new pre-shared key and re-key every tunnel of this spoke">Rotate PSK…</button> <button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
+      <td style="white-space:nowrap">${d.role === 'spoke' ? `<button type="button" class="rot" data-name="${esc(d.name)}" title="Generate a new pre-shared key and re-key every tunnel of this spoke">Rotate PSK…</button> <button type="button" class="rh" data-name="${esc(d.name)}" title="Change which headends this spoke connects to">Re-home…</button> <button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
     tb.appendChild(tr);
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
@@ -341,6 +352,7 @@ function fill(I) {
   });
   tb.querySelectorAll('button.rm').forEach(b => b.onclick = () => openRemove(b.dataset.name));
   tb.querySelectorAll('button.rot').forEach(b => b.onclick = () => openRotate(b.dataset.name));
+  tb.querySelectorAll('button.rh').forEach(b => b.onclick = () => openRehome(b.dataset.name));
   // keep spoke labels in sync with hostname edits
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
     const d = I.devices[inp.dataset.dev];
@@ -395,7 +407,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove' || r.mode === 'rotate') load(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (['spoke', 'hub', 'remove', 'rotate', 'rehome'].includes(r.mode)) load(); }
 }
 
 function render(r) {
@@ -528,6 +540,39 @@ async function wizNext() {
 }
 $('add-spoke').onclick = openWizard; $('sp.region').onchange = regionChanged; $('sp.city').onchange = cityChanged; $('sp.city').oninput = cityChanged; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
 $('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
+
+// ---- re-home dialog ------------------------------------------------------------
+let rhName = null, rhCurrent = [];
+async function openRehome(name) {
+  rhName = name; $('rh-name').textContent = name; $('rh-problems').textContent = ''; $('rh-body').innerHTML = ''; $('rh-go').disabled = true; $('rh-hubs').innerHTML = 'loading…'; $('rh').hidden = false;
+  const [rot, sug] = await Promise.all([fetch(`/api/spokes/${encodeURIComponent(name)}/rotation`).then(r => r.json()), fetch('/api/spokes/suggest').then(r => r.json())]);
+  rhCurrent = (rot.details || {}).headends || [];
+  $('rh-hubs').innerHTML = sug.context.hubs.map(h => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" class="rh-hub" value="${esc(h.name)}" ${rhCurrent.includes(h.name) ? 'checked' : ''} style="width:auto">
+      <b>${esc(h.name)}</b> <span class="hint">${esc(h.region || '?')} · ${h.tunnels}/${h.capacity} tunnels${h.headroom && h.headroom.bandwidth_mbps ? ` · ${esc(h.headroom.firewall)} ${h.headroom.bandwidth_used_mbps}/${h.headroom.bandwidth_mbps} Mbps` : ''} · <b>${h.headroom ? h.headroom.effective_free : h.capacity - h.tunnels} free</b> · ports ${h.ports_free.map(p => 'Gi' + p).join(', ') || 'none'}${rhCurrent.includes(h.name) ? ' · <i>current</i>' : ''}</span></label>`).join('');
+  document.querySelectorAll('.rh-hub').forEach(c => c.onchange = rehomePlan);
+  $('rh-body').innerHTML = `<div class="hint">Currently homed on ${rhCurrent.map(esc).join(', ')}. Tick or untick headends to see the plan.</div>`;
+}
+async function rehomePlan() {
+  const hubs = [...document.querySelectorAll('.rh-hub:checked')].map(c => c.value); $('rh-problems').textContent = ''; $('rh-go').disabled = true;
+  const r = await (await fetch(`/api/spokes/${encodeURIComponent(rhName)}/rehome?hubs=${encodeURIComponent(hubs.join(','))}`)).json();
+  if (r.problems.length) { $('rh-body').innerHTML = ''; $('rh-problems').textContent = '• ' + r.problems.join('\n• '); return; }
+  const d = r.details; $('rh-go').disabled = false;
+  $('rh-body').innerHTML = `<div class="review">
+    ${d.add.map(l => `<div class="box"><h4>Add ${esc(l.hub)}${l.edge && l.edge !== l.hub ? ' (via firewall ' + esc(l.edge) + ')' : ''}</h4><dl>
+      <dt>WAN</dt><dd>${esc(l.edge || l.hub)} port ${l.hub_port} ↔ ${esc(d.name)} Gi${l.spoke_port} · ${esc(l.wan_prefix)}</dd><dt>Tunnel</dt><dd>Tunnel${l.tunnel_id} · ${esc(l.tunnel_prefix)} (${esc(l.hub_tunnel_ip)} / ${esc(l.spoke_tunnel_ip)}) · eBGP AS ${esc(d.asn)}</dd>
+      <dt>Capacity</dt><dd>${l.hub_tunnels + 1} tunnels on ${esc(l.hub)} after${d.headroom[l.hub] ? ` · ${d.headroom[l.hub].effective_free - 1} free slot(s) left (${esc(d.headroom[l.hub].binding)} bound)` : ''}</dd></dl></div>`).join('')}
+    ${d.drop.map(x => `<div class="box"><h4>Drop ${esc(x.hub)}${x.firewall ? ' (via ' + esc(x.firewall) + ')' : ''}</h4><dl>
+      <dt>Tunnel</dt><dd>Tunnel${x.tunnel_id} ${esc(x.tunnel_prefix)} destroyed on both ends (Terraform), eBGP neighbour removed</dd><dt>WAN</dt><dd>${esc(x.edge)} port ${x.hub_port} and ${esc(d.name)} Gi${x.spoke_port} freed, ${esc(x.wan_prefix || '-')} released</dd>
+      <dt>Nautobot</dt><dd>VPN tunnel ${esc(x.hub)}-${esc(d.name)}, endpoints, peering, addresses, cable, prefixes</dd></dl></div>`).join('')}
+    <div class="hint" style="margin-top:10px">${d.reboot ? `<b>The spoke reboots</b>: a new headend means a new WAN NIC pair, which needs the VM redefined (≈6 minutes; every tunnel of ${esc(d.name)} is down meanwhile). ` : 'No new NIC: the VM stays up; only the dropped tunnel goes down. '}Order: intent + lab.conf → Nautobot clean-up of dropped links → ${d.reboot ? 'VM rebuild + reboot → ' : ''}seed → render → firewalls → terraform plan/apply on hubs and spoke → verify → Golden Config.</div></div>`;
+}
+$('rh-cancel').onclick = () => { $('rh').hidden = true; };
+$('rh-go').onclick = async () => {
+  const hubs = [...document.querySelectorAll('.rh-hub:checked')].map(c => c.value);
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'rehome', spoke: { name: rhName, hubs }, options: { golden: $('rh-golden').checked, test: $('rh-test').checked } }) });
+  if (!r.ok) { const e = await r.json(); $('rh-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json(); $('rh').hidden = true; watch(run.id);
+};
 
 // ---- rotate-PSK dialog ---------------------------------------------------------
 let rotName = null;

@@ -36,6 +36,9 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
                "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
                "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
+               "rh_validate": "Validate the re-homing (headends to add / drop, allocations)", "rh_intent": "Intent + lab.conf: new links and tunnels, dropped ones removed",
+               "rh_nautobot": "Nautobot: dropped links cleaned up", "rh_vm": "Spoke VM redefined with the new WAN link and rebooted",
+               "rh_verify": "Verify: new tunnels READY + eBGP Established, dropped ones gone",
                "rot_validate": "Validate the rotation (spoke, tunnels, headends)", "rot_intent": "New pre-shared key into the intent",
                "rot_rekey": "Re-key: clear the spoke's IKEv2 SAs", "rot_verify": "Verify: IKEv2 READY and eBGP Established on every tunnel",
                "hub_validate": "Validate hub allocation", "hub_labconf": "Register the hub in lab.conf + day-0 config (links to every spoke)",
@@ -70,13 +73,17 @@ def nautobot_token():
 class Run(RunBase):
     LAB = "cat8000v-ipsec"
     STEP_TITLES = STEP_TITLES
-    EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal"}
+    EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal", "rehome": "rehome"}
 
     def __init__(self, mode, intent, options, spoke=None, resume_of=None):
         self.intent, self.spoke = intent, spoke
         self.site, self.vpn = intent.get("site", {}).get("name"), intent.get("vpn", {}).get("name"); self.change_ticket = intent.get("vpn", {}).get("change_ticket")
         self.devices = [d["name"] for d in intent.get("devices", [])]
         self.removal = (resume_of or {}).get("removal") if mode == "remove" and resume_of and any(st["name"] == "rm_validate" and st["status"] == "success" for st in resume_of["steps"]) else None
+        if mode == "rehome" and resume_of:
+            # the allocation made by the original run (recomputing it after the intent changed would see nothing to do); a run that
+            # failed before the intent step carries none, and then the plan is simply computed again
+            self.rehome = resume_of.get("rehome") or spokes.rehome_plan((spoke or {}).get("name", ""), (spoke or {}).get("hubs") or [])[1]
         if mode == "rotate" and resume_of:   # a resumed rotation: the intent already holds the new key, so its fingerprint is the "new" one
             _, det = spokes.rotation_plan((spoke or {}).get("name", "")); self.rotation = {**(det or {}), "new_fingerprint": (det or {}).get("fingerprint")}
         super().__init__(mode, options, resume_of, runs_dir=RUNS_DIR, cwd=LAB)
@@ -101,6 +108,13 @@ class Run(RunBase):
             steps = ["rm_validate", "rm_down", "rm_nautobot", "rm_intent", "nautobot", "render", "firewalls", "rm_state", "plan", "apply", "rm_vm"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
+            return steps
+        if self.mode == "rehome":
+            # the spoke stays; its set of headends changes: new link(s) + tunnel(s) allocated and wired (the VM is redefined and
+            # rebooted for a new NIC pair), dropped ones removed from the model — terraform then adds / destroys on hub and spoke
+            steps = ["rh_validate", "rh_intent", "rh_nautobot", "rh_vm", "nautobot", "render", "firewalls", "plan", "apply", "rh_verify"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", False): steps.append("test")
             return steps
         if self.mode == "rotate":
             # new key -> intent -> Nautobot (fingerprint + date on the tunnels) -> NaC render (group variable) -> terraform on the spoke
@@ -245,6 +259,62 @@ class Run(RunBase):
     def do_save(self, s):
         intent_mod.save(self.intent); (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
         s["summary"] = f"lab-intent.json written"; self.say(s["summary"])
+
+    # ---- re-homing steps ---------------------------------------------------------
+    def do_rh_validate(self, s):
+        if getattr(self, "rehome", None): self.say("resumed: keeping the allocation made by the original run"); det = self.rehome
+        else:
+            problems, det = spokes.rehome_plan(self.spoke["name"], self.spoke.get("hubs") or [])
+            if problems: raise RuntimeError("cannot re-home: " + "; ".join(problems))
+            self.rehome = det
+        s["summary"] = f"{det['name']}: {', '.join(det['current'])} -> {', '.join(det['wanted'])}; add " + (", ".join(f"{l['hub']} ({l.get('edge') or l['hub']} port {l['hub_port']} <-> Gi{l['spoke_port']}, Tunnel{l['tunnel_id']} {l['tunnel_prefix']})" for l in det["add"]) or "none") + \
+                       "; drop " + (", ".join(f"{d['hub']} (Tunnel{d['tunnel_id']})" for d in det["drop"]) or "none") + ("; the spoke reboots for the new NIC" if det["reboot"] else "")
+        self.say(s["summary"])
+
+    def do_rh_intent(self, s):
+        new = spokes.apply_rehome(self.rehome); self.intent = new; (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(new, indent=2))
+        s["summary"] = f"intent: {len(new['tunnels'])} tunnels; lab.conf: +{len(self.rehome['add'])} / -{len(self.rehome['drop'])} link(s)"
+
+    def do_rh_nautobot(self, s):
+        if not self.rehome["drop"]: s["summary"] = "nothing dropped"; return
+        n = 0
+        for d in self.rehome["drop"]:
+            done = spokes.remove_link_from_nautobot(d["hub"], self.spoke["name"], d["tunnel_id"], d["tunnel_prefix"], d["wan_prefix"], NAUTOBOT_URL, nautobot_token())
+            for x in done: self.say("  removed " + x)
+            n += len(done)
+        s["summary"] = f"{n} objects removed for {len(self.rehome['drop'])} dropped link(s)"
+
+    def do_rh_vm(self, s):
+        if not self.rehome["reboot"]: s["summary"] = "no new NIC: the VM stays up"; return
+        name = self.spoke["name"]
+        for cmd in (["./lab.sh", "down", name], ["./lab.sh", "rebuild", name], ["./lab.sh", "up", name]):
+            if self.sh(cmd, timeout=600): raise RuntimeError(f"{' '.join(cmd[1:])} failed")
+        self.say("booting (about 5 minutes until RESTCONF answers)")
+        if self.sh(["./lab.sh", "wait", name], timeout=1500): raise RuntimeError(f"{name} did not come back")
+        s["summary"] = f"{name} redefined with the new WAN link, rebooted, RESTCONF up"
+
+    def do_rh_verify(self, s):
+        det = self.rehome; hubs_ip = {d["name"]: d["mgmt_ip"] for d in self.intent["devices"]}
+        want = {(l["hub"], l["spoke_wan_ip"], l["spoke_tunnel_ip"]) for l in det["add"]}; gone = {(d["hub"], str(ipaddress.IPv4Network(d["wan_prefix"]).network_address + 2)) for d in det["drop"] if d.get("wan_prefix")}
+        deadline = time.time() + 300; missing = set(want); lingering = set(gone)
+        while time.time() < deadline and (missing or lingering):
+            time.sleep(15); still, linger = set(), set()
+            for hub in {w[0] for w in missing} | {g[0] for g in lingering}:
+                try:
+                    c = self._ios(hubs_ip[hub]); sa = c.send_command("show crypto ikev2 sa"); bgp = c.send_command("show bgp ipv4 unicast summary | begin Neighbor"); c.disconnect()
+                except Exception as e:  # noqa: BLE001
+                    self.say(f"{hub}: {e.__class__.__name__}, retrying"); still |= {w for w in missing if w[0] == hub}; linger |= {g for g in lingering if g[0] == hub}; continue
+                for w in missing:
+                    if w[0] != hub: continue
+                    ok = any(w[1] in l and "READY" in l for l in sa.splitlines()) and any(l.split() and l.split()[0] == w[2] and l.split()[-1].isdigit() for l in bgp.splitlines())
+                    if ok: self.say(f"{hub} <- {det['name']} ({w[1]}): IKEv2 READY, eBGP Established")
+                    else: still.add(w)
+                for g in lingering:
+                    if g[0] == hub and any(g[1] in l for l in sa.splitlines()): linger.add(g)
+                    elif g[0] == hub: self.say(f"{hub}: no SA left for {det['name']} ({g[1]})")
+            missing, lingering = still, linger
+        if missing or lingering: raise RuntimeError("not converged: " + "; ".join([f"{h} <- {ip} not up" for h, ip, _ in sorted(missing)] + [f"{h}: SA for {ip} still present" for h, ip in sorted(lingering)]))
+        s["summary"] = f"{det['name']} homed on {', '.join(det['wanted'])}: {len(want)} new tunnel(s) up, {len(gone)} dropped"
 
     # ---- PSK rotation steps -----------------------------------------------------
     def do_rot_validate(self, s):
@@ -568,6 +638,12 @@ def spoke_validate(body: dict):
     return {"problems": problems, "hub_changes": spokes.hub_changes(spec) if not problems else None}
 
 
+@app.get("/api/spokes/{name}/rehome", tags=["provisioning"], summary="Plan a re-homing: the spoke on a given set of headends (what is added, dropped, allocated)")
+def spoke_rehome(name: str = PathParam(..., examples=["spoke2"]), hubs: str = Query(..., description="comma-separated wanted headends (at least two)")):
+    problems, details = spokes.rehome_plan(name, [h for h in hubs.split(",") if h])
+    return {"problems": problems, "details": details}
+
+
 @app.get("/api/spokes/{name}/rotation", tags=["provisioning"], summary="Plan a PSK rotation for a spoke (what it touches; the current key's fingerprint)")
 def spoke_rotation(name: str = PathParam(..., examples=["spoke3"])):
     problems, details = spokes.rotation_plan(name)
@@ -592,15 +668,22 @@ def start_run(body: S.RunRequest):
     * **spoke** – `spoke` (a SpokeSpec): register in lab.conf, create + boot the VM, bootstrap, onboard, add to the intent, then the deploy pipeline (hub + spoke in one apply)
     * **hub** – `hub` (a HubSpec): same for a new headend, linked to every spoke
     * **remove** – `spoke.name`: power off, Nautobot clean-up, intent/lab.conf, terraform state, apply on the headends, delete the VM, Golden Config, tests
+    * **rehome** – `spoke.name` + `spoke.hubs` (the wanted set of headends, at least two): new links / tunnels allocated for the headends to
+      add (the spoke VM is redefined and rebooted for the new NIC), the dropped ones removed from intent, lab.conf and Nautobot, then
+      seed → render → firewalls → terraform on the hubs and the spoke → verify new tunnels up and dropped ones gone → Golden Config
     * **rotate** – `spoke.name` (optional `spoke.psk` to set a chosen key): new pre-shared key → intent → Nautobot (fingerprint + date on the
       tunnels) → NaC render → terraform on the spoke and every headend → clear the spoke's IKEv2 SAs → verify every tunnel is back
       (IKEv2 READY + eBGP Established) → Golden Config; tests optional (`options.test`, default off)
     """
     body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove or rotate")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate or rehome")
     spoke = None
-    if mode == "rotate":
+    if mode == "rehome":
+        spoke = body.get("spoke") or {}; problems, _ = spokes.rehome_plan(spoke.get("name", ""), spoke.get("hubs") or [])
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    elif mode == "rotate":
         spoke = body.get("spoke") or {}; problems, _ = spokes.rotation_plan(spoke.get("name", ""))
         if spoke.get("psk") and not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", spoke["psk"]): problems.append("pre-shared key: 8-64 characters, letters/digits/_.-")
         if problems: raise HTTPException(422, {"problems": problems})

@@ -139,6 +139,11 @@ DRAM, IKE sessions, bandwidth committed vs the firewall's. The **C8000v IPsec ov
 (http://192.168.50.231:3001/d/cat8000v-ipsec-overview) draws all of it; alerts `TunnelDown`, `HeadendUnreachable`,
 `HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run.
 
+### Day-2: re-home a branch
+**Re-home…** on a spoke row moves a branch onto a different set of headends (at least two): headends to add get a link, a
+tunnel and an eBGP session allocated and built (the spoke VM is redefined and rebooted for the new NIC), headends to drop have
+theirs destroyed and cleaned out of Nautobot; the run verifies the new tunnels up and the dropped ones gone. Proven both ways.
+
 ### Day-2: rotate a spoke's pre-shared key
 **Rotate PSK…** on a spoke row runs the whole chain: new key → intent → Nautobot (fingerprint + date on the tunnels, never the
 key) → NaC → terraform on the spoke and every headend → the spoke's IKEv2 SAs cleared → every tunnel verified READY with eBGP

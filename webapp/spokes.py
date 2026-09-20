@@ -399,3 +399,99 @@ def rotate_psk(name, new_key=None):
     dev["psk"] = key; dev["psk_rotated"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     intent_mod.save(I)
     return key, hashlib.sha256(key.encode()).hexdigest()[:12]
+
+
+# ---- re-homing (change the set of headends a branch connects to) --------------------------------------------------
+def rehome_plan(name, hubs):
+    """What re-homing a spoke onto `hubs` entails (also the validation): returns (problems, details). Headends to add get a
+    link + tunnel allocation (the spoke's next free WAN port, the hub's / firewall's next free port, WAN and tunnel /30s, tunnel
+    id); headends to drop list what is released. Adding a headend wires a new NIC pair, which needs the spoke VM redefined
+    and rebooted; dropping does not."""
+    f = facts(); C, I = f["C"], f["I"]; errs = []
+    dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None: return [f"{name} is not in the intent"], None
+    if dev["role"] != "spoke": return ["only spokes can be re-homed"], None
+    hub_names = [h["name"] for h in f["hubs"]]; hubs = [h for h in dict.fromkeys(hubs) if h]
+    for h in hubs:
+        if h not in hub_names: errs.append(f"{h} is not a headend")
+    if len(hubs) < MIN_HEADENDS: errs.append(f"a spoke keeps at least {MIN_HEADENDS} headends")
+    if errs: return errs, None
+    current = [t["hub"] for t in I["tunnels"] if t["spoke"] == name]
+    add = [h for h in hubs if h not in current]; drop = [h for h in current if h not in hubs]
+    if not add and not drop: errs.append(f"{name} is already homed on {', '.join(current)}")
+    for h in add:
+        cap = intent_mod.headend_capacity(I, h)
+        if cap.get("effective_free", 1) < 1: errs.append(f"{h} has no free tunnel slot ({cap.get('binding')} bound)")
+        if not (set(f["edge_ports"](h)) - f["ports_used"](f["edge_of"](h))): errs.append(f"{f['edge_of'](h)} has no free port for {name}")
+    if errs: return errs, None
+    used_spoke_ports = {(l["b_port"] if l["b"] == name else l["a_port"]) for l in I["links"] if name in (l["a"], l["b"])}
+    links = suggest_links(I, f, name, add, spoke_ports_taken=used_spoke_ports) if add else []
+    for l in links: l["spoke"] = name
+    drops = []
+    for t in (t for t in I["tunnels"] if t["spoke"] == name and t["hub"] in drop):
+        link, fw = intent_mod.wan_path(I, t["hub"], name); edge = fw or t["hub"]
+        drops.append({"hub": t["hub"], "firewall": fw, "edge": edge, "hub_port": (link["a_port"] if link["a"] == edge else link["b_port"]) if link else None,
+                      "spoke_port": (link["b_port"] if link["b"] == name else link["a_port"]) if link else None, "tunnel_id": int(t["id"]), "tunnel_prefix": t["prefix"], "wan_prefix": link["prefix"] if link else None})
+    return [], {"name": name, "mgmt_ip": dev["mgmt_ip"], "asn": dev["asn"], "current": current, "wanted": hubs, "add": links, "drop": drops, "reboot": bool(add),
+                "headroom": {h: intent_mod.headend_capacity(I, h) for h in hubs}}
+
+
+def apply_rehome(det):
+    """Intent + lab.conf: append the new links / tunnels, remove the dropped ones (the spoke itself stays)."""
+    I = intent_mod.load(); name = det["name"]
+    for l in det["add"]:
+        I["links"].append({"a": l.get("edge") or l["hub"], "a_port": int(l["hub_port"]), "b": name, "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
+        I["tunnels"].append({"id": int(l["tunnel_id"]), "hub": l["hub"], "spoke": name, "prefix": l["tunnel_prefix"]})
+    gone_hubs = {d["hub"] for d in det["drop"]}; gone_edges = {d["edge"] for d in det["drop"]}
+    I["tunnels"] = [t for t in I["tunnels"] if not (t["spoke"] == name and t["hub"] in gone_hubs)]
+    I["links"] = [l for l in I["links"] if not ({l["a"], l["b"]} & gone_edges and name in (l["a"], l["b"]))]
+    I["tunnels"].sort(key=lambda t: int(t["id"]))
+    # lab.conf first (the intent validator checks the links against the wiring there), then the intent
+    p = LAB / "lab.conf"; s = p.read_text(); shutil.copy(p, LAB / "lab.conf.bak")
+    for d in det["drop"]:
+        s = re.sub(rf'^\s*"{re.escape(d["edge"])}:{d["hub_port"]} {re.escape(name)}:{d["spoke_port"]} [^"\n]*"\n', "", s, flags=re.M)
+        s = re.sub(rf'^\s*"{d["tunnel_id"]} {re.escape(d["hub"])} {re.escape(name)} [^"\n]*"\n', "", s, flags=re.M)
+    if det["add"]:
+        s = _replace_array(s, "LINKS", [f"{l.get('edge') or l['hub']}:{l['hub_port']} {name}:{l['spoke_port']} {l['wan_prefix']}" for l in det["add"]], multiline=True)
+        s = _replace_array(s, "TUNNELS", [f"{l['tunnel_id']} {l['hub']} {name} {l['tunnel_prefix']}" for l in det["add"]], multiline=True)
+    p.write_text(s); subprocess.run(["bash", "-n", str(p)], check=True)
+    problems = intent_mod.validate(I)
+    if problems:
+        shutil.copy(LAB / "lab.conf.bak", p)   # roll the wiring back: nothing changed
+        raise RuntimeError("intent invalid after re-homing: " + "; ".join(problems))
+    intent_mod.save(I); return I
+
+
+def remove_link_from_nautobot(hub, spoke, tunnel_id, tunnel_prefix, wan_prefix, url, token):
+    """A dropped hub<->spoke link: the BGP peering over the tunnel, the VPN tunnel + both endpoints, both TunnelN interfaces with
+    their addresses, the WAN addresses and cable, the two /30 prefixes. The seed then re-describes the freed ports as unwired."""
+    import requests
+    H = {"Authorization": f"Token {token}", "Accept": "application/json"}; done = []
+    def get(path, **params):
+        r = requests.get(f"{url}/api/{path}", params=params, headers=H, timeout=60); r.raise_for_status(); return r.json().get("results", [])
+    def delete(path, what):
+        r = requests.delete(f"{url}/api/{path}", headers=H, timeout=60)
+        if r.status_code not in (204, 404): raise RuntimeError(f"delete {what}: {r.status_code} {r.text[:200]}")
+        if r.status_code == 204: done.append(what)
+    tun_addrs = {str(ip) for ip in ipaddress.IPv4Network(tunnel_prefix).hosts()}
+    for r in (spoke, hub):   # the peering over this tunnel: an endpoint on either router sources one of the tunnel /30 addresses
+        for dev in get("dcim/devices/", name=r):
+            for ri in get("plugins/bgp/routing-instances/", device=dev["id"]):
+                for ep in get("plugins/bgp/peer-endpoints/", routing_instance=ri["id"], depth=1):
+                    src = ((ep.get("source_ip") or {}).get("address") or "").split("/")[0]
+                    if src in tun_addrs and (ep.get("peering") or {}).get("id"): delete(f"plugins/bgp/peerings/{ep['peering']['id']}/", f"BGP peering over {tunnel_prefix}")
+    for t in get("vpn/vpn-tunnels/", name=f"{hub}-{spoke}"): delete(f"vpn/vpn-tunnels/{t['id']}/", f"VPN tunnel {t['name']}")
+    for r in (hub, spoke):
+        for itf in get("dcim/interfaces/", device=r, name=f"Tunnel{tunnel_id}"):
+            for ep in get("vpn/vpn-tunnel-endpoints/", tunnel_interface=itf["id"]): delete(f"vpn/vpn-tunnel-endpoints/{ep['id']}/", f"{r} tunnel endpoint")
+            for ip in get("ipam/ip-addresses/", interfaces=itf["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"{r} Tunnel{tunnel_id} address")
+            delete(f"dcim/interfaces/{itf['id']}/", f"{r}/Tunnel{tunnel_id}")
+    for pfx in (tunnel_prefix, wan_prefix):
+        for pf in (get("ipam/prefixes/", prefix=pfx) if pfx else []):
+            for ip in get("ipam/ip-addresses/", parent=pf["id"]):
+                for asg in get("ipam/ip-address-to-interface/", ip_address=ip["id"]):
+                    itf = get("dcim/interfaces/", id=asg["interface"]["id"], depth=1)
+                    if itf and itf[0].get("cable"): delete(f"dcim/cables/{itf[0]['cable']['id']}/", f"cable on {itf[0]['device']['name']}/{itf[0]['name']}")
+                delete(f"ipam/ip-addresses/{ip['id']}/", f"address {ip['address']}")
+            delete(f"ipam/prefixes/{pf['id']}/", f"prefix {pf['prefix']}")
+    return done

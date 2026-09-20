@@ -1,0 +1,203 @@
+{
+ "id": "2026-09-20_19-10-09-e820",
+ "mode": "rehome",
+ "status": "failed",
+ "started": 1789945809.3436718,
+ "finished": 1789945809.4505918,
+ "steps": [
+  {
+   "name": "rh_validate",
+   "title": "Validate the re-homing (headends to add / drop, allocations)",
+   "status": "success",
+   "started": 1789945809.4031951,
+   "finished": 1789945809.4347684,
+   "summary": "spoke2: east-headend, central-headend, west-headend -> central-headend, west-headend; add none; drop east-headend (Tunnel2)"
+  },
+  {
+   "name": "rh_intent",
+   "title": "Intent + lab.conf: new links and tunnels, dropped ones removed",
+   "status": "failed",
+   "started": 1789945809.4351003,
+   "finished": 1789945809.450562,
+   "summary": "intent invalid after re-homing: links must match the physical wiring: [('fw-central', 1, 'central-headend', 2), ('fw-central', 2, 'spoke1', 3), ('fw-central', 3, 'spoke2', 3), ('fw-central', 4, 'spoke3', 3), ('fw-central', 5, 'spoke4', 2), ('fw-east', 1, 'east-headend', 2), ('fw-east', 2, 'spoke1', 2), ('fw-east', 3, 'spoke2', 2), ('fw-east', 4, 'spoke3', 2), ('fw-west', 1, 'west-headend', 2), ('fw-west', 2, 'spoke1', 4), ('fw-west', 3, 'spoke2', 4), ('fw-west', 4, 'spoke3', 4), ('fw-west', 5, 'spoke4', 3)]"
+  },
+  {
+   "name": "rh_nautobot",
+   "title": "Nautobot: dropped links cleaned up",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rh_vm",
+   "title": "Spoke VM redefined with the new WAN link and rebooted",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "firewalls",
+   "title": "VyOS firewalls rendered from Nautobot and pushed",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "rh_verify",
+   "title": "Verify: new tunnels READY + eBGP Established, dropped ones gone",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "intent invalid after re-homing: links must match the physical wiring: [('fw-central', 1, 'central-headend', 2), ('fw-central', 2, 'spoke1', 3), ('fw-central', 3, 'spoke2', 3), ('fw-central', 4, 'spoke3', 3), ('fw-central', 5, 'spoke4', 2), ('fw-east', 1, 'east-headend', 2), ('fw-east', 2, 'spoke1', 2), ('fw-east', 3, 'spoke2', 2), ('fw-east', 4, 'spoke3', 2), ('fw-west', 1, 'west-headend', 2), ('fw-west', 2, 'spoke1', 4), ('fw-west', 3, 'spoke2', 4), ('fw-west', 4, 'spoke3', 4), ('fw-west', 5, 'spoke4', 3)]",
+ "options": {
+  "golden": true,
+  "test": false,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke2",
+  "hubs": [
+   "central-headend",
+   "west-headend"
+  ]
+ },
+ "removal": null,
+ "rehome": {
+  "name": "spoke2",
+  "mgmt_ip": "10.2.0.13",
+  "asn": 65202,
+  "current": [
+   "east-headend",
+   "central-headend",
+   "west-headend"
+  ],
+  "wanted": [
+   "central-headend",
+   "west-headend"
+  ],
+  "add": [],
+  "drop": [
+   {
+    "hub": "east-headend",
+    "firewall": "fw-east",
+    "edge": "fw-east",
+    "hub_port": 3,
+    "spoke_port": 2,
+    "tunnel_id": 2,
+    "tunnel_prefix": "172.17.2.0/30",
+    "wan_prefix": "100.65.2.0/30"
+   }
+  ],
+  "reboot": false,
+  "headroom": {
+   "central-headend": {
+    "tunnels": 4,
+    "tunnel_capacity": 50,
+    "tunnel_free": 46,
+    "tunnel_utilisation": 8.0,
+    "firewall": "fw-central",
+    "bandwidth_mbps": 50,
+    "bandwidth_per_tunnel_mbps": 8,
+    "bandwidth_used_mbps": 32,
+    "bandwidth_free_mbps": 18,
+    "bandwidth_utilisation": 64.0,
+    "bandwidth_tunnel_capacity": 6,
+    "binding": "bandwidth",
+    "aggregate_utilisation": 64.0,
+    "effective_capacity": 6,
+    "effective_free": 2
+   },
+   "west-headend": {
+    "tunnels": 4,
+    "tunnel_capacity": 50,
+    "tunnel_free": 46,
+    "tunnel_utilisation": 8.0,
+    "firewall": "fw-west",
+    "bandwidth_mbps": 90,
+    "bandwidth_per_tunnel_mbps": 8,
+    "bandwidth_used_mbps": 32,
+    "bandwidth_free_mbps": 58,
+    "bandwidth_utilisation": 35.6,
+    "bandwidth_tunnel_capacity": 11,
+    "binding": "bandwidth",
+    "aggregate_utilisation": 35.6,
+    "effective_capacity": 11,
+    "effective_free": 7
+   }
+  }
+ },
+ "log": [
+  {
+   "t": 1789945809.434765,
+   "line": "spoke2: east-headend, central-headend, west-headend -> central-headend, west-headend; add none; drop east-headend (Tunnel2)"
+  },
+  {
+   "t": 1789945809.4505737,
+   "line": "!! intent invalid after re-homing: links must match the physical wiring: [('fw-central', 1, 'central-headend', 2), ('fw-central', 2, 'spoke1', 3), ('fw-central', 3, 'spoke2', 3), ('fw-central', 4, 'spoke3', 3), ('fw-central', 5, 'spoke4', 2), ('fw-east', 1, 'east-headend', 2), ('fw-east', 2, 'spoke1', 2), ('fw-east', 3, 'spoke2', 2), ('fw-east', 4, 'spoke3', 2), ('fw-west', 1, 'west-headend', 2), ('fw-west', 2, 'spoke1', 4), ('fw-west', 3, 'spoke2', 4), ('fw-west', 4, 'spoke3', 4), ('fw-west', 5, 'spoke4', 3)]"
+  }
+ ]
+}
