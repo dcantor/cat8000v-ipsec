@@ -151,6 +151,24 @@ Every step is idempotent, so a failed run can simply be started again.
   (`ip ssh version 2`, vty `exec-timeout 10 0`, the transform-set key size…). Default-valued attributes were
   removed from the NAC baseline, and the apply step re-plans and re-asserts once if drift remains.
 
+### Per-spoke actions: Rotate PSK
+
+Every spoke row on the Provision page has **Rotate PSK…** next to **Remove…**. The dialog shows the current key's
+fingerprint and rotation date, the tunnels and headends involved, and takes an optional chosen key (else a 24-character one
+is generated). The run (`mode: rotate`, `POST /api/runs` with `spoke: {name, psk?}`; plan with `GET /api/spokes/{name}/rotation`):
+
+1. validate — the spoke, its tunnels, its headends
+2. new key → `lab-intent.json` (with `psk_rotated`); the key is never logged
+3. Nautobot seed — the key stays out of Nautobot; each of the spoke's VPN tunnels gets the custom fields `psk_fingerprint`
+   (sha256, first 12 hex) and `psk_rotated`, so the model records which key generation runs
+4. NaC render (the key is a group variable) → terraform plan / apply on the spoke **and every headend's keyring**, saved
+5. re-key: `clear crypto ikev2 sa` on the spoke, so the tunnels re-authenticate with the new key now instead of at SA lifetime
+6. verify: every tunnel of the spoke back with IKEv2 READY on its headend and eBGP Established, within 4 minutes — else the run
+   fails (the old key is gone, so this is loud on purpose)
+7. Golden Config backup / compliance (default on); the Robot suites optional (default off)
+
+Measured: 4 min 23 s for a spoke with three headends; each tunnel is down for a few seconds.
+
 ### Tools page
 
 The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,

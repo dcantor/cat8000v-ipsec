@@ -139,6 +139,11 @@ DRAM, IKE sessions, bandwidth committed vs the firewall's. The **C8000v IPsec ov
 (http://192.168.50.231:3001/d/cat8000v-ipsec-overview) draws all of it; alerts `TunnelDown`, `HeadendUnreachable`,
 `HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run.
 
+### Day-2: rotate a spoke's pre-shared key
+**Rotate PSK…** on a spoke row runs the whole chain: new key → intent → Nautobot (fingerprint + date on the tunnels, never the
+key) → NaC → terraform on the spoke and every headend → the spoke's IKEv2 SAs cleared → every tunnel verified READY with eBGP
+Established → Golden Config. About four minutes; the tunnels blip for seconds.
+
 ## Nautobot: the source of truth
 
 Nothing about the topology is hard-coded in templates: the renderer and the Golden Config template

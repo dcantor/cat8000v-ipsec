@@ -11,7 +11,7 @@ runs the pipeline behind the scenes and streams its progress:
 Runs are executed one at a time in a background thread; state is kept in memory and mirrored to runs/<id>.json.
 Start with ./lab.sh webapp (uvicorn on 0.0.0.0:8090).
 """
-import json, os, re, subprocess, sys, time
+import ipaddress, json, os, re, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
 from labportal import RunBase, RunRegistry, install_runs_api, metric_line, run_metrics, exposition, metrics_generated
@@ -36,6 +36,8 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "spoke_validate": "Validate spoke allocation", "spoke_labconf": "Register the spoke in lab.conf + day-0 config",
                "spoke_vm": "Create and boot the spoke VM", "spoke_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)",
                "spoke_onboard": "Onboard the spoke into Nautobot", "spoke_intent": "Add the spoke to the intent (hub link, tunnel, BGP)",
+               "rot_validate": "Validate the rotation (spoke, tunnels, headends)", "rot_intent": "New pre-shared key into the intent",
+               "rot_rekey": "Re-key: clear the spoke's IKEv2 SAs", "rot_verify": "Verify: IKEv2 READY and eBGP Established on every tunnel",
                "hub_validate": "Validate hub allocation", "hub_labconf": "Register the hub in lab.conf + day-0 config (links to every spoke)",
                "hub_vm": "Create and boot the hub VM", "hub_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)", "hub_onboard": "Onboard the hub into Nautobot",
                "hub_intent": "Add the hub, its links and tunnels to the intent",
@@ -75,6 +77,8 @@ class Run(RunBase):
         self.site, self.vpn = intent.get("site", {}).get("name"), intent.get("vpn", {}).get("name"); self.change_ticket = intent.get("vpn", {}).get("change_ticket")
         self.devices = [d["name"] for d in intent.get("devices", [])]
         self.removal = (resume_of or {}).get("removal") if mode == "remove" and resume_of and any(st["name"] == "rm_validate" and st["status"] == "success" for st in resume_of["steps"]) else None
+        if mode == "rotate" and resume_of:   # a resumed rotation: the intent already holds the new key, so its fingerprint is the "new" one
+            _, det = spokes.rotation_plan((spoke or {}).get("name", "")); self.rotation = {**(det or {}), "new_fingerprint": (det or {}).get("fingerprint")}
         super().__init__(mode, options, resume_of, runs_dir=RUNS_DIR, cwd=LAB)
 
     def sh(self, cmd, cwd=None, env=None, timeout=3600, check=False):   # this portal inspects exit codes itself (terraform's -detailed-exitcode)
@@ -97,6 +101,13 @@ class Run(RunBase):
             steps = ["rm_validate", "rm_down", "rm_nautobot", "rm_intent", "nautobot", "render", "firewalls", "rm_state", "plan", "apply", "rm_vm"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", True): steps.append("test")
+            return steps
+        if self.mode == "rotate":
+            # new key -> intent -> Nautobot (fingerprint + date on the tunnels) -> NaC render (group variable) -> terraform on the spoke
+            # and every headend's keyring -> clear the spoke's SAs so the new key is used now -> every tunnel back up
+            steps = ["rot_validate", "rot_intent", "nautobot", "render", "plan", "apply", "rot_rekey", "rot_verify"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", False): steps.append("test")
             return steps
         if self.mode == "plan": return ["validate", "save", "nautobot", "render", "plan"]
         steps = ["validate", "save", "nautobot", "render", "firewalls", "plan", "apply"]
@@ -234,6 +245,57 @@ class Run(RunBase):
     def do_save(self, s):
         intent_mod.save(self.intent); (RUNS_DIR / f"{self.id}.intent.json").write_text(json.dumps(self.intent, indent=2))
         s["summary"] = f"lab-intent.json written"; self.say(s["summary"])
+
+    # ---- PSK rotation steps -----------------------------------------------------
+    def do_rot_validate(self, s):
+        problems, det = spokes.rotation_plan(self.spoke["name"])
+        if problems: raise RuntimeError("cannot rotate: " + "; ".join(problems))
+        self.rotation = det
+        s["summary"] = f"{det['name']}: {len(det['tunnels'])} tunnel(s) to {', '.join(det['headends'])}; current key fingerprint {det['fingerprint']}" + (f", rotated {det['rotated']}" if det.get("rotated") else "")
+        self.say(s["summary"])
+
+    def do_rot_intent(self, s):
+        key, fp = spokes.rotate_psk(self.spoke["name"], (self.spoke.get("psk") or None))
+        self.rotation["new_fingerprint"] = fp
+        s["summary"] = f"new {len(key)}-character key for {self.spoke['name']} (fingerprint {fp}) written to lab-intent.json; the key itself is never logged"
+        self.say(s["summary"])
+
+    def _ios(self, host):
+        from netmiko import ConnectHandler
+        return ConnectHandler(device_type="cisco_xe", host=host, username=os.environ.get("IOSXE_USERNAME", "admin"), password=os.environ.get("IOSXE_PASSWORD", "admin"), fast_cli=False)
+
+    def do_rot_rekey(self, s):
+        """IKEv2 keeps an established SA until its lifetime ends: clear the spoke's SAs so every tunnel re-authenticates with the new key now."""
+        det = self.rotation; c = self._ios(det["mgmt_ip"])
+        try:
+            before = c.send_command("show crypto ikev2 sa | count READY"); c.send_command("clear crypto ikev2 sa", read_timeout=60)
+            self.say(f"{det['name']}: cleared IKEv2 SAs ({before.strip()})")
+        finally: c.disconnect()
+        s["summary"] = f"{det['name']}: IKEv2 SAs cleared, tunnels re-authenticating with the new key"
+
+    def do_rot_verify(self, s):
+        """Every tunnel of the spoke must come back with the new key: IKEv2 SA READY on the headend for the spoke's WAN address and the
+        eBGP session over the tunnel Established — within 4 minutes, else the run fails (the old key is gone from the intent, so a
+        failed verification is a page-worthy state, not a silent one)."""
+        det = self.rotation; want = {(t["hub"], t["spoke_src_ip"], str(ipaddress.IPv4Network(t["tunnel_prefix"]).network_address + 2)) for t in det["tunnels"]}
+        deadline = time.time() + 240; missing = set(want)
+        while time.time() < deadline and missing:
+            time.sleep(15); still = set()
+            for hub in det["headends"]:
+                hub_ip = next(d["mgmt_ip"] for d in self.intent["devices"] if d["name"] == hub)
+                try:
+                    c = self._ios(hub_ip); sa = c.send_command("show crypto ikev2 sa"); bgp = c.send_command("show bgp ipv4 unicast summary | begin Neighbor"); c.disconnect()
+                except Exception as e:  # noqa: BLE001
+                    self.say(f"{hub}: {e.__class__.__name__}, retrying"); still |= {w for w in missing if w[0] == hub}; continue
+                for w in missing:
+                    if w[0] != hub: continue
+                    ike_ok = any(w[1] in l and "READY" in l for l in sa.splitlines())
+                    bgp_ok = any(l.split() and l.split()[0] == w[2] and l.split()[-1].isdigit() for l in bgp.splitlines())
+                    if not (ike_ok and bgp_ok): still.add(w)
+                    else: self.say(f"{hub} <- {det['name']} ({w[1]}): IKEv2 READY, eBGP Established")
+            missing = still
+        if missing: raise RuntimeError("not back with the new key: " + "; ".join(f"{h} <- {ip}" for h, ip, _ in sorted(missing)))
+        s["summary"] = f"all {len(want)} tunnels of {det['name']} re-keyed: IKEv2 READY + eBGP Established on {', '.join(det['headends'])} (key {det['new_fingerprint']})"
 
     def do_nautobot(self, s):
         rc = self.sh(["./lab.sh", "nautobot", "seed"])
@@ -506,6 +568,12 @@ def spoke_validate(body: dict):
     return {"problems": problems, "hub_changes": spokes.hub_changes(spec) if not problems else None}
 
 
+@app.get("/api/spokes/{name}/rotation", tags=["provisioning"], summary="Plan a PSK rotation for a spoke (what it touches; the current key's fingerprint)")
+def spoke_rotation(name: str = PathParam(..., examples=["spoke3"])):
+    problems, details = spokes.rotation_plan(name)
+    return {"problems": problems, "details": details}
+
+
 @app.get("/api/spokes/{name}/removal", tags=["provisioning"], summary="Plan a spoke's removal", response_model=S.RemovalPlan)
 def spoke_removal(name: str = PathParam(..., description="spoke hostname", examples=["spoke5"])):
     """What decommissioning releases (LAN, router-id, WAN/tunnel prefixes) and what each headend loses (port, TunnelN, BGP neighbour), with capacity after."""
@@ -524,12 +592,20 @@ def start_run(body: S.RunRequest):
     * **spoke** – `spoke` (a SpokeSpec): register in lab.conf, create + boot the VM, bootstrap, onboard, add to the intent, then the deploy pipeline (hub + spoke in one apply)
     * **hub** – `hub` (a HubSpec): same for a new headend, linked to every spoke
     * **remove** – `spoke.name`: power off, Nautobot clean-up, intent/lab.conf, terraform state, apply on the headends, delete the VM, Golden Config, tests
+    * **rotate** – `spoke.name` (optional `spoke.psk` to set a chosen key): new pre-shared key → intent → Nautobot (fingerprint + date on the
+      tunnels) → NaC render → terraform on the spoke and every headend → clear the spoke's IKEv2 SAs → verify every tunnel is back
+      (IKEv2 READY + eBGP Established) → Golden Config; tests optional (`options.test`, default off)
     """
     body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub or remove")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove or rotate")
     spoke = None
-    if mode == "remove":
+    if mode == "rotate":
+        spoke = body.get("spoke") or {}; problems, _ = spokes.rotation_plan(spoke.get("name", ""))
+        if spoke.get("psk") and not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", spoke["psk"]): problems.append("pre-shared key: 8-64 characters, letters/digits/_.-")
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    elif mode == "remove":
         spoke = body.get("spoke") or {}; problems, _ = spokes.removal_plan(spoke.get("name", ""))
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()

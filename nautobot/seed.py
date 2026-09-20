@@ -11,6 +11,7 @@ prefixes), config context (OOB, domain), one AS per site and eBGP peerings over 
 Usage: NAUTOBOT_TOKEN=... seed.py [--intent file.json]
 """
 import argparse, ipaddress, os, subprocess, sys
+import hashlib
 from pathlib import Path
 import pynautobot, requests
 sys.path.insert(0, str(Path(__file__).resolve().parent)); import intent as intent_mod   # noqa: E402
@@ -82,6 +83,13 @@ for key, label, ctypes in (("site_code", "Site code", ["dcim.location"]), ("cont
 if "vpn_tunnel_capacity" not in cf:   # the headend constraint: how many tunnels a hub may terminate (inventory page + deploy-time check)
     cf["vpn_tunnel_capacity"] = nb.extras.custom_fields.create(key="vpn_tunnel_capacity", label="VPN tunnel capacity", type="integer", content_types=["dcim.device"],
                                                                grouping="VPN", description="Maximum IPsec tunnels this headend may terminate"); created.append("custom-field:vpn_tunnel_capacity")
+# the pre-shared key never enters Nautobot; what does is its fingerprint (sha256, first 12 hex) and the rotation date on every
+# tunnel of the spoke, so the model says which key generation a tunnel runs and the portal's Rotate PSK action leaves a trace
+for key, label, typ, desc in (("psk_fingerprint", "PSK fingerprint", "text", "sha256 of the spoke's pre-shared key, first 12 hex digits (the key itself lives in lab-intent.json / NaC variables)"),
+                              ("psk_rotated", "PSK rotated", "text", "when the spoke's pre-shared key was last generated or rotated (ISO date-time)")):
+    if key not in cf:
+        cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=["vpn.vpntunnel"], grouping="VPN", description=desc); created.append(f"custom-field:{key}")
+        cf[key].update({"description": desc})   # a second save: Nautobot's per-content-type field cache ignored a field created moments earlier (values were dropped silently)
 CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 if "firewall_bandwidth_mbps" not in cf:   # the second headend constraint: the bandwidth of the firewall in front of it
     cf["firewall_bandwidth_mbps"] = nb.extras.custom_fields.create(key="firewall_bandwidth_mbps", label="Firewall bandwidth (Mbps)", type="integer", content_types=["dcim.device"],
@@ -301,6 +309,7 @@ for t in TUNNELS:
                                                                                     vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id)
     ensure(tun, name=f"{hub}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel",
            endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {hub} <-> {spoke} ({pfx})")
+    ensure_cf(tun, psk_fingerprint=hashlib.sha256(DEV[spoke]["psk"].encode()).hexdigest()[:12], psk_rotated=DEV[spoke].get("psk_rotated", ""))
     wanted_tunnels.add(tun.id)
 for old in nb.vpn.vpn_tunnels.filter(vpn=vpn.id):
     if old.id not in wanted_tunnels: old.delete(); created.append(f"removed stale VPN tunnel {old.name}")

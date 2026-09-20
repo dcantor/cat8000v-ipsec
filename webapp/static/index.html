@@ -267,6 +267,17 @@
   </div>
 </div>
 
+<div class="modal-bg" id="rot" hidden>
+  <div class="modal" style="width:min(720px,100%)">
+    <h2 style="margin:0 0 12px;font-size:16px">Rotate pre-shared key <span id="rot-name"></span></h2>
+    <div id="rot-body"></div>
+    <div style="margin-top:12px"><label>Key <span class="hint">(leave empty for a generated 24-character key; never shown again after the run)</span></label><input id="rot-key" autocomplete="off" placeholder="generated"></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="rot-golden" checked style="width:auto"> Golden Config backup + compliance afterwards</label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px"><input type="checkbox" id="rot-test" style="width:auto"> run the Robot Framework suites afterwards (≈15 min)</label>
+    <div id="rot-problems" class="problems" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:16px"><button type="button" id="rot-cancel">Cancel</button><button type="button" class="primary" id="rot-go" style="margin-left:auto">Rotate key</button></div>
+  </div>
+</div>
 <div class="modal-bg" id="rm" hidden>
   <div class="modal" style="width:min(720px,100%)">
     <h2 style="margin:0 0 12px;font-size:16px">Remove spoke <span id="rm-name"></span></h2>
@@ -314,7 +325,7 @@ function fill(I) {
       <td><input data-dev="${i}" data-k="router_id" value="${d.router_id}"></td><td><input data-dev="${i}" data-k="lan" value="${d.lan}"></td>
       <td>${d.role === 'spoke' ? `<input data-dev="${i}" data-k="psk" type="password" value="${esc(d.psk || '')}" style="min-width:90px" title="pre-shared key (click to reveal)" onfocus="this.type='text'" onblur="this.type='password'">` : ''}</td>
       <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>
-      <td>${d.role === 'spoke' ? `<button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
+      <td style="white-space:nowrap">${d.role === 'spoke' ? `<button type="button" class="rot" data-name="${esc(d.name)}" title="Generate a new pre-shared key and re-key every tunnel of this spoke">Rotate PSK…</button> <button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
     tb.appendChild(tr);
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
@@ -329,6 +340,7 @@ function fill(I) {
     tt.appendChild(tr);
   });
   tb.querySelectorAll('button.rm').forEach(b => b.onclick = () => openRemove(b.dataset.name));
+  tb.querySelectorAll('button.rot').forEach(b => b.onclick = () => openRotate(b.dataset.name));
   // keep spoke labels in sync with hostname edits
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
     const d = I.devices[inp.dataset.dev];
@@ -383,7 +395,7 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove') load(); }
+  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (r.mode === 'spoke' || r.mode === 'hub' || r.mode === 'remove' || r.mode === 'rotate') load(); }
 }
 
 function render(r) {
@@ -516,6 +528,27 @@ async function wizNext() {
 }
 $('add-spoke').onclick = openWizard; $('sp.region').onchange = regionChanged; $('sp.city').onchange = cityChanged; $('sp.city').oninput = cityChanged; $('wiz-cancel').onclick = () => { $('wiz').hidden = true; };
 $('wiz-back').onclick = () => { wizStep = Math.max(1, wizStep - 1); showWiz(); }; $('wiz-next').onclick = wizNext;
+
+// ---- rotate-PSK dialog ---------------------------------------------------------
+let rotName = null;
+async function openRotate(name) {
+  rotName = name; $('rot-name').textContent = name; $('rot-problems').textContent = ''; $('rot-key').value = ''; $('rot-body').innerHTML = 'loading…'; $('rot').hidden = false;
+  const r = await (await fetch(`/api/spokes/${encodeURIComponent(name)}/rotation`)).json();
+  if (r.problems.length) { $('rot-body').innerHTML = ''; $('rot-problems').textContent = '• ' + r.problems.join('\n• '); $('rot-go').disabled = true; return; }
+  const d = r.details; $('rot-go').disabled = false;
+  $('rot-body').innerHTML = `<div class="review"><div class="box"><h4>Spoke ${esc(d.name)} (${esc(d.mgmt_ip)})</h4><dl>
+      <dt>Current key</dt><dd>fingerprint <span class="cred">${esc(d.fingerprint)}</span>${d.rotated ? ', rotated ' + esc(d.rotated) : ' (never rotated)'}</dd>
+      <dt>Tunnels</dt><dd>${d.tunnels.map(t => `Tunnel${t.tunnel_id} → ${esc(t.hub)} (from ${esc(t.spoke_src_ip)})`).join('<br>')}</dd>
+      <dt>Re-keyed on</dt><dd>${esc(d.name)} and the keyrings of ${d.headends.map(esc).join(', ')} (${d.headends.length + 1} routers, one Terraform apply)</dd></dl></div>
+    <div class="hint" style="margin-top:10px">Order: new key → lab-intent.json → Nautobot (fingerprint + date on the tunnels; the key itself never enters Nautobot) → NaC render → terraform plan/apply → clear the spoke's IKEv2 SAs → wait until every tunnel is READY with eBGP Established (4 min limit) → Golden Config. Each tunnel is down for a few seconds while it re-authenticates.</div></div>`;
+}
+$('rot-cancel').onclick = () => { $('rot').hidden = true; };
+$('rot-go').onclick = async () => {
+  const spoke = { name: rotName }; if ($('rot-key').value.trim()) spoke.psk = $('rot-key').value.trim();
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'rotate', spoke, options: { golden: $('rot-golden').checked, test: $('rot-test').checked } }) });
+  if (!r.ok) { const e = await r.json(); $('rot-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json(); $('rot').hidden = true; $('rot-key').value = ''; watch(run.id);
+};
 
 // ---- remove-spoke dialog ------------------------------------------------------
 let rmName = null;

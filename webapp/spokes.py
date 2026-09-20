@@ -367,3 +367,35 @@ def forget_in_terraform(name, log):
 def destroy_vm(name, delete_disk=True):
     subprocess.run([str(LAB / "lab.sh"), "clean" if delete_disk else "down", name], check=True, capture_output=True, text=True)
     if delete_disk: shutil.rmtree(LAB / "nodes" / name, ignore_errors=True)
+
+
+# ---- PSK rotation (a per-spoke day-2 action) -------------------------------------------------------------------
+def rotation_plan(name):
+    """What rotating a spoke's pre-shared key touches (also the validation): returns (problems, details)."""
+    import hashlib
+    I = intent_mod.load(); errs = []
+    dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None: errs.append(f"{name} is not in the intent")
+    elif dev["role"] != "spoke": errs.append("only a spoke's key can be rotated (headends key per spoke)")
+    if errs: return errs, None
+    tunnels = []
+    for t in (t for t in I["tunnels"] if t["spoke"] == name):
+        link, fw = intent_mod.wan_path(I, t["hub"], name)   # the spoke is the second end of its WAN /30
+        src = str(ipaddress.IPv4Network(link["prefix"]).network_address + 2) if link else None
+        tunnels.append({"hub": t["hub"], "tunnel_id": int(t["id"]), "spoke_src_ip": src, "tunnel_prefix": t.get("prefix")})
+    if not tunnels: errs.append(f"{name} has no tunnels")
+    return errs, {"name": name, "mgmt_ip": dev["mgmt_ip"], "tunnels": tunnels, "headends": sorted({t["hub"] for t in tunnels}),
+                  "fingerprint": hashlib.sha256(dev["psk"].encode()).hexdigest()[:12], "rotated": dev.get("psk_rotated")}
+
+
+def rotate_psk(name, new_key=None):
+    """Write a new key for the spoke into the intent (with the rotation time); returns (key, fingerprint). The seed carries the
+    fingerprint and date to Nautobot, the NaC render puts the key into the group variables, terraform pushes it to the spoke
+    and to every headend's keyring."""
+    import hashlib, datetime
+    I = intent_mod.load(); dev = next(d for d in I["devices"] if d["name"] == name)
+    key = new_key or intent_mod.new_psk()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", key): raise ValueError("pre-shared key: 8-64 characters, letters/digits/_.-")
+    dev["psk"] = key; dev["psk_rotated"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    intent_mod.save(I)
+    return key, hashlib.sha256(key.encode()).hexdigest()[:12]
