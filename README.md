@@ -109,6 +109,10 @@ headends; **Export CSV** (tunnels plus a headend-capacity block).
 
 ![Inventory](docs/screenshots/portal-inventory.png)
 ![Topology](docs/screenshots/portal-topology.png)
+
+The topology is drawn on a map of the USA — headends in New York, Chicago and Los Angeles, branches in Boston,
+Dallas, Seattle, Denver and Phoenix (Nautobot Location coordinates, from `lab-intent.json`) — with a spoke filter and a
+schematic view as the alternative.
 ![Headend capacity](docs/screenshots/portal-capacity.png)
 ![Tunnel report](docs/screenshots/portal-tunnels.png)
 

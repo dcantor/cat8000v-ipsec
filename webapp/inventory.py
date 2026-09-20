@@ -31,7 +31,7 @@ class Inventory:
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
         """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
-        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name description latitude longitude cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
                  interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
         import sys; from pathlib import Path
@@ -43,7 +43,11 @@ class Inventory:
             ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
             out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
                         "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
-                        "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"], "bandwidth_mbps": d.get("cf_firewall_bandwidth_mbps"), "asn": (ri.get("autonomous_system") or {}).get("asn"),
+                        "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"],
+                        # where the site is (Nautobot Location latitude / longitude, the city from its description) for the map
+                        "lat": float((d["location"] or {}).get("latitude")) if (d["location"] or {}).get("latitude") is not None else None,
+                        "lon": float((d["location"] or {}).get("longitude")) if (d["location"] or {}).get("longitude") is not None else None,
+                        "city": ((d["location"] or {}).get("description") or "").split(" — ")[-1] if " — " in ((d["location"] or {}).get("description") or "") else None, "bandwidth_mbps": d.get("cf_firewall_bandwidth_mbps"), "asn": (ri.get("autonomous_system") or {}).get("asn"),
                         "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
                         "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
         # a firewall's headend: the device on the far side of its eth1 (from Nautobot cables)

@@ -99,7 +99,9 @@ for i, name in enumerate(I["regions"]):
 for d in sorted(I["devices"], key=lambda x: x["role"] == "firewall"):   # routers first: a firewall shares (and never re-describes) its headend's site
     br = branches.get(d["site"]) or get_or_create(nb.dcim.locations, {"name": d["site"]}, location_type=lt_branch.id, parent=regions[d["region"]].id, status=active.id)
     if d["role"] != "firewall":
-        ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}")
+        where = f" — {d['city']}" if d.get("city") else ""   # the city and its coordinates place the site on the portal's map (Location latitude / longitude)
+        ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}{where}",
+               **({"latitude": f"{float(d['lat']):.6f}", "longitude": f"{float(d['lon']):.6f}"} if d.get("lat") is not None else {}))
         ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", ""))
     branches[d["site"]] = br
 

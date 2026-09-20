@@ -153,11 +153,21 @@ Every step is idempotent, so a failed run can simply be started again.
 
 ### Topology map
 
-The Inventory page starts with a rendered topology: hub-role routers on the top row, spokes below, one
-curved line per IPsec tunnel coloured by live health (green up / amber degraded / red down / grey no
-data), labelled `TunnelN · subnet`; hovering a line shows ports, addresses, IKE/VTI/BGP state and ESP
-counters, clicking a node or a line opens the object in Nautobot. It is plain SVG generated in the browser
-from `GET /api/vpn-inventory` (which now also returns the location's `devices`).
+The Inventory page starts with a rendered topology in one of two views:
+
+- **map (USA)** — the default: the continental US (state outlines from [us-atlas](https://github.com/topojson/us-atlas),
+  pre-projected by `tools/build_usa_map.py` into `static/usa-map.json` with the Albers parameters of d3's `geoAlbersUsa`),
+  hubs at their headend cities and spokes at their branches. The position is the Nautobot **Location latitude /
+  longitude** (seeded from `city` / `lat` / `lon` on the device in `lab-intent.json`; the city goes into the location's
+  description), projected in the browser with the same formula. A site without coordinates (a spoke added through the
+  portal before a city was given) is placed approximately in its region and marked "(approx.)". Firewalls are the small
+  square beside their hub.
+- **schematic** — hub-role routers on the top row, firewalls under them, spokes below, grouped by region.
+
+Both views draw one curved line per IPsec tunnel coloured by live health (green up / amber degraded / red down / grey
+no data); hovering a line shows ports, addresses, IKE/VTI/BGP state and ESP counters, clicking a node or a line opens
+the object in Nautobot. The **spoke filter** (one chip per spoke, plus *all* / *none*) hides spokes and their tunnels
+in either view and is remembered per browser. Plain SVG generated in the browser from `GET /api/vpn-inventory`.
 
 ### Resuming runs
 

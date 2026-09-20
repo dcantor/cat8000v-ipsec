@@ -245,6 +245,8 @@ def validate(intent):
         if d.get("region") not in regions: errs.append(f"{d.get('name')}: region {d.get('region')!r} is not one of {regions}")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}", d.get("site") or ""): errs.append(f"{d.get('name')}: site name missing or invalid")
         if d.get("site") in sites and sites[d["site"]] != d.get("region"): errs.append(f"site {d['site']} is placed in two regions")
+        if (d.get("lat") is None) != (d.get("lon") is None): errs.append(f"{d.get('name')}: lat and lon go together")
+        if d.get("lat") is not None and not (-90 <= float(d["lat"]) <= 90 and -180 <= float(d["lon"]) <= 180): errs.append(f"{d.get('name')}: lat/lon out of range")
         sites[d.get("site")] = d.get("region")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", (intent.get("vpn") or {}).get("name", "")): errs.append("VPN name: letters/digits/_-")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", pr.get("name", "")): errs.append("profile name: letters/digits/_-")

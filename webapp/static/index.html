@@ -31,6 +31,12 @@
   .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:#cbd5e1; stroke-dasharray:6 4 }
   .topo .edge:hover { stroke-width:4 } .topo .elabel { font-size:10px; fill:#334155 } .topo .elabel rect { fill:#fff; stroke:var(--line); rx:3 }
   .topo a { cursor:pointer }
+  .map { position:relative } .map svg { width:100%; height:auto; display:block; font:12px system-ui,sans-serif } .map .state { fill:#e8eef5; stroke:#fff; stroke-width:1 }
+  .map .site circle { stroke:#fff; stroke-width:2 } .map .site.hub circle { fill:#9d174d } .map .site.spoke circle { fill:#1e40af } .map .site.firewall rect { fill:#475569; stroke:#fff; stroke-width:1.5 }
+  .map .site text { fill:var(--ink); font-weight:600; font-size:12px; paint-order:stroke; stroke:#fff; stroke-width:3px; stroke-linejoin:round } .map .site .city { font-weight:400; fill:var(--muted); font-size:10.5px }
+  .map .site.dim { opacity:.18 } .map .edge.dim { opacity:.12 }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0 10px } .chips label { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; font-size:12px; cursor:pointer; background:#fff }
+  .chips label.off { color:var(--muted); background:#f8fafc } .chips input { width:auto; margin:0 } .chips .sep { color:var(--muted); font-size:12px; margin:0 4px } .chips button.small { padding:2px 8px; font-size:12px }
   main { display:grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap:20px; padding:20px 24px; max-width:1700px }
   main > section { min-width:0 }
   @media (max-width:1100px){ main { grid-template-columns:1fr } }
@@ -184,6 +190,8 @@
   <div class="card">
     <h2>Topology <small>hubs and spokes from Nautobot · one line per IPsec tunnel, coloured by live health · click a node or a tunnel to open it in Nautobot</small>
       <span class="hint"><span class="health up"></span>up <span class="health degraded"></span>degraded <span class="health down"></span>down <span class="health"></span>no data</span></h2>
+    <div class="chips" id="topo-chips"><span class="sep">view</span><label><input type="radio" name="topo-view" value="map" checked> map (USA)</label><label><input type="radio" name="topo-view" value="schematic"> schematic</label>
+      <span class="sep" id="topo-filter-label">· show spokes</span><span id="topo-spokes"></span><button class="small" type="button" onclick="spokeFilter('all')">all</button><button class="small" type="button" onclick="spokeFilter('none')">none</button></div>
     <div id="inv-topo" style="overflow-x:auto"></div>
   </div>
   <div class="card">
@@ -525,7 +533,7 @@ async function loadInventory(refresh) {
     ['Aggregate free slots', s.effective_free, s.effective_free === 0 ? 'bad' : (s.effective_free <= 5 ? 'warn' : 'ok')]
   ].map(([l, n, c]) => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
   $('inv-per-tunnel').textContent = (d.headends.find(h => h.bandwidth_per_tunnel_mbps) || {}).bandwidth_per_tunnel_mbps || '?';
-  renderTopology(d);
+  TOPO = d; renderTopologyView();
   const barCls = pct => pct >= 100 ? 'fail' : pct >= 80 ? 'warn' : '';
   const bar = (label, used, total, unit, pct, note, bold) => `<div class="cap sub${bold ? ' agg' : ''}"><div class="cap-l">${label}</div>
       <div class="bar"><div class="${barCls(pct)}" style="width:${Math.min(100, pct)}%"></div></div>
@@ -559,6 +567,69 @@ async function loadInventory(refresh) {
     <td>${esc(t.model_status || '')}<div class="hint">${t.last_updated ? new Date(t.last_updated).toLocaleDateString() : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="21" class="hint">no tunnels modelled</td></tr>';
 }
 $('inv-refresh').onclick = () => loadInventory(true);
+
+// ---- topology: the USA map (sites at their Nautobot latitude / longitude) or the schematic; the spoke filter applies to both
+let TOPO = null, USA = null;
+const topoView = () => (document.querySelector('input[name="topo-view"]:checked') || {}).value || 'map';
+document.querySelectorAll('input[name="topo-view"]').forEach(r => r.onchange = renderTopologyView);
+function hiddenSpokes() { try { return new Set(JSON.parse(localStorage.getItem('ipsec.hiddenSpokes') || '[]')); } catch { return new Set(); } }
+function spokeFilter(what, name) {
+  const h = hiddenSpokes(); const all = (TOPO ? TOPO.devices.filter(x => x.role === 'spoke').map(x => x.name) : []);
+  if (what === 'all') h.clear(); else if (what === 'none') all.forEach(n => h.add(n)); else if (h.has(name)) h.delete(name); else h.add(name);
+  try { localStorage.setItem('ipsec.hiddenSpokes', JSON.stringify([...h])); } catch {}
+  renderTopologyView();
+}
+function renderTopologyView() {
+  if (!TOPO) return; const h = hiddenSpokes(); const spokes = TOPO.devices.filter(x => x.role === 'spoke').sort((a, b) => a.name.localeCompare(b.name));
+  $('topo-spokes').innerHTML = spokes.map(x => `<label class="${h.has(x.name) ? 'off' : ''}" title="${esc(x.city || x.site || '')}"><input type="checkbox" ${h.has(x.name) ? '' : 'checked'} onchange="spokeFilter('one', '${esc(x.name)}')"> ${esc(x.name)}${x.city ? ` <span class="hint">${esc(x.city.split(',')[0])}</span>` : ''}</label>`).join('');
+  const d = { ...TOPO, devices: TOPO.devices.filter(x => x.role !== 'spoke' || !h.has(x.name)), tunnels: TOPO.tunnels.filter(t => !h.has(t.spoke)) };
+  if (topoView() === 'map') renderMap(d, h); else renderTopology(d);
+}
+// d3.geoAlbersUsa's continental component (conic equal-area, parallels 29.5 / 45.5, rotate 96, center [-0.6, 38.7], scale 1070,
+// translate [487.5, 305]) — the same formula tools/build_usa_map.py projected the state outlines with, so a site lands on its city
+function albers(lon, lat) {
+  const R = Math.PI / 180, p0 = 29.5 * R, p1 = 45.5 * R, sy0 = Math.sin(p0), n = (sy0 + Math.sin(p1)) / 2, c = 1 + sy0 * (2 * n - sy0), r0 = Math.sqrt(c) / n;
+  const raw = (l, f) => { const r = Math.sqrt(c - 2 * n * Math.sin(f)) / n; l *= n; return [r * Math.sin(l), r0 - r * Math.cos(l)]; };
+  const [cx, cy] = raw(-0.6 * R, 38.7 * R), [x, y] = raw((lon + 96) * R, lat * R);
+  return [487.5 + 1070 * (x - cx), 305 - 1070 * (y - cy)];
+}
+async function renderMap(d, hidden) {
+  if (!USA) { try { USA = await (await fetch('/static/usa-map.json')).json(); } catch (e) { $('inv-topo').innerHTML = `<div class="msg">map outlines unavailable (${esc(String(e))}) — showing the schematic</div>`; return renderTopology(d); } }
+  const W = USA.width, H = USA.height;
+  // a site without coordinates (a spoke added through the portal before a city was set) falls back to a spot in its region
+  const REGION_FALLBACK = { East: [-77.5, 38.9], Central: [-93.5, 38.5], West: [-115.5, 39.5] }; let fb = 0;
+  const pos = {}; d.devices.forEach(n => {
+    let lon = n.lon, lat = n.lat, guessed = false;
+    if (lon == null || lat == null) { const f = REGION_FALLBACK[n.region] || [-98, 39]; lon = f[0] + (fb % 3 - 1) * 3; lat = f[1] - Math.floor(fb / 3) * 2.5; fb++; guessed = true; }
+    const [x, y] = albers(lon, lat); pos[n.name] = { x, y, guessed };
+  });
+  const hubs = d.devices.filter(x => x.role === 'hub'), spokes = d.devices.filter(x => x.role === 'spoke'), fws = d.devices.filter(x => x.role === 'firewall');
+  // tunnels: a curve bowing north between hub and spoke; several tunnels of one spoke fan out by hub
+  const edges = d.tunnels.map(t => {
+    const a = pos[t.headend], b = pos[t.spoke]; if (!a || !b) return '';
+    const l = t.live || {}, cls = l.health || 'none', dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    const bow = Math.min(60, len * 0.18); const mx = (a.x + b.x) / 2 - dy / len * bow, my = (a.y + b.y) / 2 + dx / len * bow;
+    const subnet = (t.headend_tunnel_ip || '').replace(/\.(\d+)\/30$/, (m, o) => '.' + (o - 1) + '/30');
+    const tip = `${t.name}: ${t.headend} ${t.headend_if} (${t.headend_src_ip}) → ${t.spoke} ${t.spoke_if} (${t.spoke_src_ip})\n${subnet}: ${t.headend_tunnel_ip} / ${t.spoke_tunnel_ip}\nIKE ${l.ike_status || '?'} · VTI ${l.line_protocol || '?'} · BGP ${/^\d+$/.test(l.bgp_state || '') ? 'Established (' + l.bgp_state + ' pfx)' : (l.bgp_state || '?')}\nESP ${l.encaps ?? '?'} / ${l.decaps ?? '?'} pkts`;
+    // label at a point along the curve, staggered per tunnel so neighbouring labels (and the site labels) stay clear
+    const u = 0.3 + 0.4 * ((d.tunnels.indexOf(t) % 5) / 4), q = (p0, p1, p2) => (1 - u) ** 2 * p0 + 2 * (1 - u) * u * p1 + u ** 2 * p2;
+    const lx = q(a.x, mx, b.x), ly = q(a.y, my, b.y), label = `T${t.tunnel_id}`;
+    return `<a href="${t.url}" target="_blank"><path class="edge ${cls}" d="M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}"><title>${esc(tip)}</title></path>
+      <g class="elabel" transform="translate(${lx},${ly})"><rect x="${-(label.length * 6.2 + 10) / 2}" y="-8" width="${label.length * 6.2 + 10}" height="15"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
+  }).join('');
+  const site = n => { const p = pos[n.name]; const city = (n.city || n.site || '') + (p.guessed ? ' (approx.)' : ''); const r = n.role === 'hub' ? 9 : 6;
+    const tip = `${n.name} (${n.role}) · ${n.site || ''} / ${n.region || ''}\n${n.city || 'no coordinates in Nautobot'}\n${n.mgmt_ip || ''}${n.asn ? ' · AS ' + n.asn : ''}${n.lan ? ' · LAN ' + n.lan : ''}`;
+    if (n.role === 'firewall') { const h = pos[n.hub]; if (!h) return ''; return `<a href="${n.url}" target="_blank"><g class="site firewall" transform="translate(${h.x - 16},${h.y - 10})"><title>${esc(tip)}</title><rect x="-5" y="-5" width="10" height="10" rx="2"></rect></g></a>`; }
+    // hub labels under the dot, spoke labels above it: a branch next to its headend (Boston / New York) keeps both readable
+    const dy = n.role === 'hub' ? 24 : -22, anchor = p.x > W * 0.8 ? 'end' : (p.x < W * 0.12 ? 'start' : 'middle');
+    return `<a href="${n.url}" target="_blank"><g class="site ${n.role}" transform="translate(${p.x},${p.y})"><title>${esc(tip)}</title><circle r="${r}"></circle>
+      <text text-anchor="${anchor}" y="${dy}">${esc(n.name)}</text><text class="city" text-anchor="${anchor}" y="${dy + 12}">${esc(city)}</text></g></a>`; };
+  const hiddenNote = hidden.size ? `<text x="${W - 12}" y="${H - 10}" text-anchor="end" fill="#64748b" font-size="11">${hidden.size} spoke${hidden.size > 1 ? 's' : ''} hidden by the filter</text>` : '';
+  $('inv-topo').innerHTML = `<div class="map"><svg class="topo" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f8fafc"></rect>
+    ${USA.states.map(st => `<path class="state" d="${st.d}"><title>${esc(st.name)}</title></path>`).join('')}
+    <text x="12" y="${H - 10}" fill="#64748b" font-size="11">hubs at their headend cities · spokes at their branches (Nautobot Location coordinates) · firewall = square beside its hub</text>${hiddenNote}
+    ${edges}${hubs.map(site).join('')}${fws.map(site).join('')}${spokes.map(site).join('')}</svg></div>`;
+}
 
 function renderTopology(d) {
   // group by region (in the order the regions appear across the devices, hubs first)
