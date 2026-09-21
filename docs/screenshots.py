@@ -38,7 +38,7 @@ with sync_playwright() as pw:
     page.evaluate("document.getElementById('inv-capacity').parentElement.scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-capacity.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 560})
     page.evaluate("document.getElementById('inv-tunnels').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-tunnels.png"))
     page.evaluate("document.getElementById('inv-hosts').parentElement.parentElement.parentElement.scrollIntoView({block:'start'})"); page.click("#hosts-ping"); page.wait_for_function("document.querySelectorAll('#hosts-matrix table tr').length > 2", timeout=120000); time.sleep(0.8)
-    page.screenshot(path=str(OUT / "portal-hosts.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 580})
+    page.screenshot(path=str(OUT / "portal-hosts.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 620})
     page.goto(f"{PORTAL}/#branches"); page.wait_for_function("document.querySelectorAll('#brs-table tbody tr').length > 0", timeout=120000); time.sleep(1); page.screenshot(path=str(OUT / "portal-branches.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 560})
     page.goto(f"{PORTAL}/#branch/spoke3"); page.wait_for_function("document.querySelectorAll('#br-tunnels tbody tr').length > 0", timeout=120000); page.wait_for_function("document.getElementById('br-show').textContent.includes('READY')", timeout=60000); time.sleep(1)
     page.screenshot(path=str(OUT / "portal-branch.png"))

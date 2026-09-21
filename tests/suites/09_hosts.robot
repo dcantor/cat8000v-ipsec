@@ -39,13 +39,18 @@ The hosts are modelled in Nautobot: device at the router's site, eth1 addressed 
         Should Be Equal    ${e1}[connected_interface][ip_addresses][0][address]    ${h}[gateway]/24
     END
 
-Every host reaches every other host: the full ping mesh over the tunnels
+Every host reaches every other host, its own router and the internet: the full ping mesh over the tunnels
     [Documentation]    Every ordered pair (42 for 7 hosts): branch to its headends, branch to branch through a shared headend, headend
-    ...    to headend through a spoke homed on both (headends do not peer with each other).
+    ...    to headend through a spoke homed on both (headends do not peer with each other) — plus, per host, its own router (the LAN
+    ...    gateway) and the internet (1.1.1.1 through its headend's breakout): 56 checks.
     ${m}=    Matrix
     Log    ${m}[results]
-    Should Be True    ${m}[ok]    msg=${m}[failed] of ${m}[pairs] pairs failed: ${m}[failed]
-    Should Be Equal As Integers    ${m}[pairs]    ${{ len($LAN_HOSTS) * (len($LAN_HOSTS) - 1) }}
+    Should Be True    ${m}[ok]    msg=${m}[failed] of ${m}[pairs] checks failed: ${m}[failed]
+    Should Be Equal As Integers    ${m}[pairs]    ${{ len($LAN_HOSTS) * (len($LAN_HOSTS) + 1) }}
+    FOR    ${h}    IN    @{LAN_HOSTS}
+        Should Be True    ${m}[results][${h}][gateway][ok]    msg=${h} cannot ping its router ${LAN_HOSTS}[${h}][gateway]
+        Should Be True    ${m}[results][${h}][internet][ok]    msg=${h} cannot ping the internet (${m}[targets][internet])
+    END
     # every answered pair carries its round-trip time (the portal's mesh shows it, green; a failed pair is red)
     ${slow}=    Evaluate    [(s, d, v['ms']) for s, r in $m['results'].items() for d, v in r.items() if v['ms'] is None or v['ms'] > 500]
     Should Be Empty    ${slow}    msg=pairs without a round-trip time or slower than 500 ms: ${slow}

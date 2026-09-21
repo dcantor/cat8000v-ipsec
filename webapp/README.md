@@ -323,8 +323,9 @@ OIDC so it is trusted without a users.json entry; logins land in the audit trail
 
 The **LAN hosts** card lists the Alpine VM behind every router (`GET /api/hosts`: router and LAN port, LAN address `.2`, gateway
 `.1`, OOB address, VM state) and **Ping mesh** runs `tools/host_cmd.py`'s matrix (`?ping=true`, two pings per pair, cached 60 s):
-every host pings every other host over the tunnels, shown as a from/to grid — a green cell with the average round-trip time,
-a red one when the pair failed. **▶ Live** polls `?ping=true&live=true` (one probe per pair, cached 3 s) every 5 seconds and
+every host pings every other host over the tunnels, its own router (the LAN gateway) and the internet (1.1.1.1 through the
+breakout; `MESH_INTERNET_TARGET` overrides it), shown as a from/to grid — a green cell with the average round-trip time, a red
+one when the check failed. **▶ Live** polls `?ping=true&live=true` (one probe per pair, cached 3 s) every 5 seconds and
 redraws the grid with the current latencies until **■ Stop** (or leaving the page); the tool keeps one SSH session per host
 open between probes. New spokes provisioned by the wizard get their LAN port
 addressed (the site LAN is always the router's last port) but no host VM yet — add one in `lab.conf` (role `host`, a LAN link) and

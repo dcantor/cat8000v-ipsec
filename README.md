@@ -157,8 +157,9 @@ schematic view as the alternative.
 ![Headend capacity](docs/screenshots/portal-capacity.png)
 ![Tunnel report](docs/screenshots/portal-tunnels.png)
 
-The **LAN hosts** card lists the Alpine VM behind every router; **Ping mesh** runs the full host-to-host matrix over the tunnels —
-every pair green with its round-trip time, red when it fails — and **▶ Live** keeps probing every pair every 5 seconds with the
+The **LAN hosts** card lists the Alpine VM behind every router; **Ping mesh** runs the full host-to-host matrix over the tunnels,
+plus two more columns per host — its **own router** (the LAN gateway) and the **internet** (1.1.1.1 through its headend's breakout) —
+every check green with its round-trip time, red when it fails; **▶ Live** keeps probing every check every 5 seconds with the
 latencies updating in place (■ Stop ends it; the SSH sessions to the hosts stay open between probes).
 
 ![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
