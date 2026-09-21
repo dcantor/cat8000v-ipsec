@@ -271,6 +271,14 @@ way. The same lines feed the *Firewalls* row of the Grafana IPsec dashboard (dro
 source, top dropped flows, the raw log) and two vmalert-logs rules: `FirewallDropBurst` (more than 20 packets from one source
 dropped in 5 minutes) and `FirewallDroppingPeerTraffic` (IKE or ESP hitting the drop rule — the policy and the wiring disagree).
 
+### LAN hosts (Inventory page)
+
+The **LAN hosts** card lists the Alpine VM behind every router (`GET /api/hosts`: router and LAN port, LAN address `.2`, gateway
+`.1`, OOB address, VM state) and **Ping mesh** runs `tools/host_cmd.py`'s matrix (`?ping=true`, cached 60 s): every host pings every
+other host over the tunnels, shown as a from/to grid with the pair count. New spokes provisioned by the wizard get their LAN port
+addressed (the site LAN is always the router's last port) but no host VM yet — add one in `lab.conf` (role `host`, a LAN link) and
+the intent, then `./lab.sh up`.
+
 ### Tools page
 
 The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,

@@ -56,11 +56,12 @@ class Profile(BaseModel):
 class Device(BaseModel):
     name: str = Field(..., description="hostname / Nautobot device name", examples=["spoke1"])
     mgmt_ip: str = Field(..., description="management address (fixed by the VM's day-0 config)", examples=["10.2.0.12"])
-    role: Literal["hub", "spoke", "firewall"]
+    role: Literal["hub", "spoke", "firewall", "host"]
     hub: Optional[str] = Field(None, description="firewall only: the headend it fronts")
+    router: Optional[str] = Field(None, description="LAN host only: the router it hangs off (eth1 = .2 of that router's site LAN, gateway .1 on the router's LAN port)")
     asn: Optional[int] = Field(None, examples=[65201])
     router_id: Optional[str] = Field(None, examples=["10.255.1.2"])
-    lan: Optional[str] = Field(None, description="site LAN /24 (Loopback10)", examples=["192.168.12.0/24"])
+    lan: Optional[str] = Field(None, description="site LAN /24 on the router's LAN port (.1; the LAN host is .2)", examples=["192.168.12.0/24"])
     comments: str = ""
     region: Optional[str] = Field(None, examples=["East"])
     site: Optional[str] = Field(None, description="branch / HQ location in Nautobot", examples=["branch-1"])

@@ -30,9 +30,11 @@ ensure_networks() {
 # ---- point-to-point WAN links (UDP tunnels between VMs) --------------------
 port_local() { echo $(( UDP_BASE + NODE_IDX[$1]*100 + $2 )); }           # UDP port a node's NIC listens on when it anchors a link
 port_far()   { echo $(( UDP_BASE + 10000 + NODE_IDX[$1]*100 + $2 )); }   # ...and the port it sends to (the other end listens there)
-node_ports() { case "${ROLE[$1]}" in hub) seq 2 $((1 + HUB_PORTS));; firewall) seq 1 "$FW_PORTS";; *) seq 2 $((1 + SPOKE_PORTS));; esac; }
+node_ports() { case "${ROLE[$1]}" in hub) seq 2 $((1 + HUB_PORTS));; firewall) seq 1 "$FW_PORTS";; host) seq 1 "$HOST_PORTS";; *) seq 2 $((1 + SPOKE_PORTS));; esac; }
 is_fw()      { [[ "${ROLE[$1]}" == "firewall" ]]; }
-port_name()  { if is_fw "$1"; then echo "eth$2"; else echo "GigabitEthernet$2"; fi; }
+is_host()    { [[ "${ROLE[$1]}" == "host" ]]; }
+lan_port()   { case "${ROLE[$1]}" in hub) echo "$HUB_LAN_PORT";; spoke) echo "$SPOKE_LAN_PORT";; esac; }   # a router's site LAN port
+port_name()  { if is_fw "$1" || is_host "$1"; then echo "eth$2"; else echo "GigabitEthernet$2"; fi; }
 mac()        { printf '%s:%02x:%02x' "$MAC_OUI" "${NODE_IDX[$1]}" "$2"; }
 link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
   local me="$1:$2" l a b pfx
@@ -197,6 +199,115 @@ X
 }
 
 # ---- build ------------------------------------------------------------------
+host_xml() {       # Alpine LAN host: eth0 = OOB, eth1 = UDP tunnel to its router's LAN port; cloud-init NoCloud seed on a cdrom
+  local n="$1" d peer pn pp pfx; d="$(node_dir "$n")"
+  peer="$(link_peer "$n" 1)"; read -r pn pp pfx _ <<<"$peer"
+  cat <<X
+<domain type='kvm'>
+  <name>$n</name>
+  <uuid>$(uuidgen --sha1 --namespace @dns --name "cat8000v-ipsec.${MGMT_IP[$n]}")</uuid>
+  <title>Alpine LAN host ($n, behind $pn)</title>
+  <memory unit='MiB'>$HOST_RAM_MIB</memory>
+  <vcpu placement='static'>$HOST_VCPU</vcpu>
+  <cpu mode='host-passthrough' check='none'/>
+  <os><type arch='x86_64' machine='pc'>hvm</type><boot dev='hd'/></os>
+  <features><acpi/><apic/></features>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff><on_reboot>restart</on_reboot><on_crash>restart</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='$d/disk.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='$d/seed.iso'/>
+      <target dev='hda' bus='ide'/>
+      <readonly/>
+    </disk>
+    <!-- eth0: OOB management ${MGMT_IP[$n]} -->
+    <interface type='network'>
+      <mac address='$(mac "$n" 0)'/>
+      <source network='$OOB_NET'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <!-- eth1: $(wan_ip "$n" 1) <-> $pn $(port_name "$pn" "$pp") ($pfx); the router anchors the socket pair -->
+    <interface type='udp'>
+      <mac address='$(mac "$n" 1)'/>
+      <source address='127.0.0.1' port='$(port_local "$pn" "$pp")'>
+        <local address='127.0.0.1' port='$(port_far "$pn" "$pp")'/>
+      </source>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </interface>
+X
+  serial_xml "$n"
+  cat <<X
+    <memballoon model='none'/>
+  </devices>
+</domain>
+X
+}
+
+host_seed() {      # cloud-init NoCloud seed: static addresses (network-config v2 by MAC), user lab / lab, sshd, node-exporter
+  local n="$1" d peer pn pp pfx cidr gw; d="$(node_dir "$n")"
+  peer="$(link_peer "$n" 1)"; [[ -n "$peer" ]] || die "$n eth1 is not wired in LINKS"; read -r pn pp pfx _ <<<"$peer"
+  cidr="$(wan_ip "$n" 1)/${pfx##*/}"; gw="$(wan_ip "$pn" "$pp")"
+  echo "[$n] building cloud-init (NoCloud) seed ISO"
+  printf 'instance-id: %s-001\nlocal-hostname: %s\n' "$n" "$n" > "$d/meta-data"
+  cat > "$d/network-config" <<U
+version: 2
+ethernets:
+  oob:
+    match: { macaddress: "$(mac "$n" 0)" }
+    set-name: eth0
+    addresses: [${MGMT_IP[$n]}/24]
+    routes: [{ to: 10.0.0.0/8, via: $OOB_GATEWAY }]
+  lan:
+    match: { macaddress: "$(mac "$n" 1)" }
+    set-name: eth1
+    addresses: [$cidr]
+    routes: [{ to: 0.0.0.0/0, via: $gw }]
+U
+  cat > "$d/user-data" <<U
+#cloud-config
+# $n: eth0 = OOB management (${MGMT_IP[$n]}), eth1 = LAN behind $pn $(port_name "$pn" "$pp") ($pfx, gateway $gw)
+hostname: $n
+users:
+  - name: lab
+    plain_text_passwd: lab
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/sh
+ssh_pwauth: true
+write_files:
+  - path: /etc/motd
+    content: "$n — LAN host behind $pn: eth1 $cidr (gateway $gw), OOB eth0 ${MGMT_IP[$n]}. iperf3 / tcpdump / mtr installed.\n"
+runcmd:
+  - rc-update add sshd default
+  - rc-service sshd restart
+  - rc-update add node-exporter default
+  - rc-service node-exporter restart
+U
+  genisoimage -quiet -o "$d/seed.iso.tmp" -V cidata -J -r "$d/user-data" "$d/meta-data" "$d/network-config" && mv -f "$d/seed.iso.tmp" "$d/seed.iso"
+}
+
+build_host() {
+  local n="$1" d; d="$(node_dir "$n")"
+  [[ -f "$HOST_IMAGE" ]] || die "host base image not found: $HOST_IMAGE (built by srv6-core/tools/build_host_image.sh)"
+  mkdir -p "$d"
+  if [[ ! -f "$d/disk.qcow2" ]]; then
+    echo "[$n] creating overlay disk on $(basename "$HOST_IMAGE")"
+    qemu-img create -q -f qcow2 -b "$HOST_IMAGE" -F qcow2 "$d/disk.qcow2"
+  fi
+  host_seed "$n"
+  host_xml "$n" > "$d/domain.xml"
+  V define "$d/domain.xml" >/dev/null
+}
+
 build_firewall() {
   local n="$1" d; d="$(node_dir "$n")"
   [[ -f "$VYOS_IMAGE" ]] || die "VyOS base image not found: $VYOS_IMAGE (see tools/vyos_install.py)"
@@ -210,6 +321,7 @@ build_firewall() {
 
 build_router() {
   if is_fw "$1"; then build_firewall "$1"; return; fi
+  if is_host "$1"; then build_host "$1"; return; fi
   local n="$1" d; d="$(node_dir "$n")"
   [[ -f "$C8000V_IMAGE" ]] || die "base image not found: $C8000V_IMAGE"
   if [[ ! -f "$d/disk.qcow2" ]]; then
@@ -247,7 +359,7 @@ cmd_up() {
 cmd_down() {
   for n in $(nodes_or_all "$@"); do
     running "$n" || { echo "[$n] not running"; continue; }
-    if is_fw "$n"; then V shutdown "$n" >/dev/null; for _ in $(seq 20); do running "$n" || break; sleep 2; done; running "$n" && V destroy "$n" >/dev/null; echo "[$n] stopped"; continue; fi
+    if is_fw "$n" || is_host "$n"; then V shutdown "$n" >/dev/null; for _ in $(seq 20); do running "$n" || break; sleep 2; done; running "$n" && V destroy "$n" >/dev/null; echo "[$n] stopped"; continue; fi
     echo "[$n] saving config, then powering off"
     save_config "$n" || echo "[$n] warning: could not save config"
     V destroy "$n" >/dev/null; echo "[$n] stopped"
@@ -266,16 +378,17 @@ cmd_clean() {      # destroy VMs and delete overlay disks (base image untouched)
   for n in $(nodes_or_all "$@"); do
     running "$n" && V destroy "$n" >/dev/null
     defined "$n" && V undefine "$n" >/dev/null
-    rm -f "$(node_dir "$n")"/{disk.qcow2,config.iso,domain.xml,console.log}
+    rm -f "$(node_dir "$n")"/{disk.qcow2,config.iso,seed.iso,meta-data,user-data,network-config,domain.xml,console.log}
     echo "[$n] removed"
   done
 }
 
 cmd_status() {
-  printf '%-7s %-6s %-10s %-10s %-6s %-16s %-8s\n' NODE ROLE STATE MGMT-IP AS LAN CONSOLE
+  printf '%-15s %-8s %-10s %-10s %-6s %-16s %-8s\n' NODE ROLE STATE MGMT-IP AS LAN CONSOLE
   for n in "${ALL_NODES[@]}"; do
-    printf '%-7s %-6s %-10s %-10s %-6s %-16s %-8s\n' "$n" "${ROLE[$n]}" "$(V domstate "$n" 2>/dev/null || echo undefined)" \
-      "${MGMT_IP[$n]}" "${BGP_AS[$n]}" "${LAN[$n]}" "${CONSOLE_PORT[$n]}"
+    local lan="${LAN[$n]}"; is_host "$n" && lan="$(wan_ip "$n" 1) (LAN of $(link_peer "$n" 1 | cut -d' ' -f1))"
+    printf '%-15s %-8s %-10s %-10s %-6s %-16s %-8s\n' "$n" "${ROLE[$n]}" "$(V domstate "$n" 2>/dev/null || echo undefined)" \
+      "${MGMT_IP[$n]}" "${BGP_AS[$n]}" "$lan" "${CONSOLE_PORT[$n]}"
   done
   echo; echo "WAN links (point-to-point) and IPsec VTI tunnels:"
   local l a b pfx t; for l in "${LINKS[@]}"; do read -r a b pfx <<<"$l"; echo "  ${a%%:*} $(port_name "${a%%:*}" "${a##*:}") $(wan_ip "${a%%:*}" "${a##*:}")  <->  ${b%%:*} $(port_name "${b%%:*}" "${b##*:}") $(wan_ip "${b%%:*}" "${b##*:}")   ($pfx)"; done
@@ -290,6 +403,8 @@ cmd_console() {
 
 cmd_ssh() {
   local n="${1:?node}"; shift || true
+  if is_host "$n"; then echo "(host: user lab, password lab)" >&2; ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o PubkeyAuthentication=no "lab@${MGMT_IP[$n]}" "$@"; return; fi
+  if is_fw "$n"; then ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "vyos@${MGMT_IP[$n]}" "$@"; return; fi
   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "admin@${MGMT_IP[$n]}" "$@"
 }
 
@@ -307,6 +422,7 @@ bootstrap_firewall() {   # VyOS day-0 over the serial console: hostname, eth0, s
 cmd_bootstrap() {  # wait for boot, (re)apply day-0, generate SSH keys; then wait for RESTCONF
   for n in $(nodes_or_all "$@"); do
     if is_fw "$n"; then bootstrap_firewall "$n"; continue; fi
+    if is_host "$n"; then for _ in $(seq 60); do fw_ready "$n" && break; sleep 5; done; fw_ready "$n" && echo "[$n] ready: ssh lab@${MGMT_IP[$n]} (lab)" || echo "[$n] warning: SSH not answering yet"; continue; fi
     local d; d="$(node_dir "$n")"
     echo "[$n] waiting for console prompt (C8000v takes ~3-5 min on first boot)..."
     python3 "$LAB_DIR/tools/console.py" wait 127.0.0.1 "${CONSOLE_PORT[$n]}" 1800 >/dev/null
@@ -335,7 +451,7 @@ PY
 
 cmd_wait() {       # block until RESTCONF (routers) / SSH (firewalls) answers on the given nodes (used after up)
   for n in $(nodes_or_all "$@"); do
-    if is_fw "$n"; then for _ in $(seq 60); do fw_ready "$n" && break; sleep 5; done; fw_ready "$n" && echo "[$n] SSH ready" || echo "[$n] SSH NOT ready"; continue; fi
+    if is_fw "$n" || is_host "$n"; then for _ in $(seq 60); do fw_ready "$n" && break; sleep 5; done; fw_ready "$n" && echo "[$n] SSH ready" || echo "[$n] SSH NOT ready"; continue; fi
     for _ in $(seq 90); do restconf_ready "$n" && break; sleep 10; done
     restconf_ready "$n" && echo "[$n] RESTCONF ready" || echo "[$n] RESTCONF NOT ready"
   done
@@ -393,6 +509,11 @@ cmd_webapp() {     # VPN provisioning portal (FastAPI/uvicorn) on http://0.0.0.0
   cd "$LAB_DIR/webapp" && exec .venv/bin/uvicorn app:app --host "${WEBAPP_HOST:-0.0.0.0}" --port "${WEBAPP_PORT:-8090}" "$@"
 }
 
+cmd_hosts() {      # the LAN hosts: `hosts` = ping matrix (every host to every other host over the tunnels), `hosts run NAME CMD`
+  [[ -x "$LAB_DIR/tests/.venv/bin/python" ]] || "$LAB_DIR/tests/setup.sh"
+  "$LAB_DIR/tests/.venv/bin/python" "$LAB_DIR/tools/host_cmd.py" "${1:-matrix}" "${@:2}"
+}
+
 cmd_test() {       # Robot Framework suite; results in results/<date>_<time>/
   [[ -x "$LAB_DIR/tests/.venv/bin/robot" ]] || "$LAB_DIR/tests/setup.sh"
   exec "$LAB_DIR/tests/run.sh" "$@"
@@ -401,11 +522,12 @@ cmd_test() {       # Robot Framework suite; results in results/<date>_<time>/
 usage() {
   cat <<U
 usage: $(basename "$0") <command> [node...]
-  up [node..]        create (if needed) and start routers        (default: all)
-  down [node..]      save configs and stop routers               (default: all)
+  up [node..]        create (if needed) and start nodes          (default: all)
+  down [node..]      save configs and stop nodes                 (default: all)
   status             show nodes, addresses, console ports
   console <node>     attach to serial console
-  ssh <node> [cmd]   ssh to a router's OOB management IP (admin/admin)
+  ssh <node> [cmd]   ssh to a node's OOB management IP (routers admin/admin, firewalls vyos/vyos, hosts lab/lab)
+  hosts [run N CMD]  ping matrix between the LAN hosts (or run a command on one host)
   bootstrap [node..] wait for boot, generate SSH keys, wait for RESTCONF (first boot)
   wait [node..]      wait until RESTCONF answers
   log <node> [n]     follow a node's console log
@@ -423,6 +545,6 @@ U
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|intent|webapp|rename|rebuild|clean) "cmd_$cmd" "$@" ;;
+  up|down|status|console|ssh|bootstrap|wait|log|nac|nautobot|test|intent|webapp|rename|rebuild|clean|hosts) "cmd_$cmd" "$@" ;;
   *) usage; exit 1 ;;
 esac

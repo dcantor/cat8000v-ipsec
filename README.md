@@ -41,6 +41,18 @@ the state the portal left it in.
 Everyday operation happens in the portal: **http://192.168.50.231:8090** (LAN) / http://localhost:8090.
 Nautobot: **http://192.168.50.231:8080** (admin / admin).
 
+### The LAN hosts
+Behind every router sits a **small Alpine VM** (1 vCPU, 256 MiB; the `alpine-host.qcow2` the srv6-core lab builds, with
+iperf3 / tcpdump / mtr / node-exporter, user `lab`/`lab`): `host-east`, `host-central`, `host-west` behind the headends,
+`host-spoke1..4` behind the branches. Its eth1 is a UDP link to the router's **LAN port** — the last port of every router
+(GigabitEthernet9 on a headend, GigabitEthernet5 on a spoke), which now carries the site LAN `/24` (`.1`, the host's
+gateway; the LAN used to be Loopback10) — its eth0 is on the OOB network (10.2.0.31–37); cloud-init (NoCloud seed ISO)
+addresses it. The hosts are Nautobot devices (role `lan-host`, platform `alpine`, at their router's site, eth1 addressed
+and cabled to the LAN port), and the intent lists them (role `host`, `router`); the LAN link is the only `/24` link.
+`./lab.sh hosts` prints the **ping matrix** — every host pings every other host over the tunnels (branch ↔ headend, branch ↔
+branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Inventory page has the
+same under **LAN hosts → Ping mesh** (`GET /api/hosts?ping=true`), and Robot suite 09 asserts the full mesh and the path.
+
 ### The firewalls
 Each headend sits behind a **VyOS** firewall (1 vCPU / 1 GB, built once from the rolling ISO by
 `tools/vyos_install.py` into `images/vyos-base.qcow2`, overlays per node, day-0 over the serial console).
@@ -254,26 +266,26 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 42 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 46 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
 compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
-renewal and a real PSK ↔ certificate switch of a spoke through the portal.
+renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels.
 Each run keeps pre/post config backups and a diff under `results/`.
 
 ## What is where
 
 | Path | Purpose |
 |---|---|
-| `lab.conf`, `lab.sh`, `tools/`, `nodes/` | VM facts and libvirt controller (`up down bootstrap rebuild clean rename status console ssh nac nautobot test intent webapp`), console automation, day-0 template, `tools/nac_apply.py` (staged terraform apply: creates, updates, then destroys) |
+| `lab.conf`, `lab.sh`, `tools/`, `nodes/` | VM facts and libvirt controller (`up down bootstrap rebuild clean rename status console ssh hosts nac nautobot test intent webapp`), console automation, day-0 template, `tools/nac_apply.py` (staged terraform apply: creates, updates, then destroys) |
 | `lab-intent.json`, `nautobot/intent.py` | the VPN service intent (site, regions, devices + PSKs, links, tunnels, crypto, capacity); generated from `lab.conf` once, edited by the portal |
 | `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, certificate enrolment (`pki.py`), rename tool, saved GraphQL query, Jinja template |
 | `pki/` | the lab CA (`ca.py`; `ca/ca.crt` public, `ca/ca.key` never committed), issued router certificates and the index |
 | `nac/` | Terraform root and NAC data |
-| `tests/` | Robot suites 01–08, keyword library, `lab_vars.py` derived from the intent |
+| `tests/` | Robot suites 01–09, keyword library, `lab_vars.py` derived from the intent |
 | `webapp/` | the portal (FastAPI + single-page UI), API schemas, spoke/headend provisioning, inventory collector, run records, demo recorders, `lab-webapp.service`, `restart.sh` |
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |

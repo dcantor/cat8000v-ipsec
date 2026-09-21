@@ -35,11 +35,13 @@ LLDP shows the firewall on each spoke's WAN port and on the headend's WAN port
         Wait Until Keyword Succeeds    120s    10s    Lldp Shows Link    ${t}
     END
 
-Loopbacks carry the router-id and the site LAN
+Loopback0 carries the router-id and the LAN port the site LAN
+    [Documentation]    The site LAN /24 is the router's last port (.1 — the host's default gateway), no longer Loopback10.
     FOR    ${r}    IN    @{ROUTER_NAMES}
-        ${brief}=    Show    ${r}    show ip interface brief | include Loopback
+        ${brief}=    Show    ${r}    show ip interface brief | include Loopback|${ROUTERS}[${r}][lan_if]
         Should Match Regexp    ${brief}    (?m)^Loopback0\\s+${ROUTERS}[${r}][router_id]\\s+YES\\s+\\S+\\s+up\\s+up
-        Should Match Regexp    ${brief}    (?m)^Loopback10\\s+${ROUTERS}[${r}][lan_ip]\\s+YES\\s+\\S+\\s+up\\s+up
+        Should Match Regexp    ${brief}    (?m)^${ROUTERS}[${r}][lan_if]\\s+${ROUTERS}[${r}][lan_ip]\\s+YES\\s+\\S+\\s+up\\s+up
+        Should Not Contain    ${brief}    Loopback10
     END
 
 *** Keywords ***

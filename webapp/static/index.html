@@ -249,6 +249,15 @@
     <div id="inv-capacity"></div>
   </div>
   <div class="card">
+    <h2>LAN hosts <small>one small Alpine VM behind every router (eth1 = .2 of the site LAN, the router's LAN port .1 as gateway; OOB eth0, lab / lab) — every host must reach every other host over the tunnels</small>
+      <span style="float:right"><button type="button" id="hosts-ping">Ping mesh</button></span></h2>
+    <div class="hint" id="hosts-note"></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;align-items:start">
+      <div class="wide"><table id="inv-hosts"><thead><tr><th>Host</th><th>Behind</th><th>LAN address</th><th>Gateway</th><th>OOB</th><th>VM</th></tr></thead><tbody></tbody></table></div>
+      <div id="hosts-matrix" class="hint wide">no ping run yet — <b>Ping mesh</b> pings every host from every other host (~15 s)</div>
+    </div>
+  </div>
+  <div class="card">
     <h2>Tunnels <small>model from Nautobot's VPN app · live state from the headend (IKEv2 SA, VTI, eBGP, ESP counters)</small></h2>
     <div class="wide"><table id="inv-tunnels"><thead><tr>
       <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Region / site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
@@ -392,6 +401,7 @@ function fill(I) {
     const days = Math.floor(c.days_left); const cls = c.expired ? 'fail' : days < 30 ? 'warn' : '';
     return `<span class="pill ${cls}" title="serial ${esc(c.serial)} · issued ${esc((c.issued || '').slice(0, 10))} · SHA-1 ${esc(c.fingerprint)}">${c.expired ? 'expired' : days + ' d'}</span> <span class="hint">until ${esc((c.not_after || '').slice(0, 10))}</span>`; };
   I.devices.forEach((d, i) => {
+    if (d.role === 'host') return;   // the LAN hosts live on the Inventory page (LAN hosts card); the intent keeps them at their router's site
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input data-dev="${i}" data-k="name" value="${d.name}"></td><td><input readonly value="${d.mgmt_ip}"></td>
       <td><span class="pill ${d.role}">${d.role}</span></td>
@@ -839,7 +849,22 @@ async function loadTools() {
 // ---- inventory --------------------------------------------------------------
 const age = s => s == null ? '' : s >= 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor(s % 86400 / 3600) + 'h' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : Math.floor(s / 60) + 'm';
 const bps = n => n == null ? '' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' Mb/s' : n >= 1e3 ? (n / 1e3).toFixed(0) + ' kb/s' : n + ' b/s';
+async function loadHosts(ping) {
+  $('hosts-note').textContent = ping ? 'pinging every host from every other host…' : '';
+  const r = await fetch('/api/hosts' + (ping ? '?ping=true' : '')); if (!r.ok) { $('hosts-note').textContent = `HTTP ${r.status}`; return; }
+  const d = await r.json();
+  $('inv-hosts').querySelector('tbody').innerHTML = d.hosts.map(h => `<tr><td class="cred">${esc(h.name)}</td><td><span class="pill ${h.router.endsWith('headend') ? 'hub' : 'spoke'}">${esc(h.router)}</span> <span class="hint">${esc(h.lan_if)}</span></td><td class="cred">${esc(h.lan_ip)}/24</td><td class="cred">${esc(h.gateway)}</td><td class="cred">${esc(h.mgmt_ip)}</td><td><span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></td></tr>`).join('');
+  if (d.matrix) {
+    const names = Object.keys(d.matrix.hosts), res = d.matrix.results;
+    $('hosts-matrix').innerHTML = `<table style="font-size:12px"><thead><tr><th>from \\ to</th>${names.map(n => `<th>${esc(n.replace('host-', ''))}</th>`).join('')}</tr></thead><tbody>${names.map(s => `<tr><td class="cred">${esc(s.replace('host-', ''))}</td>${names.map(t => t === s ? '<td class="hint">·</td>' : `<td><span class="pill ${res[s][t] === 'ok' ? '' : 'fail'}">${res[s][t] === 'ok' ? 'ok' : esc(res[s][t])}</span></td>`).join('')}</tr>`).join('')}</tbody></table>
+      <div class="hint" style="margin-top:6px">${d.matrix.pairs - d.matrix.failed.length} / ${d.matrix.pairs} pairs reachable${d.matrix.ok ? ' — full mesh' : ' — failed: ' + d.matrix.failed.map(p => p.join(' → ')).join(', ')} · ${new Date(d.matrix.generated * 1000).toLocaleTimeString()}</div>`;
+    $('hosts-note').textContent = '';
+  }
+}
+$('hosts-ping').onclick = () => loadHosts(true);
+
 async function loadInventory(refresh) {
+  loadHosts(false);
   $('inv-generated').textContent = refresh ? 'collecting live data from the headends…' : 'loading…';
   const r = await fetch('/api/vpn-inventory' + (refresh ? '?refresh=1' : ''));
   if (!r.ok) { $('inv-generated').textContent = (await r.json()).detail; return; }

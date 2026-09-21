@@ -35,7 +35,7 @@ def address_names(I):
     for d in I.get("devices") or []:
         try:
             if d.get("router_id"): names[str(ipaddress.IPv4Address(d["router_id"]))] = f"{d['name']} Lo0"
-            if d.get("lan"): names[str(ipaddress.IPv4Network(d["lan"]).network_address + 1)] = f"{d['name']} Lo10 ({d['lan']})"
+            if d.get("lan"): names[str(ipaddress.IPv4Network(d["lan"]).network_address + 1)] = f"{d['name']} LAN ({d['lan']})"; names[str(ipaddress.IPv4Network(d["lan"]).network_address + 2)] = f"{intent_mod.host_of(I, d['name']) or 'host'} ({d['lan']})"
         except ValueError: pass   # a firewall carries neither
         names[d["mgmt_ip"]] = f"{d['name']} mgmt"
     return names

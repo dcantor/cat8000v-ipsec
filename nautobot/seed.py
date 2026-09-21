@@ -29,16 +29,18 @@ nb = pynautobot.api(a.url, token=a.token)
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 SITE = I["site"]["name"]
 DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(n for n, d in DEV.items() if d["role"] in ("hub", "spoke")); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
-FIREWALLS = sorted(n for n, d in DEV.items() if d["role"] == "firewall")
+FIREWALLS = sorted(n for n, d in DEV.items() if d["role"] == "firewall"); LAN_HOSTS = sorted(n for n, d in DEV.items() if d["role"] == "host")
 NODES = intent_mod.nodes()                                # mgmt ip -> {node, idx, role} (VM facts)
-LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items() if d["role"] != "firewall"}
+LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items() if d["role"] in ("hub", "spoke")}   # .1 = the router's LAN port; .2 = its host
 LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
-def port_name(node, port): return f"eth{port}" if DEV[node]["role"] == "firewall" else f"GigabitEthernet{port}"
+LAN_LINKS = [l for l in LINKS if intent_mod.is_lan_link(I, l)]; WAN_LINKS = [l for l in LINKS if not intent_mod.is_lan_link(I, l)]
+def port_name(node, port): return f"eth{port}" if DEV[node]["role"] in ("firewall", "host") else f"GigabitEthernet{port}"
 WIRED = {}                                              # (node, port) -> "peer <interface>"
 for l in LINKS:
     WIRED[(l["a"], l["a_port"])] = f"{l['b']} {port_name(l['b'], l['b_port'])}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} {port_name(l['a'], l['a_port'])}"
 SC = intent_mod.scalars("MAC_OUI", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS"); OUI = SC["MAC_OUI"] or "52:54:00:c7"
-PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2)), "firewall": range(1, 1 + int(SC["FW_PORTS"] or 8))}
+PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2)), "firewall": range(1, 1 + int(SC["FW_PORTS"] or 8)), "host": range(1, 2)}
+LAN_PORT = {n: intent_mod.lan_port(I, n) for n in ROUTERS}   # the router's last port is its site LAN (.1 of the LAN /24; the host behind it .2)
 
 created = []
 def gql(query):
@@ -118,9 +120,9 @@ regions, branches = {}, {}
 for i, name in enumerate(I["regions"]):
     regions[name] = get_or_create(nb.dcim.locations, {"name": name}, location_type=lt_region.id, parent=site.id, status=active.id)
     ensure(regions[name], parent=site.id, description=f"region #{i + 1} of {len(I['regions'])}")
-for d in sorted(I["devices"], key=lambda x: x["role"] == "firewall"):   # routers first: a firewall shares (and never re-describes) its headend's site
+for d in sorted(I["devices"], key=lambda x: x["role"] in ("firewall", "host")):   # routers first: a firewall / a LAN host shares (and never re-describes) its router's site
     br = branches.get(d["site"]) or get_or_create(nb.dcim.locations, {"name": d["site"]}, location_type=lt_branch.id, parent=regions[d["region"]].id, status=active.id)
-    if d["role"] != "firewall":
+    if d["role"] not in ("firewall", "host"):
         where = f" — {d['city']}" if d.get("city") else ""   # the city and its coordinates place the site on the portal's map (Location latitude / longitude)
         ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}{where}",
                **({"latitude": f"{float(d['lat']):.6f}", "longitude": f"{float(d['lon']):.6f}"} if d.get("lat") is not None else {}))
@@ -260,14 +262,37 @@ for r in ROUTERS:
     ensure_ip(g1, f"{d['mgmt_ip']}/24", primary_of=dev)
     for port in PORTS[d["role"]]:  # wired ports get description/enabled from the links; set here so one update suffices
         wired = WIRED.get((r, port))
+        if port == LAN_PORT[r]:   # the site LAN: always up with .1 of the LAN /24 (advertised by BGP), a host behind it when one is wired
+            gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"site LAN {d['lan']}" + (f" ({wired})" if wired else " (no host)"), enabled=True, mac=f"{OUI}:{idx:02x}:{port:02x}")
+            continue
         if not wired and foreign_wired(dev, f"GigabitEthernet{port}"):   # cabled by another lab (the SRv6 core's attachment on a headend): theirs, leave it alone
             gi[(r, port)] = nb.dcim.interfaces.get(device=dev.id, name=f"GigabitEthernet{port}"); continue
         gi[(r, port)] = ensure_iface(dev, f"GigabitEthernet{port}", "1000base-t", f"WAN to {wired}" if wired else "unwired", enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
         if not wired:   # a port that lost its link (re-wiring) must not keep an address
             for x in nb.ipam.ip_address_to_interface.filter(interface=gi[(r, port)].id): x.delete(); created.append(f"unassigned address from unwired {r}/GigabitEthernet{port}")
     lo0 = ensure_iface(dev, "Loopback0", "virtual", "Router ID"); tag(ensure_prefix(f"{d['router_id']}/32", prole["loopback"], f"{r} router-id")); ensure_ip(lo0, f"{d['router_id']}/32")
-    lo10 = ensure_iface(dev, "Loopback10", "virtual", "site LAN"); tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(lo10, f"{LAN_IP[r]}/24")
+    # the site LAN used to be Loopback10: it lives on the LAN port now (the host's default gateway)
+    lo10 = nb.dcim.interfaces.get(device=dev.id, name="Loopback10")
+    if lo10: lo10.delete(); created.append(f"removed {r}/Loopback10 (the site LAN is GigabitEthernet{LAN_PORT[r]} now)")
+    tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(gi[(r, LAN_PORT[r])], f"{LAN_IP[r]}/24")
     devs[r] = dev
+# LAN hosts: one Alpine VM behind every router (cloud-init, no onboarding); eth0 = management, eth1 = the router's LAN (.2)
+if LAN_HOSTS:
+    hmfr = get_or_create(nb.dcim.manufacturers, {"name": "Alpine Linux"})
+    htype = nb.dcim.device_types.get(model="Alpine VM", manufacturer=hmfr.id) or nb.dcim.device_types.create(model="Alpine VM", manufacturer=hmfr.id, u_height=0); htype = nb.dcim.device_types.get(model="Alpine VM", manufacturer=hmfr.id)
+    hplat = nb.dcim.platforms.get(name="alpine") or nb.dcim.platforms.create(name="alpine", manufacturer=hmfr.id, network_driver="linux"); hplat = nb.dcim.platforms.get(name="alpine")
+    hrole = get_or_create(nb.extras.roles, {"name": "lan-host"}, color="4caf50", content_types=["dcim.device"])
+    for h in LAN_HOSTS:
+        d = DEV[h]; r = d["router"]
+        dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else nb.dcim.devices.get(name=h)
+        if dev is None:
+            dev = nb.dcim.devices.create(name=h, device_type=htype.id, role=hrole.id, platform=hplat.id, status=active.id, location=branches[DEV[r]["site"]].id); created.append(f"device:{h}")
+        ensure(dev, name=h, role=hrole.id, platform=hplat.id, status=active.id, location=branches[DEV[r]["site"]].id, comments=d.get("comments", ""))
+        idx = NODES[d["mgmt_ip"]]["idx"]
+        e0 = ensure_iface(dev, "eth0", "1000base-t", "OOB management", mgmt_only=True, mac=f"{OUI}:{idx:02x}:00")
+        ensure_ip(e0, f"{d['mgmt_ip']}/24", primary_of=dev)
+        gi[(h, 1)] = ensure_iface(dev, "eth1", "1000base-t", f"LAN of {r} (GigabitEthernet{LAN_PORT[r]})", mac=f"{OUI}:{idx:02x}:01")
+        devs[h] = dev
 # firewalls: VyOS devices created here (no onboarding); eth0 = management, eth1 = headend side, eth2.. = spokes
 if FIREWALLS:
     mfr = get_or_create(nb.dcim.manufacturers, {"name": "VyOS"})
@@ -290,11 +315,16 @@ if FIREWALLS:
         devs[f] = dev
 
 # WAN point-to-point links: addresses, cables
-for l in LINKS:
+for l in WAN_LINKS:
     an, ap, bn, bp, pfx = l["a"], l["a_port"], l["b"], l["b_port"], l["prefix"]; hosts = list(ipaddress.IPv4Network(pfx).hosts())
     ensure_prefix(pfx, prole["wan-p2p"], f"WAN link {an} Gi{ap} - {bn} Gi{bp}")
     ia, ib = gi[(an, ap)], gi[(bn, bp)]
     ensure_ip(ia, f"{hosts[0]}/30"); ensure_ip(ib, f"{hosts[1]}/30"); ensure_cable(ia, ib)
+# LAN links: the router's LAN port (.1, addressed above) <-> its host's eth1 (.2), cabled
+for l in LAN_LINKS:
+    rn, rp, hn, hp = (l["a"], l["a_port"], l["b"], l["b_port"]) if DEV[l["a"]]["role"] != "host" else (l["b"], l["b_port"], l["a"], l["a_port"])
+    hosts = list(ipaddress.IPv4Network(l["prefix"]).hosts())
+    ensure_ip(gi[(hn, hp)], f"{hosts[1]}/24"); ensure_cable(gi[(rn, rp)], gi[(hn, hp)])
 # VTI tunnels: hub TunnelN <-> spoke TunnelN over the link between them, as core VPN tunnels with two endpoints
 def wan_iface(r, other):
     """The interface on r that carries traffic to `other`: the direct link, or (for a headend) its firewall link."""

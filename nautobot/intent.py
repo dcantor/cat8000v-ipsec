@@ -43,6 +43,8 @@ def from_lab_conf():
     for n in sorted(C["ROLE"]):
         if C["ROLE"][n] == "firewall":
             devices.append({"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": "firewall", "hub": None, "comments": ""})   # hub filled in from the links below
+        elif C["ROLE"][n] == "host":
+            devices.append({"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": "host", "router": None, "comments": ""})   # router filled in from its LAN link below
         else:
             devices.append({"name": n, "mgmt_ip": C["MGMT_IP"][n], "role": C["ROLE"][n], "asn": int(C["BGP_AS"][n]),
                             "router_id": f"10.255.1.{C['NODE_IDX'][n]}", "lan": C["LAN"][n], "comments": ""})
@@ -50,9 +52,11 @@ def from_lab_conf():
     for l in C["LINKS"].values():
         a_end, b_end, pfx = l.split(); (an, ap), (bn, bp) = a_end.split(":"), b_end.split(":")
         links.append({"a": an, "a_port": int(ap), "b": bn, "b_port": int(bp), "prefix": pfx})
-    for d in devices:   # a firewall fronts the headend on its eth1 link
+    for d in devices:   # a firewall fronts the headend on its eth1 link; a host hangs off its router's LAN port (eth1)
         if d["role"] == "firewall":
             d["hub"] = next((l["b"] for l in links if l["a"] == d["name"] and l["a_port"] == 1), None)
+        if d["role"] == "host":
+            d["router"] = next((l["a"] for l in links if l["b"] == d["name"] and l["b_port"] == 1), None)
     tunnels = []
     for t in C["TUNNELS"].values():   # "id hub spoke prefix" (older 3-field form: the single hub is implied)
         f = t.split(); hub = f[1] if len(f) == 4 else next(n for n in C["ROLE"] if C["ROLE"][n] == "hub")
@@ -137,6 +141,20 @@ def profile_names(I, auth):
     ios = dict((I.get("profile") or {}).get("ios") or {}); suffix = "" if auth == default_auth(I) else ("-CERT" if auth == "certificate" else "-PSK")
     return {**ios, "ikev2_profile": ios["ikev2_profile"] + suffix, "ipsec_profile": ios["ipsec_profile"] + suffix, "profile": (I.get("profile") or {}).get("name", "VPN-IPSEC") + suffix, "auth": auth}
 
+LAN_PORT = {"hub": 9, "spoke": 5}   # the last port of a router is its site LAN (HUB_LAN_PORT / SPOKE_LAN_PORT in lab.conf)
+def lan_port(I, router):
+    """The router's LAN port number: from lab.conf when present, else the defaults."""
+    d = next((x for x in I["devices"] if x["name"] == router), None) or {}
+    sc = scalars("HUB_LAN_PORT", "SPOKE_LAN_PORT") if (LAB / "lab.conf").exists() else {}
+    return int(sc.get("HUB_LAN_PORT") or LAN_PORT["hub"]) if d.get("role") == "hub" else int(sc.get("SPOKE_LAN_PORT") or LAN_PORT["spoke"])
+def host_of(I, router):
+    """The LAN host behind a router (device role host with router = it), or None."""
+    return next((d["name"] for d in I["devices"] if d.get("role") == "host" and d.get("router") == router), None)
+def is_lan_link(I, link):
+    """A link is a LAN link when one end is a host (the router's LAN /24, .1 on the router, .2 on the host)."""
+    roles = {d["name"]: d.get("role") for d in I["devices"]}
+    return "host" in (roles.get(link.get("a")), roles.get(link.get("b")))
+
 def firewall_of(I, hub):
     """The firewall fronting a headend (None when the headend is wired directly)."""
     return next((d["name"] for d in I["devices"] if d.get("role") == "firewall" and d.get("hub") == hub), None)
@@ -202,6 +220,14 @@ def validate(intent):
             if d.get("hub") not in {x["name"] for x in devs if x.get("role") == "hub"}: errs.append(f"{d.get('name')}: hub {d.get('hub')!r} is not a headend")
             if not (1 <= int(d.get("bandwidth_mbps") or 0) <= 100000): errs.append(f"{d.get('name')}: bandwidth_mbps must be 1..100000")
             continue
+        if d.get("role") == "host":   # a LAN host: management address, the router it hangs off (its LAN link is the router's LAN /24)
+            try: ipaddress.IPv4Address(d.get("mgmt_ip", ""))
+            except ValueError: errs.append(f"{d.get('name')}: mgmt_ip {d.get('mgmt_ip')!r} is not an IPv4 address")
+            r = next((x for x in devs if x.get("name") == d.get("router")), None)
+            if not r or r.get("role") not in ("hub", "spoke"): errs.append(f"{d.get('name')}: router {d.get('router')!r} is not a router")
+            elif not any({l.get("a"), l.get("b")} == {d["name"], r["name"]} and l.get("prefix") == r.get("lan") for l in intent.get("links") or []):
+                errs.append(f"{d.get('name')}: needs a LAN link to {r['name']} with prefix {r.get('lan')}")
+            continue
         for f in ("mgmt_ip", "router_id"):
             try: ipaddress.IPv4Address(d.get(f, ""))
             except ValueError: errs.append(f"{d.get('name')}: {f} {d.get(f)!r} is not an IPv4 address")
@@ -231,7 +257,9 @@ def validate(intent):
     for l in intent.get("links") or []:
         try:
             n = ipaddress.IPv4Network(l.get("prefix", ""), strict=True)
-            if n.prefixlen != 30: errs.append(f"link {l.get('a')}-{l.get('b')}: prefix must be a /30")
+            if is_lan_link(intent, l):
+                if n.prefixlen != 24: errs.append(f"LAN link {l.get('a')}-{l.get('b')}: prefix must be the router's /24")
+            elif n.prefixlen != 30: errs.append(f"link {l.get('a')}-{l.get('b')}: prefix must be a /30")
             if n in used: errs.append(f"prefix {n} used twice")
             used.add(n)
         except ValueError: errs.append(f"link {l.get('a')}-{l.get('b')}: bad prefix {l.get('prefix')!r}")

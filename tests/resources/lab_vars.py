@@ -16,6 +16,11 @@ SPOKES = sorted(d["name"] for d in _I["devices"] if d["role"] == "spoke")
 ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
                        "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1]), "region": d.get("region"), "site": d.get("site"),
                        "site_code": d.get("site_code", ""), "psk": d.get("psk")} for d in _I["devices"] if d["role"] in ("hub", "spoke")}
+for _n, _r in ROUTERS.items(): _r["lan_if"] = f"GigabitEthernet{intent_mod.lan_port(_I, _n)}"   # the site LAN lives on the router's LAN port (.1)
+# the LAN hosts: one Alpine VM behind every router (eth1 = .2 of the router's LAN /24, default gateway .1; OOB eth0, lab / lab)
+LAN_HOSTS = {d["name"]: {"host": d["mgmt_ip"], "router": d["router"], "lan": ROUTERS[d["router"]]["lan"], "lan_ip": str(ipaddress.IPv4Network(ROUTERS[d["router"]]["lan"])[2]),
+                         "gateway": ROUTERS[d["router"]]["lan_ip"]} for d in _I["devices"] if d["role"] == "host"}
+HOST_OF = {h["router"]: n for n, h in LAN_HOSTS.items()}
 REGIONS = _I.get("regions", [])
 ROUTER_NAMES = list(ROUTERS)
 # VyOS firewalls: one per headend, between the headend (eth1) and its spokes (eth2..)

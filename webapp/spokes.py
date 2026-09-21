@@ -13,16 +13,17 @@ MIN_HEADENDS = 2     # every spoke needs redundant headends
 def facts():
     """Current allocations from lab.conf + the intent."""
     C = intent_mod.lab_conf("ROLE", "MGMT_IP", "BGP_AS", "LAN", "NODE_IDX", "CONSOLE_PORT")
-    sc = intent_mod.scalars("OOB_GATEWAY", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS", "C8000V_RAM_MIB")
+    sc = intent_mod.scalars("OOB_GATEWAY", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS", "C8000V_RAM_MIB", "HUB_LAN_PORT", "SPOKE_LAN_PORT")
     I = intent_mod.load(); hubs = [d for d in I["devices"] if d["role"] == "hub"]
+    lan = {"hub": int(sc["HUB_LAN_PORT"] or intent_mod.LAN_PORT["hub"]), "spoke": int(sc["SPOKE_LAN_PORT"] or intent_mod.LAN_PORT["spoke"])}   # a router's last port is its site LAN, never a WAN link
     wiring = intent_mod.wiring()
     def ports_used(n): return {w["a_port"] for w in wiring if w["a"] == n} | {w["b_port"] for w in wiring if w["b"] == n}
     # a spoke's link lands on the headend's WAN edge: its firewall when it has one, else the headend itself
     def edge_of(h): return intent_mod.firewall_of(I, h) or h
-    def edge_ports(h): return range(2, 2 + (int(sc["FW_PORTS"] or 8) - 1)) if intent_mod.firewall_of(I, h) else range(2, 2 + int(sc["HUB_PORTS"] or 2))
+    def edge_ports(h): return range(2, 2 + (int(sc["FW_PORTS"] or 8) - 1)) if intent_mod.firewall_of(I, h) else [p for p in range(2, 2 + int(sc["HUB_PORTS"] or 2)) if p != lan["hub"]]
     def ifname(dev, port): return f"eth{port}" if any(d["name"] == dev and d["role"] == "firewall" for d in I["devices"]) else f"GigabitEthernet{port}"
     return {"C": C, "sc": sc, "I": I, "hubs": hubs, "hub": hubs[0], "wiring": wiring, "ports_used": ports_used, "edge_of": edge_of, "edge_ports": edge_ports, "ifname": ifname,
-            "hub_ports": range(2, 2 + int(sc["HUB_PORTS"] or 2)), "spoke_ports": range(2, 2 + int(sc["SPOKE_PORTS"] or 2)),
+            "hub_ports": [p for p in range(2, 2 + int(sc["HUB_PORTS"] or 2)) if p != lan["hub"]], "spoke_ports": [p for p in range(2, 2 + int(sc["SPOKE_PORTS"] or 2)) if p != lan["spoke"]], "lan_port": lan,
             "capacity": int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)}
 
 

@@ -833,6 +833,26 @@ def auth_plan(name: str, method: str = Query(..., pattern="^(psk|certificate)$")
     return {"ok": not problems, "problems": problems, **(details or {})}
 
 
+_hosts_cache = {}
+@app.get("/api/hosts", tags=["monitoring"], summary="The LAN hosts (one Alpine VM behind every router) and, with ?ping=true, the full host-to-host ping mesh over the tunnels")
+def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (every host pings every other host, ~15 s; cached 60 s)")):
+    """From the intent: each host, its router, its LAN address (.2 of the router's site LAN) and gateway (.1, the router's LAN port); VM state
+    from virsh. `ping=true` runs tools/host_cmd.py's matrix (SSH into every host in parallel, `ping -c 2` to every other LAN address)."""
+    sys.path.insert(0, str(LAB / "tools")); import host_cmd
+    I = intent_mod.load(); vms = _vm_states()
+    hosts = [{"name": d["name"], "mgmt_ip": d["mgmt_ip"], "router": d["router"], "site": d.get("site"), "region": d.get("region"),
+              "lan": next(x["lan"] for x in I["devices"] if x["name"] == d["router"]), "lan_ip": str(ipaddress.IPv4Network(next(x["lan"] for x in I["devices"] if x["name"] == d["router"]))[2]),
+              "gateway": str(ipaddress.IPv4Network(next(x["lan"] for x in I["devices"] if x["name"] == d["router"]))[1]), "lan_if": f"GigabitEthernet{intent_mod.lan_port(I, d['router'])}",
+              "state": vms.get((d["name"], "host"), "undefined")} for d in I["devices"] if d["role"] == "host"]
+    out = {"hosts": sorted(hosts, key=lambda h: (not h["router"].endswith("headend"), h["router"])), "matrix": None}
+    if ping:
+        c = _hosts_cache.get("matrix")
+        if not c or time.time() - c["generated"] > 60:
+            m = host_cmd.matrix(); c = {"generated": time.time(), **m}; _hosts_cache["matrix"] = c
+        out["matrix"] = c
+    return out
+
+
 @app.get("/api/pki", tags=["monitoring"], summary="The lab CA and every router certificate it issued (pki/index.json), with days left; the IKE authentication mode")
 def pki_status():
     I = intent_mod.load(); st = lab_ca.status()

@@ -25,7 +25,7 @@ QUERY = q["results"][0]["query"] if q["count"] == 1 else (Path(__file__).resolve
 r = requests.post(f"{a.url}/api/graphql/", json={"query": QUERY}, headers=H, timeout=60); r.raise_for_status()
 data = r.json()
 if data.get("errors"): sys.exit(f"GraphQL errors: {data['errors']}")
-devices = sorted((d for d in data["data"]["devices"] if (d.get("role") or {}).get("name") != "vpn-firewall"), key=lambda d: d["name"])   # firewalls are VyOS: rendered by render_vyos.py
+devices = sorted((d for d in data["data"]["devices"] if (d.get("role") or {}).get("name") in ("vpn-hub", "vpn-spoke")), key=lambda d: d["name"])   # firewalls are VyOS (render_vyos.py); LAN hosts are cloud-init
 bgp_ri = {x["device"]["name"]: x for x in data["data"]["bgp_routing_instances"]}
 # GraphQL renders choice values as enum names (IPSEC_TUNNEL, AES_256_CBC, IKEV2); keys below use that form
 ENCAP = {"IPSEC_TUNNEL": "ipsec ipv4", "GRE": "gre ip"}

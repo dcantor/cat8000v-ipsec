@@ -25,7 +25,7 @@ COOKIE = "portal_session"; SESSION_HOURS = 12
 current_user = contextvars.ContextVar("portal_user", default=None)
 
 # what each verb / path needs: the first matching rule wins; anything not listed needs a viewer login
-OPEN = [("GET", "/metrics"), ("GET", "/api/sd"), ("GET", "/api/vpn-inventory"), ("GET", "/api/runs"), ("GET", "/api/intent"), ("GET", "/api/cities"), ("GET", "/api/pki"),
+OPEN = [("GET", "/metrics"), ("GET", "/api/sd"), ("GET", "/api/vpn-inventory"), ("GET", "/api/runs"), ("GET", "/api/intent"), ("GET", "/api/cities"), ("GET", "/api/pki"), ("GET", "/api/hosts"),
         ("GET", "/api/me"), ("POST", "/api/login"), ("POST", "/api/logout"), ("GET", "/docs"), ("GET", "/redoc"), ("GET", "/openapi.json"), ("GET", "/static/"), ("GET", "/results/"), ("GET", "/")]
 APPROVER_RUN_MODES = {"remove"}
 

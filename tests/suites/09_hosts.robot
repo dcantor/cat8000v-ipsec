@@ -1,0 +1,59 @@
+*** Settings ***
+Documentation     The LAN hosts: one small Alpine VM behind every router (its eth1 = .2 of the site LAN, the router's LAN port .1 as the
+...               gateway), modelled in Nautobot and cabled to the router; every host reaches every other host — branch to branch through
+...               a headend, branch to headend, headend to headend — over the IPsec tunnels (full ping mesh), and the path shows the tunnel.
+Resource          ../resources/common.resource
+Library           OperatingSystem
+Library           ../../tools/host_cmd.py
+Suite Teardown    Suite Teardown Close Connections
+
+*** Test Cases ***
+Every router has a LAN host, reachable over the OOB network, addressed on the site LAN with the router as its gateway
+    FOR    ${r}    IN    @{ROUTER_NAMES}
+        Dictionary Should Contain Key    ${HOST_OF}    ${r}    msg=${r} has no LAN host in the intent
+    END
+    FOR    ${h}    IN    @{LAN_HOSTS}
+        Host Ping    ${LAN_HOSTS}[${h}][host]
+        Tcp Port Should Be Open    ${LAN_HOSTS}[${h}][host]    22
+        ${rc}    ${out}=    Run    ${LAN_HOSTS}[${h}][host]    ip -4 -br addr show eth1; ip route show default; hostname
+        Should Be Equal As Integers    ${rc}    0
+        Should Match Regexp    ${out}    (?m)^eth1\\s+UP\\s+${LAN_HOSTS}[${h}][lan_ip]/24
+        Should Contain    ${out}    default via ${LAN_HOSTS}[${h}][gateway]
+        Should Contain    ${out}    ${h}
+    END
+
+The hosts are modelled in Nautobot: device at the router's site, eth1 addressed and cabled to the router's LAN port
+    ${d}=    Nautobot Graphql    { devices(role: ["lan-host"], location: ["${NAUTOBOT_LOCATION}"]) { name platform { name } location { name } primary_ip4 { address } interfaces { name enabled ip_addresses { address parent { prefix role { name } } } connected_interface { name device { name } ip_addresses { address } } } } }
+    Length Should Be    ${d}[devices]    ${{ len($LAN_HOSTS) }}
+    FOR    ${dev}    IN    @{d}[devices]
+        ${h}=    Set Variable    ${LAN_HOSTS}[${dev}[name]]
+        Should Be Equal    ${dev}[platform][name]    alpine
+        Should Be Equal    ${dev}[location][name]    ${ROUTERS}[${h}[router]][site]
+        Should Be Equal    ${dev}[primary_ip4][address]    ${h}[host]/24
+        ${e1}=    Evaluate    [i for i in $dev['interfaces'] if i['name'] == 'eth1'][0]
+        Should Be Equal    ${e1}[ip_addresses][0][address]    ${h}[lan_ip]/24
+        Should Be Equal    ${e1}[ip_addresses][0][parent][prefix]    ${h}[lan]
+        Should Be Equal    ${e1}[ip_addresses][0][parent][role][name]    site-lan
+        Should Be Equal    ${e1}[connected_interface][device][name]    ${h}[router]
+        Should Be Equal    ${e1}[connected_interface][name]    ${ROUTERS}[${h}[router]][lan_if]
+        Should Be Equal    ${e1}[connected_interface][ip_addresses][0][address]    ${h}[gateway]/24
+    END
+
+Every host reaches every other host: the full ping mesh over the tunnels
+    [Documentation]    Every ordered pair (42 for 7 hosts): branch to its headends, branch to branch through a shared headend, headend
+    ...    to headend through a spoke homed on both (headends do not peer with each other).
+    ${m}=    Matrix
+    Log    ${m}[results]
+    Should Be True    ${m}[ok]    msg=${m}[failed] of ${m}[pairs] pairs failed: ${m}[failed]
+    Should Be Equal As Integers    ${m}[pairs]    ${{ len($LAN_HOSTS) * (len($LAN_HOSTS) - 1) }}
+
+The path between two branch hosts goes through the branch routers and a headend's tunnels
+    ${a}=    Set Variable    ${HOST_OF}[${SPOKES}[0]]
+    ${b}=    Set Variable    ${HOST_OF}[${SPOKES}[1]]
+    ${rc}    ${tr}=    Run    ${LAN_HOSTS}[${a}][host]    traceroute -n -w 2 -q 1 -m 8 ${LAN_HOSTS}[${b}][lan_ip]
+    Log    ${tr}
+    Should Contain    ${tr}    ${LAN_HOSTS}[${a}][gateway]    msg=first hop must be ${SPOKES}[0]'s LAN port
+    ${hub_hops}=    Evaluate    [t['hub_ip'] for t in $TUNNEL_LIST if t['spoke'] == $SPOKES[0]]
+    ${seen}=    Evaluate    [h for h in $hub_hops if h in """${tr}"""]
+    Should Not Be Empty    ${seen}    msg=no headend tunnel address in the path: ${hub_hops}
+    Should Contain    ${tr}    ${LAN_HOSTS}[${b}][lan_ip]

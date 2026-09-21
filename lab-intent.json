@@ -103,42 +103,6 @@
       "lon": -118.2437
     },
     {
-      "name": "fw-central",
-      "mgmt_ip": "10.2.0.22",
-      "role": "firewall",
-      "hub": "central-headend",
-      "comments": "VyOS firewall in front of central-headend",
-      "region": "Central",
-      "site": "central-hq",
-      "site_code": "",
-      "contact": "",
-      "bandwidth_mbps": 50
-    },
-    {
-      "name": "fw-east",
-      "mgmt_ip": "10.2.0.21",
-      "role": "firewall",
-      "hub": "east-headend",
-      "comments": "VyOS firewall in front of east-headend",
-      "region": "East",
-      "site": "east-hq",
-      "site_code": "",
-      "contact": "",
-      "bandwidth_mbps": 40
-    },
-    {
-      "name": "fw-west",
-      "mgmt_ip": "10.2.0.23",
-      "role": "firewall",
-      "hub": "west-headend",
-      "comments": "VyOS firewall in front of west-headend",
-      "region": "West",
-      "site": "west-hq",
-      "site_code": "",
-      "contact": "",
-      "bandwidth_mbps": 90
-    },
-    {
       "name": "spoke1",
       "mgmt_ip": "10.2.0.12",
       "role": "spoke",
@@ -209,6 +173,119 @@
       "city": "Denver, CO",
       "lat": 39.7392,
       "lon": -104.9903
+    },
+    {
+      "name": "fw-central",
+      "mgmt_ip": "10.2.0.22",
+      "role": "firewall",
+      "hub": "central-headend",
+      "comments": "VyOS firewall in front of central-headend",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 50
+    },
+    {
+      "name": "fw-east",
+      "mgmt_ip": "10.2.0.21",
+      "role": "firewall",
+      "hub": "east-headend",
+      "comments": "VyOS firewall in front of east-headend",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 40
+    },
+    {
+      "name": "fw-west",
+      "mgmt_ip": "10.2.0.23",
+      "role": "firewall",
+      "hub": "west-headend",
+      "comments": "VyOS firewall in front of west-headend",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 90
+    },
+    {
+      "name": "host-central",
+      "mgmt_ip": "10.2.0.32",
+      "role": "host",
+      "router": "central-headend",
+      "comments": "Alpine LAN host behind central-headend",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-east",
+      "mgmt_ip": "10.2.0.31",
+      "role": "host",
+      "router": "east-headend",
+      "comments": "Alpine LAN host behind east-headend",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke1",
+      "mgmt_ip": "10.2.0.34",
+      "role": "host",
+      "router": "spoke1",
+      "comments": "Alpine LAN host behind spoke1",
+      "region": "East",
+      "site": "branch-1",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke2",
+      "mgmt_ip": "10.2.0.35",
+      "role": "host",
+      "router": "spoke2",
+      "comments": "Alpine LAN host behind spoke2",
+      "region": "Central",
+      "site": "branch-2",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke3",
+      "mgmt_ip": "10.2.0.36",
+      "role": "host",
+      "router": "spoke3",
+      "comments": "Alpine LAN host behind spoke3",
+      "region": "West",
+      "site": "branch-3",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke4",
+      "mgmt_ip": "10.2.0.37",
+      "role": "host",
+      "router": "spoke4",
+      "comments": "Alpine LAN host behind spoke4",
+      "region": "Central",
+      "site": "branch-4",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-west",
+      "mgmt_ip": "10.2.0.33",
+      "role": "host",
+      "router": "west-headend",
+      "comments": "Alpine LAN host behind west-headend",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
     }
   ],
   "links": [
@@ -302,6 +379,55 @@
       "b": "spoke4",
       "b_port": 4,
       "prefix": "100.65.2.0/30"
+    },
+    {
+      "a": "east-headend",
+      "a_port": 9,
+      "b": "host-east",
+      "b_port": 1,
+      "prefix": "192.168.11.0/24"
+    },
+    {
+      "a": "central-headend",
+      "a_port": 9,
+      "b": "host-central",
+      "b_port": 1,
+      "prefix": "192.168.14.0/24"
+    },
+    {
+      "a": "west-headend",
+      "a_port": 9,
+      "b": "host-west",
+      "b_port": 1,
+      "prefix": "192.168.16.0/24"
+    },
+    {
+      "a": "spoke1",
+      "a_port": 5,
+      "b": "host-spoke1",
+      "b_port": 1,
+      "prefix": "192.168.12.0/24"
+    },
+    {
+      "a": "spoke2",
+      "a_port": 5,
+      "b": "host-spoke2",
+      "b_port": 1,
+      "prefix": "192.168.23.0/24"
+    },
+    {
+      "a": "spoke3",
+      "a_port": 5,
+      "b": "host-spoke3",
+      "b_port": 1,
+      "prefix": "192.168.13.0/24"
+    },
+    {
+      "a": "spoke4",
+      "a_port": 5,
+      "b": "host-spoke4",
+      "b_port": 1,
+      "prefix": "192.168.15.0/24"
     }
   ],
   "tunnels": [

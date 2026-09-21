@@ -30,17 +30,18 @@ class Inventory:
 
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
-        """VPN routers for the topology map: role, management IP, AS, site LAN (Loopback10), serial."""
+        """VPN routers for the topology map: role, management IP, AS, site LAN (the router's LAN port), serial."""
         q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name description latitude longitude cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
-                 interfaces(name: "Loopback10") { ip_addresses { address parent { prefix } } } } }"""
+                 interfaces { name ip_addresses { address parent { prefix role { name } } } } } }"""
         import sys; from pathlib import Path
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "nautobot")); import intent as intent_mod
         q = q % intent_mod.load()["site"]["name"]
         r = requests.post(f"{self.url}/api/graphql/", json={"query": q}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60); r.raise_for_status()
         out = []
         for d in r.json()["data"]["devices"]:
-            ri = (d["bgp_routing_instances"] or [{}])[0]; lo = ((d["interfaces"] or [{}])[0].get("ip_addresses") or [{}])[0]
+            ri = (d["bgp_routing_instances"] or [{}])[0]
+            lo = next((ip for i in (d["interfaces"] or []) for ip in (i.get("ip_addresses") or []) if ((ip.get("parent") or {}).get("role") or {}).get("name") == "site-lan"), {})
             out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
                         "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
                         "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"],
