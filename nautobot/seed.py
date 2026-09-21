@@ -155,7 +155,10 @@ def drop_legacy_tunnel_model(t):
 
 CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # policy for the VyOS firewalls between a headend and its spokes: only what the tunnels need may cross
-       "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "log_drops": True}, "management": {"ssh": True, "lldp": True}}}
+       # peers_only: IKE and ESP only between the modelled WAN addresses (the headend behind the firewall, the spokes cabled to it) — address groups
+       # rendered from Nautobot's cables and addresses; ICMP stays open for the underlay reachability tests. log_accepts: the IKE, ESP and
+       # ICMP accept rules log too — one line per new flow, since every later packet of a known flow is taken by the established rule
+       "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "peers_only": True, "log_drops": True, "log_accepts": True}, "management": {"ssh": True, "lldp": True}}}
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})

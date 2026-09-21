@@ -41,14 +41,31 @@ The rendered firewall configuration matches what runs on the firewalls
     ${rc}=    Vyos Check
     Should Be Equal As Integers    ${rc}    0    msg=a firewall drifted from Nautobot — run ./lab.sh nautobot vyos
 
-Only IKEv2, ESP and ICMP cross the firewall; the tunnels actually carry ESP through it
+Only IKEv2, ESP and ICMP cross the firewall, IKEv2 and ESP only between the modelled WAN addresses; the tunnels actually carry ESP through it
+    [Documentation]    The address groups HEADEND-WAN / SPOKE-WAN hold exactly the WAN addresses Nautobot models on the far ends of the
+    ...    firewall's cables; the IKE / ESP rules reference them in both directions.
     FOR    ${f}    IN    @{FIREWALLS}
         ${rules}=    Vyos    ${f}    show firewall ipv4 forward filter
-        Should Match Regexp    ${rules}    (?m)^10\\s+accept\\s+udp\\s+\\d+\\s+\\S+\\s+udp dport \\{ 500, 4500 \\}
-        Should Match Regexp    ${rules}    (?m)^20\\s+accept\\s+esp\\s+[1-9]\\d*\\s    msg=${f}: no ESP packets have crossed
+        Should Match Regexp    ${rules}    (?m)^10\\s+accept\\s+udp\\s+\\d+\\s+\\S+\\s+udp dport \\{ 500, 4500 \\} ip daddr @A_HEADEND-WAN ip saddr @A_SPOKE-WAN
+        Should Match Regexp    ${rules}    (?m)^11\\s+accept\\s+udp\\s+\\d+\\s+\\S+\\s+udp dport \\{ 500, 4500 \\} ip daddr @A_SPOKE-WAN ip saddr @A_HEADEND-WAN
+        Should Match Regexp    ${rules}    (?m)^20\\s+accept\\s+esp\\s+\\d+\\s+\\S+\\s+meta l4proto esp ip daddr @A_HEADEND-WAN ip saddr @A_SPOKE-WAN
+        Should Match Regexp    ${rules}    (?m)^21\\s+accept\\s+esp\\s+\\d+\\s+\\S+\\s+meta l4proto esp ip daddr @A_SPOKE-WAN ip saddr @A_HEADEND-WAN
+        # ESP actually crossing: conntrack tracks ESP with the generic tracker ("unknown" protocol) and, once a flow is known, every further
+        # packet is counted by the established rule, so the ESP rules' own counters only see the first packet of each flow (0 right after a
+        # policy reload while the flows persist) — the flow entries between the WAN addresses are the proof
+        ${ct}=    Vyos    ${f}    show conntrack table ipv4
+        Should Match Regexp    ${ct}    (?m)^100\\.6[45]\\.\\d+\\.\\d+\\s+100\\.6[45]\\.\\d+\\.\\d+\\s+.*\\sunknown\\s    msg=${f}: no ESP flow between the WAN addresses in the conntrack table
         Should Match Regexp    ${rules}    (?m)^30\\s+accept\\s+icmp
         Should Match Regexp    ${rules}    (?m)^900\\s+drop\\s+all
         Should Match Regexp    ${rules}    (?m)^default\\s+drop
+        ${groups}=    Vyos    ${f}    show configuration commands | match "firewall group address-group"
+        ${hub}=    Set Variable    ${FIREWALLS}[${f}][hub]
+        ${hub_wan}=    Evaluate    [str(__import__("ipaddress").IPv4Network(l["prefix"])[2]) for l in $LINKS if "${hub}" in (l["a"], l["b"]) and "${f}" in (l["a"], l["b"])]
+        ${spoke_wans}=    Evaluate    sorted(str(__import__("ipaddress").IPv4Network(l["prefix"])[2]) for l in $LINKS if "${f}" in (l["a"], l["b"]) and "${hub}" not in (l["a"], l["b"]))
+        ${have_hub}=    Get Regexp Matches    ${groups}    address-group HEADEND-WAN address '([\\d.]+)'    1
+        ${have_spokes}=    Get Regexp Matches    ${groups}    address-group SPOKE-WAN address '([\\d.]+)'    1
+        Lists Should Be Equal    ${{ sorted($have_hub) }}    ${{ sorted($hub_wan) }}    msg=${f}: HEADEND-WAN differs from the modelled headend WAN address
+        Lists Should Be Equal    ${{ sorted($have_spokes) }}    ${spoke_wans}    msg=${f}: SPOKE-WAN differs from the modelled spoke WAN addresses
     END
 
 Firewall bandwidth is modelled in Nautobot and bounds the headend capacity together with the tunnel count
@@ -68,10 +85,15 @@ Firewall bandwidth is modelled in Nautobot and bounds the headend capacity toget
         Should Be Equal As Integers    ${row}[tunnels]    ${hc}[tunnels]
         Should Be Equal As Integers    ${row}[bandwidth_mbps]    ${hc}[bandwidth_mbps]
         Should Be Equal As Integers    ${row}[bandwidth_used_mbps]    ${hc}[bandwidth_used_mbps]
-        Should Be Equal    ${row}[binding]    ${hc}[binding]
-        Should Be Equal As Integers    ${row}[effective_free]    ${hc}[effective_free]
-        ${agg}=    Evaluate    max($row["utilisation"], $row["bandwidth_utilisation"])
-        Should Be Equal As Numbers    ${row}[aggregate_utilisation]    ${agg}    msg=${h}: aggregate must be the tighter of the two constraints
+        IF    '${row}[binding]' == 'cpu'
+            # live: the headend's control-plane CPU can be the tightest constraint while the suites (or a Terraform apply) load it
+            Should Be True    ${row}[cpu_utilisation] >= max(${row}[utilisation], ${row}[bandwidth_utilisation])    msg=${h}: cpu-bound but the CPU utilisation is not the highest
+        ELSE
+            Should Be Equal    ${row}[binding]    ${hc}[binding]
+            Should Be Equal As Integers    ${row}[effective_free]    ${hc}[effective_free]
+        END
+        ${agg}=    Evaluate    max($row["utilisation"], $row["bandwidth_utilisation"], $row.get("cpu_utilisation") or 0)
+        Should Be Equal As Numbers    ${row}[aggregate_utilisation]    ${agg}    msg=${h}: aggregate must be the tightest of the constraints
         Should Be True    ${row}[bandwidth_used_mbps] <= ${row}[bandwidth_mbps]    msg=${h}: tunnels commit more than the firewall carries
     END
 

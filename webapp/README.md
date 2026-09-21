@@ -225,8 +225,14 @@ its interfaces (address, state, description — which spoke each port faces), th
 descriptions from the configuration, and the **firewall log** (`show log firewall`) for the last 1 h – 3 days: every entry
 parsed into rule, verdict, in → out interface, source and destination (resolved to the lab's device names from the intent's
 links, tunnels and loopbacks), protocol, ports and TCP flags — grouped by flow with hit counts first, every entry underneath.
-Collected over SSH from all firewalls in parallel, cached for 60 s; Refresh collects again. Rule 900 is the "log everything
-else" drop, so the log is the list of what the policy refused (e.g. the suites' SSH probe from a spoke to its headend).
+Collected over SSH from all firewalls in parallel, cached for 60 s; Refresh collects again.
+
+The policy (Nautobot config context `firewall.forward`): `allow: [ike, esp, icmp]`, `peers_only: true` — IKEv2 / NAT-T and ESP are
+admitted only between the modelled WAN addresses, as two address groups the renderer builds from Nautobot's cables (`HEADEND-WAN`,
+the far end of eth1; `SPOKE-WAN`, the far ends of the spoke ports) and one rule per direction (10 / 11 IKE, 20 / 21 ESP); ICMP
+from anywhere for the underlay tests; `log_accepts: true` — the accept rules log their first packet per flow (every later
+packet of a known flow is taken by the established / related rule 5, which never logs); rule 900 logs every drop. The rules
+table shows Source / Destination as the group name with its members; the log shows accepts and drops with their verdict.
 
 ### Tools page
 

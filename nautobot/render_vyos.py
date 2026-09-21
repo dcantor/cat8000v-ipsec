@@ -19,7 +19,7 @@ p.add_argument("names", nargs="*")
 a = p.parse_args(); H = {"Authorization": f"Token {a.token}"}
 SITE = intent_mod.load()["site"]["name"]
 Q = """{ devices(location: ["%s"], role: ["vpn-firewall"]) { name primary_ip4 { address } config_context
-          interfaces { name enabled description mgmt_only mac_address ip_addresses { address } connected_interface { name device { name role { name } } } } } }""" % SITE
+          interfaces { name enabled description mgmt_only mac_address ip_addresses { address } connected_interface { name device { name role { name } } ip_addresses { address } } } } }""" % SITE
 r = requests.post(f"{a.url}/api/graphql/", json={"query": Q}, headers=H, timeout=60); r.raise_for_status()
 fws = [d for d in r.json()["data"]["devices"] if not a.names or d["name"] in a.names]
 
@@ -37,14 +37,36 @@ def commands(dev):
         else:
             out += [f"set interfaces ethernet {i['name']} description 'unwired'", f"set interfaces ethernet {i['name']} disable"]
     out.append("delete firewall")
+    # the modelled peers: the headend's WAN address (the far end of eth1) and every spoke's WAN address (the far ends of the spoke ports),
+    # from Nautobot's cables — IKE and ESP are admitted only between them when the policy says peers_only
+    peers = {"hub": [], "spoke": []}
+    for i in dev["interfaces"]:
+        ci = i.get("connected_interface") or {}
+        if not (i["enabled"] and i["ip_addresses"] and ci.get("ip_addresses")): continue
+        role = ((ci.get("device") or {}).get("role") or {}).get("name", "")
+        if role in ("vpn-hub", "vpn-spoke"): peers["hub" if role == "vpn-hub" else "spoke"].append((ci["ip_addresses"][0]["address"].split("/")[0], (ci.get("device") or {}).get("name", "?")))
+    peers_only = bool(fwd.get("peers_only")) and peers["hub"] and peers["spoke"]
+    if peers_only:
+        out += [f"set firewall group address-group HEADEND-WAN description 'WAN address of the headend behind this firewall'"] + [f"set firewall group address-group HEADEND-WAN address {ip}" for ip, _ in sorted(peers["hub"])]
+        out += [f"set firewall group address-group SPOKE-WAN description 'WAN addresses of the spokes cabled to this firewall'"] + [f"set firewall group address-group SPOKE-WAN address {ip}" for ip, _ in sorted(peers["spoke"])]
     out.append(f"set firewall ipv4 forward filter default-action {fwd.get('default_action', 'drop')}")
     out += ["set firewall ipv4 forward filter rule 5 action accept", "set firewall ipv4 forward filter rule 5 state established", "set firewall ipv4 forward filter rule 5 state related",
             "set firewall ipv4 forward filter rule 5 description 'established / related'"]
     n = 10
+    log_accepts = bool(fwd.get("log_accepts"))   # the accept rules log their first packet per flow (the rest match rule 5, which never logs)
+    def between(rule, src, dst, proto, desc, port=None):
+        out.extend([f"set firewall ipv4 forward filter rule {rule} action accept", f"set firewall ipv4 forward filter rule {rule} protocol {proto}"] + ([f"set firewall ipv4 forward filter rule {rule} destination port {port}"] if port else []) +
+                   ([f"set firewall ipv4 forward filter rule {rule} source group address-group {src}", f"set firewall ipv4 forward filter rule {rule} destination group address-group {dst}"] if peers_only else []) +
+                   ([f"set firewall ipv4 forward filter rule {rule} log"] if log_accepts else []) +
+                   [f"set firewall ipv4 forward filter rule {rule} description '{desc}'"])
     for what in allow:
-        if what == "ike": out += [f"set firewall ipv4 forward filter rule {n} action accept", f"set firewall ipv4 forward filter rule {n} protocol udp", f"set firewall ipv4 forward filter rule {n} destination port 500,4500", f"set firewall ipv4 forward filter rule {n} description 'IKEv2 / NAT-T'"]
-        elif what == "esp": out += [f"set firewall ipv4 forward filter rule {n} action accept", f"set firewall ipv4 forward filter rule {n} protocol esp", f"set firewall ipv4 forward filter rule {n} description 'IPsec ESP'"]
-        elif what == "icmp": out += [f"set firewall ipv4 forward filter rule {n} action accept", f"set firewall ipv4 forward filter rule {n} protocol icmp", f"set firewall ipv4 forward filter rule {n} description 'ICMP (underlay reachability tests)'"]
+        if what == "ike":
+            between(n, "SPOKE-WAN", "HEADEND-WAN", "udp", "IKEv2 / NAT-T, spoke -> headend" if peers_only else "IKEv2 / NAT-T", "500,4500")
+            if peers_only: between(n + 1, "HEADEND-WAN", "SPOKE-WAN", "udp", "IKEv2 / NAT-T, headend -> spoke", "500,4500")
+        elif what == "esp":
+            between(n, "SPOKE-WAN", "HEADEND-WAN", "esp", "IPsec ESP, spoke -> headend" if peers_only else "IPsec ESP")
+            if peers_only: between(n + 1, "HEADEND-WAN", "SPOKE-WAN", "esp", "IPsec ESP, headend -> spoke")
+        elif what == "icmp": out += [f"set firewall ipv4 forward filter rule {n} action accept", f"set firewall ipv4 forward filter rule {n} protocol icmp"] + ([f"set firewall ipv4 forward filter rule {n} log"] if log_accepts else []) + [f"set firewall ipv4 forward filter rule {n} description 'ICMP (underlay reachability tests)'"]
         n += 10
     if fwd.get("log_drops", True): out += ["set firewall ipv4 forward filter rule 900 action drop", "set firewall ipv4 forward filter rule 900 log", "set firewall ipv4 forward filter rule 900 description 'log everything else'"]
     mgmt = fw.get("management") or {}
