@@ -226,6 +226,11 @@
     <div class="card"><h2>LAN host <small>the Alpine VM behind the router</small></h2><div id="br-host"></div></div>
     <div class="card"><h2>Runs that touched it <small>newest first</small></h2><table id="br-runs"><thead><tr><th>When</th><th>Run</th><th>Status</th><th>By</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   </div>
+  <div class="card"><h2>Configuration <small id="br-cfg-note">running config read over SSH · intended config and compliance from Nautobot's Golden Config</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><select id="br-cfg-which"><option value="running">running (live)</option><option value="intended">intended (Nautobot)</option><option value="backup">last backup (Nautobot)</option></select><button type="button" class="small" onclick="loadConfig(true)">Re-read</button><button type="button" class="small" id="br-cfg-dl">Download</button></span></h2>
+    <div id="br-compliance" class="hint" style="margin-bottom:8px"></div>
+    <pre id="br-config" style="max-height:520px;overflow:auto;font-size:12px;line-height:1.35;background:var(--bg);padding:10px;border-radius:6px;white-space:pre">loading…</pre>
+  </div>
 </main>
 <main id="view-audit" hidden style="grid-template-columns:1fr">
   <div class="card">
@@ -801,6 +806,24 @@ async function loadBranches(refresh) {
     <td><a href="#branch/${encodeURIComponent(b.name)}"><button type="button" class="small">Open</button></a></td></tr>`).join('');
 }
 
+// ---- per-branch page: configuration ----------------------------------------------------------------------------------
+let CFG = null;
+function showConfig() {
+  if (!CFG) return;
+  const w = $('br-cfg-which').value; const text = w === 'running' ? CFG.running : (CFG.golden[w] || '');
+  $('br-config').textContent = text || (w === 'running' ? (CFG.error || 'no configuration') : `no ${w} config in Nautobot yet (run the Golden Config jobs)`);
+  $('br-cfg-note').textContent = `${w === 'running' ? `running config read ${new Date(CFG.generated * 1000).toLocaleTimeString()} · ${CFG.lines} lines` : `${w} config from Nautobot · ${(CFG.golden[w + '_at'] || '').slice(0, 19).replace('T', ' ')}`}${CFG.keys_shown ? '' : ' · pre-shared keys redacted (operator role shows them)'}`;
+}
+async function loadConfig(refresh) {
+  const name = decodeURIComponent(location.hash.slice(8)); $('br-config').textContent = refresh ? 'reading the running configuration…' : 'loading…';
+  const r = await fetch(`/api/branch/${encodeURIComponent(name)}/config${refresh ? '?refresh=true' : ''}`); if (!r.ok) { $('br-config').textContent = `HTTP ${r.status}`; return; }
+  CFG = await r.json(); showConfig();
+  const g = CFG.golden || {};
+  $('br-compliance').innerHTML = g.error ? `Nautobot Golden Config: ${esc(g.error)}` : (g.compliance || []).length ? `Compliance (Nautobot, ${esc((g.compliance_at || '').slice(0, 19).replace('T', ' '))}): ${g.compliance.map(c => `<span class="pill ${c.compliant ? '' : 'fail'}" title="${esc(c.compliant ? 'compliant' : 'missing: ' + c.missing + '\nextra: ' + c.extra)}">${esc(c.feature)}</span>`).join(' ')} · <a href="${esc(g.url || '#')}" target="_blank">details</a>` : 'no compliance data in Nautobot yet';
+}
+$('br-cfg-which').onchange = showConfig;
+$('br-cfg-dl').onclick = () => { if (!CFG) return; const w = $('br-cfg-which').value; const blob = new Blob([w === 'running' ? CFG.running : (CFG.golden[w] || '')], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${CFG.name}.${w}-config.txt`; a.click(); };
+
 // ---- per-branch page ------------------------------------------------------------------------------------------------
 async function loadBranch(name, refresh) {
   $('br-head').innerHTML = `<h2>${esc(name)} <span class="hint">loading…</span></h2>`;
@@ -833,6 +856,7 @@ async function loadBranch(name, refresh) {
     ${f.flows.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Flows in the last 3 h (${f.flows.length}) · ${f.log.length} log line${f.log.length === 1 ? '' : 's'} shown</summary><table><thead><tr><th>Verdict</th><th>Source</th><th>Destination</th><th>Service</th><th class="num">Hits</th><th>Last</th></tr></thead><tbody>${f.flows.map(x => `<tr><td><span class="pill ${x.verdict === 'drop' ? 'fail' : ''}">${esc(x.verdict)}</span></td><td>${who(x)}</td><td>${whom(x)}</td><td class="cred">${port(x)}</td><td class="num">${x.hits}</td><td class="cred">${esc(x.last.slice(11))}</td></tr>`).join('')}</tbody></table></details>` : '<div class="hint">nothing logged for it in the last 3 h</div>'}`).join('') || '<div class="hint">no firewall in the path of this router</div>';
   const h = d.host;
   $('br-host').innerHTML = h ? `<dl class="review"><div class="box"><dl><dt>Host</dt><dd class="cred">${esc(h.name)} <span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></dd><dt>LAN</dt><dd class="cred">${esc(h.lan_ip)}/24 via ${esc(h.gateway)} (${esc(h.lan_if)})</dd><dt>OOB</dt><dd class="cred">${esc(h.mgmt_ip)} <span class="hint">ssh lab@ (lab)</span></dd></dl></div></dl><div class="hint" style="margin-top:6px">The full host-to-host ping mesh is on the <a href="#inventory">Inventory</a> page (LAN hosts → Ping mesh).</div>` : '<div class="hint">no LAN host behind this router</div>';
+  CFG = null; loadConfig(refresh);
   $('br-runs').querySelector('tbody').innerHTML = d.runs.map(r => `<tr><td>${new Date(r.started * 1000).toLocaleString()}</td><td><a onclick="location.hash='provision';watch('${r.id}')">${esc(r.mode)}</a></td><td class="status ${r.status}">${r.status}</td><td>${esc(r.user || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">none</td></tr>';
 }
 window.addEventListener('hashchange', showView);

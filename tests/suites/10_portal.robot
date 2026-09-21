@@ -76,6 +76,24 @@ The Branches list names every router with its health, method, certificate and ho
         Should Be Equal    ${p}[name]    ${b}[name]
     END
 
+Every router's page shows its configuration: the live running config (keys redacted for viewers), Nautobot's intended config and compliance
+    FOR    ${r}    IN    @{ROUTER_NAMES}
+        ${v}=    Portal Request    GET    /api/branch/${r}/config    user=viewer    password=viewer
+        Should Be Equal As Integers    ${v}[status]    200
+        Should Be Equal    ${v}[json][error]    ${None}    msg=${r}: ${v}[json][error]
+        Should Contain    ${v}[json][running]    hostname ${r}
+        Should Be True    ${v}[json][lines] > 100
+        Should Not Match Regexp    ${v}[json][running]    pre-shared-key (?!<redacted>)\\S+    msg=${r}: a viewer must not see pre-shared keys
+        Should Be Equal    ${v}[json][keys_shown]    ${False}
+        Should Contain    ${v}[json][golden][intended]    hostname ${r}
+        ${bad}=    Evaluate    [c['feature'] for c in $v['json']['golden']['compliance'] if not c['compliant']]
+        Should Be Empty    ${bad}    msg=${r}: non-compliant features in Nautobot: ${bad}
+        IF    $SPOKE_AUTH.get($r) == 'psk'
+            ${o}=    Portal Request    GET    /api/branch/${r}/config    user=operator    password=operator
+            Should Match Regexp    ${o}[json][running]    pre-shared-key ${ROUTERS}[${r}][psk]    msg=${r}: an operator sees the key as configured
+        END
+    END
+
 Single sign-on is offered and starts an authorization-code flow with PKCE at the provider
     ${o}=    Portal Get    /api/oidc
     Skip If    not $o['enabled']    OIDC is not configured on this portal (webapp/oidc.json)

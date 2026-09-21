@@ -865,6 +865,43 @@ def auth_plan(name: str, method: str = Query(..., pattern="^(psk|certificate)$")
     return {"ok": not problems, "problems": problems, **(details or {})}
 
 
+_config_cache = {}
+@app.get("/api/branch/{name}/config", tags=["inventory"], summary="A router's configuration: the running config (live, SSH), Nautobot's intended config and the compliance per feature")
+def branch_config(name: str, request: Request, refresh: bool = Query(False, description="read the running config again now (otherwise cached for 60 s)")):
+    """`running` is `show running-config` read over SSH now (pre-shared keys are redacted for viewers; operators see them, as they
+    do on the Routers table); `intended` and `compliance` come from Nautobot's Golden Config app (its last backup / intended /
+    compliance runs — the portal's golden step, or `./lab.sh nautobot golden`), with the missing / extra lines per feature."""
+    I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None or dev["role"] not in ("hub", "spoke"): raise HTTPException(404, "no such router")
+    c = _config_cache.get(name)
+    if refresh or not c or time.time() - c["generated"] > 60:
+        from netmiko import ConnectHandler
+        try:
+            conn = ConnectHandler(device_type="cisco_xe", host=dev["mgmt_ip"], username=os.environ.get("IOSXE_USERNAME", "admin"), password=os.environ.get("IOSXE_PASSWORD", "admin"), conn_timeout=20, fast_cli=False)
+            try: running = conn.send_command("show running-config", read_timeout=90)
+            finally: conn.disconnect()
+            err = None
+        except Exception as e:  # noqa: BLE001
+            running, err = "", f"{e.__class__.__name__}: {e}"
+        golden = {}
+        try:
+            tok = nautobot_token(); H = {"Authorization": f"Token {tok}"}
+            did = requests.get(f"{NAUTOBOT_URL}/api/dcim/devices/", params={"name": name}, headers=H, timeout=20).json()["results"][0]["id"]
+            gc = requests.get(f"{NAUTOBOT_URL}/api/plugins/golden-config/golden-config/", params={"device": did}, headers=H, timeout=30).json()["results"]
+            if gc: golden = {"intended": gc[0].get("intended_config") or "", "backup": gc[0].get("backup_config") or "", "backup_at": gc[0].get("backup_last_success_date"), "intended_at": gc[0].get("intended_last_success_date"), "compliance_at": gc[0].get("compliance_last_success_date")}
+            rows = requests.get(f"{NAUTOBOT_URL}/api/plugins/golden-config/config-compliance/", params={"device": did, "depth": 2, "limit": 100}, headers=H, timeout=30).json()["results"]
+            golden["compliance"] = sorted([{"feature": r["rule"]["feature"]["name"], "compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or ""} for r in rows], key=lambda x: (x["compliant"], x["feature"]))
+            golden["url"] = f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/?device={did}"
+        except Exception as e:  # noqa: BLE001
+            golden = {"error": f"{e.__class__.__name__}: {e}"}
+        c = _config_cache[name] = {"generated": time.time(), "running": running, "error": err, "golden": golden}
+    user = request.state.user or {}
+    show = auth.role_rank(user.get("role", "")) >= auth.role_rank("operator")
+    redact = lambda t: t if show else re.sub(r"(pre-shared-key(?: local| remote)?(?: [0-6])?) \S+", r"\1 <redacted>", t)   # keys are for operators (the Routers table shows them the same way)
+    g = dict(c["golden"]); g["intended"] = redact(g.get("intended", "")); g["backup"] = redact(g.get("backup", ""))
+    return {"name": name, "generated": c["generated"], "running": redact(c["running"]), "error": c["error"], "lines": len(c["running"].splitlines()), "golden": g, "keys_shown": show}
+
+
 @app.get("/api/branches", tags=["inventory"], summary="Every branch and headend in one list: health of its tunnels, IKE method, certificate days left, LAN host state, last run")
 def branches(refresh: bool = Query(False, description="re-collect the tunnels' live state now")):
     I = intent_mod.load(); st = lab_ca.status()["devices"] or {}; vms = _vm_states(); hosts = {h["router"]: h for h in lan_hosts(False)["hosts"]}

@@ -280,8 +280,11 @@ the Routers table (*page ⧉*) and in the tunnel tables links there too: `#branc
 headend serves; the certificate with days left; whether a key is held), the day-2 actions (Change auth, Renew cert, Rotate PSK,
 Re-home, Remove — the same dialogs), its tunnels with live IKE SA / VTI / eBGP / ESP counters (and a headend's capacity line), the
 firewall rules whose address groups admit its WAN addresses plus its flows and log lines of the last 3 hours (per firewall in its
-path), its LAN host, and the runs that named it. Everything comes from the caches the other pages use; **Refresh live** re-collects
-the tunnel state.
+path), its LAN host, the runs that named it, and — at the bottom — its **configuration** (`GET /api/branch/{name}/config`): the
+running config read over SSH (cached 60 s, **Re-read** for a fresh one; pre-shared keys are redacted unless the user is an
+operator), Nautobot's intended config and last backup (the Golden Config app), and the compliance per feature as pills
+(hover for the missing / extra lines; *details* opens Nautobot), with a Download of whichever is shown. Everything else comes
+from the caches the other pages use; **Refresh live** re-collects the tunnel state.
 
 ### Run queue
 
