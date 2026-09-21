@@ -169,6 +169,26 @@ is generated). The run (`mode: rotate`, `POST /api/runs` with `spoke: {name, psk
 
 Measured: 4 min 23 s for a spoke with three headends; each tunnel is down for a few seconds.
 
+### Certificates: the `pki` steps and Renew cert
+
+With `profile.ike.authentication: certificate` (Provision page → *IKE authentication*), every pipeline that reaches Terraform
+carries two more steps: **pki** right after the render (`./lab.sh nautobot pki`: key pair, trustpoint with the CA fingerprint
+pinned, CA certificate, router certificate enrolled or renewed when missing / foreign / within `renew_before_days` of expiry;
+Nautobot's `cert_*` device fields updated) and **pki_verify** right after the apply (`--post-apply`: keyrings removed, SAs still
+authenticated with a key cleared, every tunnel back READY with RSA both ways within 4 minutes). Both are no-ops in PSK mode.
+The PSK column and **Rotate PSK…** give way to a **Certificate** column (days left, expiry; serial and fingerprint on hover) and
+**Renew cert…** on every router row (operator). The run (`mode: renew`, `POST /api/runs` with `spoke: {name}`; plan with
+`GET /api/routers/{name}/renewal`; the CA and every issued certificate at `GET /api/pki`):
+
+1. validate — the router, what the CA index says it holds, the tunnels that re-authenticate
+2. renew — `pki.py --force NAME`: new CSR from the router → signed by `pki/ca.py` → imported; the old serial goes to the index's
+   `previous` list; Nautobot `cert_serial` / `cert_expires` / `cert_renewed` follow
+3. verify — `pki.py --post-apply --rekey NAME`: the router's IKEv2 SAs cleared so its peers see the new certificate now, every
+   tunnel back READY with `Auth sign: RSA, Auth verify: RSA`
+4. Robot suites optional (default off)
+
+Measured: about a minute; each tunnel of the router is down for a few seconds.
+
 ### Login, roles, audit
 
 The portal requires a sign-in (`auth.py`). Users are local — `users.json` (salted scrypt hashes; not committed) managed with
@@ -183,7 +203,7 @@ A sign-in sets a signed session cookie (12 h; the secret is generated on first s
 | approver | + the destructive run (**remove** a spoke) and user management (`/api/users`) |
 
 What stays open without a login: `/metrics` and `/api/sd` (Prometheus), `GET /api/vpn-inventory` and `GET /api/runs*` (the lab
-hub and the Robot suites poll them), `/api/intent`, `/api/cities`, the static files and `/docs`. Every other request answers 401
+hub and the Robot suites poll them), `/api/intent`, `/api/cities`, `/api/pki` (the CA and issued certificates: public data), the static files and `/docs`. Every other request answers 401
 (the page then shows the sign-in dialog) or 403 with the role it needs; the page disables what the signed-in role may not do.
 
 The **audit trail** (`runs/audit.jsonl`, append-only, `GET /api/audit`, the Audit tab) records logins (and failed ones),

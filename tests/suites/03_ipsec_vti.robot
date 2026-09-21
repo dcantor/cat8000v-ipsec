@@ -34,18 +34,20 @@ Tunnels are up/up at both ends and the tunnel subnet is reachable
         Should Match Regexp    ${p}    Success rate is (100|80) percent
     END
 
-IKEv2 SAs are READY with the modelled proposal and PSK authentication
+IKEv2 SAs are READY with the modelled proposal and the modelled authentication (PSK or certificates)
+    [Documentation]    Auth sign / verify follow the intent's IKE authentication: PSK, or RSA when every router holds a certificate from the
+    ...    lab CA (suite 08 checks the certificates themselves).
     FOR    ${t}    IN    @{TUNNEL_LIST}
         ${sa}=    Show    ${t}[hub]    show crypto ikev2 sa
         Should Match Regexp    ${sa}    (?m)^\\d+\\s+${t}[hub_wan]/500\\s+${t}[spoke_wan]/500\\s+none/none\\s+READY
-        Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: PSK, Auth verify: PSK
+        Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: ${IKE_AUTH_SHOW}, Auth verify: ${IKE_AUTH_SHOW}
         ${ssa}=    Show    ${t}[spoke]    show crypto ikev2 sa
         Should Match Regexp    ${ssa}    (?m)^\\d+\\s+${t}[spoke_wan]/500\\s+${t}[hub_wan]/500\\s+none/none\\s+READY
     END
     FOR    ${r}    IN    @{ROUTER_NAMES}
         ${prof}=    Show    ${r}    show crypto ikev2 profile
         Should Contain    ${prof}    IKEv2 profile: ${IKEV2_PROFILE}
-        Should Contain    ${prof}    Local authentication method: pre-share
+        Should Contain    ${prof}    Local authentication method: ${IKE_AUTH_METHOD}
         IF    ${DPD}[enabled]
             Should Contain    ${prof}    DPD: interval ${DPD}[interval], retry-interval ${DPD}[retries], on-demand
         END

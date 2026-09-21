@@ -138,6 +138,17 @@ class LabLib:
         return r.json()
 
     @keyword
+    def portal_post(self, path, body):
+        """A write to the portal's API (PORTAL_USER / PORTAL_PASSWORD must be an operator for runs; default operator / operator when
+        the viewer default is not overridden and the call needs more than reading)."""
+        url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090")
+        s = requests.Session()
+        r = s.post(f"{url}/api/login", json={"username": os.environ.get("PORTAL_OPERATOR", "operator"), "password": os.environ.get("PORTAL_OPERATOR_PASSWORD", "operator")}, timeout=30); r.raise_for_status()
+        r = s.post(f"{url}{path}", data=body if isinstance(body, str) else json.dumps(body), headers={"content-type": "application/json"}, timeout=300)
+        logger.info(f"POST {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
+        return r.json()
+
+    @keyword
     def victorialogs_query(self, query):
         """One LogsQL query against VictoriaLogs on the NMS (VICTORIALOGS_URL, default http://10.0.0.10:9428) -> list of result rows."""
         url = os.environ.get("VICTORIALOGS_URL", "http://10.0.0.10:9428")

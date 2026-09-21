@@ -83,13 +83,18 @@ for key, label, ctypes in (("site_code", "Site code", ["dcim.location"]), ("cont
 if "vpn_tunnel_capacity" not in cf:   # the headend constraint: how many tunnels a hub may terminate (inventory page + deploy-time check)
     cf["vpn_tunnel_capacity"] = nb.extras.custom_fields.create(key="vpn_tunnel_capacity", label="VPN tunnel capacity", type="integer", content_types=["dcim.device"],
                                                                grouping="VPN", description="Maximum IPsec tunnels this headend may terminate"); created.append("custom-field:vpn_tunnel_capacity")
+def nudge_cf(field, desc):
+    """A second, real save of a custom field created moments earlier: Nautobot's per-content-type field cache ignores a brand-new field
+    (values written to it are dropped silently) until the field is saved again — and pynautobot sends nothing when nothing changed,
+    so the description goes out changed and comes back."""
+    field.update({"description": desc + " "}); field.update({"description": desc})
 # the pre-shared key never enters Nautobot; what does is its fingerprint (sha256, first 12 hex) and the rotation date on every
 # tunnel of the spoke, so the model says which key generation a tunnel runs and the portal's Rotate PSK action leaves a trace
 for key, label, typ, desc in (("psk_fingerprint", "PSK fingerprint", "text", "sha256 of the spoke's pre-shared key, first 12 hex digits (the key itself lives in lab-intent.json / NaC variables)"),
                               ("psk_rotated", "PSK rotated", "text", "when the spoke's pre-shared key was last generated or rotated (ISO date-time)")):
     if key not in cf:
         cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=["vpn.vpntunnel"], grouping="VPN", description=desc); created.append(f"custom-field:{key}")
-        cf[key].update({"description": desc})   # a second save: Nautobot's per-content-type field cache ignored a field created moments earlier (values were dropped silently)
+        nudge_cf(cf[key], desc)
 # the router certificates (IKE authentication "certificate"): what each router presents, written by nautobot/pki.py after an enrolment and
 # never touched by the seed — the model says which certificate a router runs, when it expires and when it was last renewed
 for key, label, typ, desc in (("cert_serial", "Certificate serial", "text", "serial (hex) of the router certificate the lab CA issued (pki/index.json), as IOS-XE shows it"),
@@ -98,7 +103,7 @@ for key, label, typ, desc in (("cert_serial", "Certificate serial", "text", "ser
                               ("cert_renewed", "Certificate renewed", "date", "when the router last enrolled (pki.py, or the portal's Renew certificate action)")):
     if key not in cf:
         cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=["dcim.device"], grouping="VPN", description=desc); created.append(f"custom-field:{key}")
-        cf[key].update({"description": desc})   # second save, see above
+        nudge_cf(cf[key], desc)
 CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 if "firewall_bandwidth_mbps" not in cf:   # the second headend constraint: the bandwidth of the firewall in front of it
     cf["firewall_bandwidth_mbps"] = nb.extras.custom_fields.create(key="firewall_bandwidth_mbps", label="Firewall bandwidth (Mbps)", type="integer", content_types=["dcim.device"],
@@ -133,8 +138,12 @@ ike, ipsec, dpd, ios = PROF["ike"], PROF["ipsec"], PROF["dpd"], PROF["ios"]
 # certificate-map names the routers use travel with the other Cisco names in the profile's extra_options.ios
 CERT = ike.get("authentication", "psk") == "certificate"; AUTH_NB = "RSA" if CERT else "PSK"
 PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP"}, **{k: v for k, v in (PROF.get("pki") or {}).items() if k in ("trustpoint", "keypair", "certificate_map")}}
-ios = {**ios, **({"trustpoint": PKI["trustpoint"], "rsakeypair": PKI["keypair"], "certificate_map": PKI["certificate_map"]} if CERT else {})}
-ios = {k: v for k, v in ios.items() if CERT or k not in ("trustpoint", "rsakeypair", "certificate_map")}
+if CERT:
+    sys.path.insert(0, str(LAB / "pki")); import ca as lab_ca   # noqa: E402
+    lab_ca.init(); ca_info = lab_ca.cert_info(lab_ca.CA_CRT.read_text())   # the CA certificate is public; its fingerprint is pinned on every trustpoint
+    ios = {**ios, "trustpoint": PKI["trustpoint"], "rsakeypair": PKI["keypair"], "certificate_map": PKI["certificate_map"], "ca_fingerprint": ca_info["fingerprint"], "ca_subject": ca_info["subject"]}
+else:
+    ios = {k: v for k, v in ios.items() if k not in ("trustpoint", "rsakeypair", "certificate_map", "ca_fingerprint", "ca_subject")}
 p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": ios["ikev2_profile"]}, description="IKEv2 SA (from lab-intent.json)")
 ensure(p1, ike_version="IKEv2", encryption_algorithm=[ike["encryption"]], integrity_algorithm=[ike["integrity"]], dh_group=[str(ike["dh_group"])],
        lifetime_seconds=int(ike["lifetime"]), authentication_method=AUTH_NB, description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, {AUTH_NB}")

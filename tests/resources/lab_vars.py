@@ -50,8 +50,14 @@ SPOKE_TUNNELS = {s: [t for t in TUNNEL_LIST if t["spoke"] == s] for s in SPOKES}
 
 OOB_GATEWAY = _I["oob"]["gateway"]
 DOMAIN_NAME = _I["domain_name"]
+# IKE authentication: "psk" (one key per spoke) or "certificate" (every router enrolled with the lab CA — pki/, nautobot/pki.py)
+IKE_AUTH = (_I["profile"].get("ike") or {}).get("authentication", "psk")
+PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP", "validity_days": 365, "renew_before_days": 30}, **(_I["profile"].get("pki") or {})}
+IKE_AUTH_SHOW = "RSA" if IKE_AUTH == "certificate" else "PSK"                 # as `show crypto ikev2 sa detail` prints Auth sign / verify
+IKE_AUTH_METHOD = "rsa-sig" if IKE_AUTH == "certificate" else "pre-share"     # as `show crypto ikev2 profile` prints the authentication method
 MGMT_ACL = _I["oob"]["acl"]
 IKEV2_PROFILE = _I["profile"]["ios"]["ikev2_profile"]
+PROFILE_NAME = _I["profile"]["name"]
 IPSEC_PROFILE = _I["profile"]["ios"]["ipsec_profile"]
 VPN_PROFILE = _I["profile"]["name"]
 VPN_NAME = _I["vpn"]["name"]

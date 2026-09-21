@@ -68,7 +68,12 @@ Nautobot 3.2.4 quirks met on the way (worked around in `seed.py`):
 - M2M fields (`protected_prefixes`, policies) are absent from REST *reads* — verified via GraphQL;
 - endpoint `tunnel_interface` must be an interface of type `tunnel` (not `virtual`);
 - GraphQL renders single-choice fields as enum names (`IPSEC_TUNNEL`, `IKEV2`) but
-  JSON-array choice fields raw (`AES-256-CBC`) — the renderer normalises both.
+  JSON-array choice fields raw (`AES-256-CBC`) — the renderer normalises both;
+- a custom field created moments earlier is invisible to the per-content-type field cache:
+  values written to it are dropped silently until the field is saved again — and pynautobot
+  sends nothing for an unchanged `update()`, so `seed.py` nudges a brand-new field with a
+  real change of its description (`nudge_cf`); the `cert_*` device fields (certificate mode,
+  written by `pki.py`) are created this way.
 
 Gotcha found while seeding: pynautobot diffs an `update()` against the record as
 first fetched, so two updates of the same field in one run (e.g. `enabled` False

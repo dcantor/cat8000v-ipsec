@@ -388,6 +388,24 @@ def rotation_plan(name):
                   "fingerprint": hashlib.sha256(dev["psk"].encode()).hexdigest()[:12], "rotated": dev.get("psk_rotated")}
 
 
+def renewal_plan(name):
+    """What renewing a router's certificate touches (also the validation): returns (problems, details) — the router, what the CA index
+    says it holds now, the tunnels that re-authenticate. Any IOS-XE router (headend or spoke) qualifies while IKE authenticates with
+    certificates."""
+    import sys as _sys; _sys.path.insert(0, str(LAB / "pki")); import ca as lab_ca
+    I = intent_mod.load(); errs = []
+    if (I.get("profile", {}).get("ike") or {}).get("authentication", "psk") != "certificate": errs.append("IKE authenticates with pre-shared keys (profile.ike.authentication): nothing to renew — rotate the key instead")
+    dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None: errs.append(f"{name} is not in the intent")
+    elif dev["role"] not in ("hub", "spoke"): errs.append("only a router's certificate can be renewed (firewalls hold none)")
+    if errs: return errs, None
+    tunnels = [{"hub": t["hub"], "spoke": t["spoke"], "tunnel_id": int(t["id"])} for t in I["tunnels"] if name in (t["hub"], t["spoke"])]
+    if not tunnels: errs.append(f"{name} has no tunnels")
+    entry = (lab_ca.status()["devices"] or {}).get(name) or {}
+    return errs, {"name": name, "role": dev["role"], "mgmt_ip": dev["mgmt_ip"], "tunnels": tunnels, "peers": sorted({t["hub"] if t["spoke"] == name else t["spoke"] for t in tunnels}),
+                  "serial": entry.get("serial"), "expires": (entry.get("not_after") or "")[:10] or None, "days_left": entry.get("days_left"), "issued": entry.get("issued")}
+
+
 def rotate_psk(name, new_key=None):
     """Write a new key for the spoke into the intent (with the rotation time); returns (key, fingerprint). The seed carries the
     fingerprint and date to Nautobot, the NaC render puts the key into the group variables, terraform pushes it to the spoke

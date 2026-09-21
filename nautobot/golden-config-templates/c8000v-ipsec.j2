@@ -1,5 +1,6 @@
 {#- Intended configuration for the C8000v IPsec VTI routers, rendered from Nautobot (query golden-config-lab).
-    Features under compliance: management ACL, static routes, loopbacks, wan-interface, tunnel, crypto, BGP, banner. -#}
+    Features under compliance: management ACL, static routes, loopbacks, wan-interface, tunnel, crypto (incl. the PKI trustpoint and
+    certificate map when IKE authenticates with certificates), BGP, banner. -#}
 {%- set masks = {'24': '255.255.255.0', '30': '255.255.255.252', '32': '255.255.255.255'} -%}
 {#- crypto suite from the VPN profile of this router's tunnel endpoints (core vpn app); Cisco names in extra_options.ios -#}
 {%- set ns = namespace(prof=none) -%}
@@ -97,11 +98,35 @@ crypto ikev2 proposal {{ ios.ikev2_proposal }}
 crypto ikev2 policy {{ ios.ikev2_policy }}
  proposal {{ ios.ikev2_proposal }}
 !
+{% if p1.authentication_method == 'RSA' %}
+{#- certificates from the lab CA: the trustpoint (nautobot/pki.py enrols it; the CA fingerprint is pinned), the map the peers are matched on -#}
+crypto pki trustpoint {{ ios.trustpoint }}
+ enrollment terminal pem
+ fqdn {{ hostname }}.{{ config_context.domain_name }}
+ fingerprint {{ ios.ca_fingerprint }}
+ subject-name CN={{ hostname }}.{{ config_context.domain_name }},O=cat8000v-ipsec
+ subject-alt-name {{ hostname }}.{{ config_context.domain_name }}
+ revocation-check none
+ rsakeypair {{ ios.rsakeypair }}
+ hash sha256
+!
+crypto pki certificate map {{ ios.certificate_map }} 10
+ issuer-name co {{ ios.ca_subject.split(',')[0].split('=')[1] | lower }}
+!
+crypto ikev2 profile {{ ios.ikev2_profile }}
+ match identity remote address 0.0.0.0
+ match certificate {{ ios.certificate_map }}
+ identity local dn
+ authentication remote rsa-sig
+ authentication local rsa-sig
+ pki trustpoint {{ ios.trustpoint }}
+{% else %}
 crypto ikev2 profile {{ ios.ikev2_profile }}
  match identity remote address 0.0.0.0
  authentication remote pre-share
  authentication local pre-share
  keyring local {{ ios.ikev2_keyring }}
+{% endif %}
 {% if prof.keepalive_enabled %}
  dpd {{ prof.keepalive_interval }} {{ prof.keepalive_retries }} on-demand
 {% endif %}

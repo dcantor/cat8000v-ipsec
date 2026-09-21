@@ -75,11 +75,17 @@ else:
     gcs.update(fields)
 
 plat = nb.dcim.platforms.get(name="cisco_xe")
-for slug, fname, match in (("wan-interface", "WAN interface", "interface GigabitEthernet2\ninterface GigabitEthernet3"),):
+I = intent_mod.load(); pki = I["profile"].get("pki") or {}
+CRYPTO = "crypto ikev2 proposal\ncrypto ikev2 policy\ncrypto ikev2 profile\ncrypto ipsec transform-set\ncrypto ipsec profile"
+if (I["profile"].get("ike") or {}).get("authentication") == "certificate":   # the trustpoint and the certificate map join the crypto feature (never the keyring: the template holds no secrets)
+    CRYPTO += f"\ncrypto pki trustpoint {pki.get('trustpoint', 'LAB-CA')}\ncrypto pki certificate map {pki.get('certificate_map', 'LAB-CERT-MAP')}"
+for slug, fname, match in (("wan-interface", "WAN interface", "interface GigabitEthernet2\ninterface GigabitEthernet3"), ("crypto", "Crypto", CRYPTO)):
     feat = gc.compliance_feature.get(slug=slug) or gc.compliance_feature.create(slug=slug, name=fname, description=f"{fname} (from Nautobot)")
-    if gc.compliance_rule.get(feature=feat.id, platform=plat.id) is None:
+    rule = gc.compliance_rule.get(feature=feat.id, platform=plat.id)
+    if rule is None:
         gc.compliance_rule.create(feature=feat.id, platform=plat.id, config_type="cli", match_config=match,
                                   config_ordered=False, config_remediation=True); print(f"  created compliance rule {slug}")
+    elif rule.match_config.strip() != match: rule.update({"match_config": match}); print(f"  updated compliance rule {slug}: {match.replace(chr(10), ' ; ')}")
 if a.no_run:
     sys.exit(0)
 devs = [d.id for d in nb.dcim.devices.filter(location=SITE, platform="cisco_xe")]

@@ -370,6 +370,7 @@ cmd_nautobot() {
     seed)    nautobot_py seed.py "$@" ;;           # load the DMVPN intent (idempotent)
     render)  nautobot_py render_nac.py "$@" ;;     # regenerate nac/data/devices.nac.yaml (--check to verify)
     vyos)    nautobot_py render_vyos.py "$@" ;;      # render + push the VyOS firewalls from Nautobot (--check | --dry-run)
+    pki)     nautobot_py pki.py "$@" ;;              # certificate enrolment of the routers against pki/ca.py (--check | --force | --post-apply [device ...])
     golden)  GITEA_PASSWORD="$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@10.0.0.10 'grep ^GITEA_PASSWORD /opt/nautobot/.env | cut -d= -f2')" \
              nautobot_py golden_config.py "$@" ;;  # Golden Config scope/template for the routers + backup/intended/compliance
     token)   nautobot_token ;;
@@ -413,7 +414,7 @@ usage: $(basename "$0") <command> [node...]
   intent <cmd>       init|validate|show  lab-intent.json (the document the web app edits)
   webapp             start the VPN provisioning portal on http://<host>:8090
   rename OLD NEW     rename a stopped router (VM, lab.conf, intent, terraform state); then rebuild/up + nautobot seed
-  nautobot <cmd>     onboard|seed|render|golden|token  (shared Nautobot at $NAUTOBOT_URL)
+  nautobot <cmd>     onboard|seed|render|vyos|pki|golden|token  (shared Nautobot at $NAUTOBOT_URL)
   rebuild [node..]   re-generate domain XML / day-0 ISO (keeps disks)
   clean [node..]     stop, undefine and delete overlay disks
 nodes: ${ALL_NODES[*]}

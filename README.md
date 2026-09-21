@@ -162,6 +162,29 @@ theirs destroyed and cleaned out of Nautobot; the run verifies the new tunnels u
 key) → NaC → terraform on the spoke and every headend → the spoke's IKEv2 SAs cleared → every tunnel verified READY with eBGP
 Established → Golden Config. About four minutes; the tunnels blip for seconds.
 
+### Certificates instead of pre-shared keys
+`profile.ike.authentication: certificate` in the intent (the *IKE authentication* selector on the Provision page) puts the whole
+lab on **IKEv2 rsa-sig with certificates from a lab CA** — `pki/ca.py` (openssl on the host: `pki/ca/ca.crt` public and
+committed, `ca.key` never committed, `pki/certs/*.crt` and `pki/index.json` the record of what was issued). The `pki`
+pipeline step (`nautobot/pki.py`, `./lab.sh nautobot pki`) enrols every router over SSH the way a real PKI would: an RSA
+key pair generated **on the router** (the private key never leaves it), a trustpoint with `enrollment terminal pem` and the
+**CA fingerprint pinned**, `crypto pki authenticate` with the CA certificate, `crypto pki enroll` → CSR → signed by the CA
+→ `crypto pki import … certificate`. Nautobot holds the model: the Phase 1 policy's authentication method (`RSA`), the
+trustpoint / key-pair / certificate-map names and the CA fingerprint in the profile's Cisco names, and per device the
+custom fields `cert_serial`, `cert_subject`, `cert_expires`, `cert_renewed` written after each enrolment. The NaC render
+drops the keyrings and the pre-share lines; the rsa-sig profile lines the Terraform provider cannot express (`match
+certificate`, `identity local dn`, `authentication local/remote rsa-sig`, `pki trustpoint`) ride as one `iosxe_cli` template
+per router; the `pki_verify` step after the apply removes the keyrings (IOS refuses the provider's delete while the profile
+still references them), clears SAs still on a key and verifies every tunnel back READY with `Auth sign: RSA, Auth verify:
+RSA`. The Golden Config template renders the trustpoint and the certificate map, and the crypto compliance rule covers them.
+
+Day-2: **Renew cert…** on any router row (headend or spoke; `mode: renew`) — a new CSR, signed, imported, Nautobot updated,
+the router's SAs cleared, every tunnel verified back with RSA (≈1 min). The `pki` step also renews on its own within
+`renew_before_days` (30) of expiry on every deploy. `/metrics` exports `lab_cert_not_after_seconds` per router and
+`lab_ike_certificate_auth`; the shared monitoring alerts `CertificateExpiringSoon` / `CertificateExpired`. Switching back
+to `psk` re-renders the keyrings from the keys still held in the intent. Suite 08 proves all of it, including a real renewal
+through the portal.
+
 ## Nautobot: the source of truth
 
 Nothing about the topology is hard-coded in templates: the renderer and the Golden Config template
@@ -220,12 +243,14 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 32 Robot tests: management plane; underlay links and CDP; VTIs,
-IKEv2 SAs and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
-Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering); and the Nautobot model — devices and serials, cables, VPN objects (every router's
+`./lab.sh test` (or the portal) runs 41 Robot tests: management plane; underlay links and CDP; VTIs,
+IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
+Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
-compliant. Each run keeps pre/post config backups and a diff under `results/`.
+compliant; and, in certificate mode, suite 08 — the CA pinned on every router, each router certificate issued by it to the router's
+own name and not near expiry, rsa-sig with no key left anywhere, Nautobot's record of it, and a real renewal through the portal.
+Each run keeps pre/post config backups and a diff under `results/`.
 
 ## What is where
 
@@ -233,9 +258,10 @@ compliant. Each run keeps pre/post config backups and a diff under `results/`.
 |---|---|
 | `lab.conf`, `lab.sh`, `tools/`, `nodes/` | VM facts and libvirt controller (`up down bootstrap rebuild clean rename status console ssh nac nautobot test intent webapp`), console automation, day-0 template |
 | `lab-intent.json`, `nautobot/intent.py` | the VPN service intent (site, regions, devices + PSKs, links, tunnels, crypto, capacity); generated from `lab.conf` once, edited by the portal |
-| `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, rename tool, saved GraphQL query, Jinja template |
+| `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, certificate enrolment (`pki.py`), rename tool, saved GraphQL query, Jinja template |
+| `pki/` | the lab CA (`ca.py`; `ca/ca.crt` public, `ca/ca.key` never committed), issued router certificates and the index |
 | `nac/` | Terraform root and NAC data |
-| `tests/` | Robot suites 01–07, keyword library, `lab_vars.py` derived from the intent |
+| `tests/` | Robot suites 01–08, keyword library, `lab_vars.py` derived from the intent |
 | `webapp/` | the portal (FastAPI + single-page UI), API schemas, spoke/headend provisioning, inventory collector, run records, demo recorders, `lab-webapp.service`, `restart.sh` |
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |

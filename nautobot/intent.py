@@ -60,7 +60,10 @@ def from_lab_conf():
     return {
         "site": {"name": "c8000v-ipsec-lab", "description": "C8000v IPsec VTI lab (libvirt)", "site_code": "LAB-IPSEC", "contact": "noc@lab.local"},
         "vpn": {"name": "IPSEC_VPN", "description": "Hub-and-spoke IPsec VTIs with eBGP (one AS per site)", "change_ticket": "", "owner": "network team"},
-        "profile": {"name": "VPN-IPSEC", "ike": {"encryption": "AES-256-CBC", "integrity": "SHA256", "dh_group": "14", "lifetime": 86400},
+        "profile": {"name": "VPN-IPSEC", "ike": {"encryption": "AES-256-CBC", "integrity": "SHA256", "dh_group": "14", "lifetime": 86400, "authentication": "psk"},
+                    # ike.authentication "certificate": every router enrols with the lab CA (pki/ca.py, nautobot/pki.py) and IKEv2 uses rsa-sig; the pre-shared keys stay
+                    # in the intent, unused, so the lab can switch back
+                    "pki": {"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "key_bits": 2048, "validity_days": 365, "renew_before_days": 30, "certificate_map": "LAB-CERT-MAP"},
                     "ipsec": {"encryption": "AES-256-CBC", "integrity": "SHA256", "lifetime": 3600},
                     "dpd": {"enabled": True, "interval": 30, "retries": 5}, "ios": dict(IOS_NAMES)},
         "regions": list(DEFAULT_REGIONS),
@@ -235,6 +238,12 @@ def validate(intent):
     if str((pr.get("ike") or {}).get("dh_group")) not in {"14", "19", "20", "21", "24"}: errs.append("IKE DH group not supported")
     if (pr.get("ipsec") or {}).get("encryption") not in ENC: errs.append("IPsec encryption not supported")
     if (pr.get("ipsec") or {}).get("integrity") not in INT: errs.append("IPsec integrity not supported")
+    if (pr.get("ike") or {}).get("authentication", "psk") not in ("psk", "certificate"): errs.append("IKE authentication: psk or certificate")
+    pki = pr.get("pki") or {}
+    for k in ("trustpoint", "keypair", "certificate_map"):
+        if k in pki and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", str(pki[k])): errs.append(f"pki {k}: letters/digits/_-")
+    if pki and not (int(pki.get("key_bits", 2048)) in (2048, 3072, 4096) and 30 <= int(pki.get("validity_days", 365)) <= 3650 and 1 <= int(pki.get("renew_before_days", 30)) < int(pki.get("validity_days", 365))):
+        errs.append("pki: key_bits 2048/3072/4096, validity_days 30-3650, renew_before_days below validity_days")
     dpd = pr.get("dpd") or {}
     if dpd.get("enabled") and not (10 <= int(dpd.get("interval") or 0) <= 3600 and 2 <= int(dpd.get("retries") or 0) <= 60): errs.append("DPD interval 10-3600 s, retries 2-60")
     regions = intent.get("regions") or []

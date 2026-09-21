@@ -118,6 +118,8 @@ Locations form the hierarchy lab site -> region -> branch, with site metadata on
     Should Be Equal    ${{ sorted([l["name"] for l in $rg["locations"]]) }}    ${{ sorted($REGIONS) }}
 
 Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke
+    [Documentation]    PSK mode only: with certificates (suite 08) no keyring exists on any router.
+    Skip If    '${IKE_AUTH}' == 'certificate'    IKE authenticates with certificates: no pre-shared keys on the routers (suite 08 proves the keyrings are gone)
     FOR    ${s}    IN    @{SPOKES}
         ${kr}=    Show    ${s}    show run | section crypto ikev2 keyring
         FOR    ${t}    IN    @{SPOKE_TUNNELS}[${s}]
@@ -146,7 +148,7 @@ The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies an
     ${p1}=    Set Variable    ${prof}[vpn_phase1_policies][0]
     ${p2}=    Set Variable    ${prof}[vpn_phase2_policies][0]
     Should Be Equal    ${p1}[ike_version]    IKEV2
-    Should Be Equal    ${p1}[authentication_method]    PSK
+    Should Be Equal    ${p1}[authentication_method]    ${{ 'RSA' if $IKE_AUTH == 'certificate' else 'PSK' }}
     Should Be Equal    ${p1}[encryption_algorithm]    ${{ [$IKE['encryption']] }}
     Should Be Equal    ${p1}[integrity_algorithm]    ${{ [$IKE['integrity']] }}
     Should Be Equal    ${p1}[dh_group]    ${{ [str($IKE['dh_group'])] }}
@@ -161,7 +163,7 @@ The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies an
         ${ts}=    Show    ${r}    show crypto ipsec transform-set ${ios}[transform_set]
         Should Match Regexp    ${ts}    \\{ ${ESP_TRANSFORM}\\s*\\}
         ${prof_out}=    Show    ${r}    show crypto ikev2 profile ${ios}[ikev2_profile]
-        Should Contain    ${prof_out}    Keyring: ${ios}[ikev2_keyring]
+        Should Contain    ${prof_out}    ${{ 'Keyring: none' if $IKE_AUTH == 'certificate' else 'Keyring: ' + $ios['ikev2_keyring'] }}
         IF    ${prof}[keepalive_enabled]
             Should Contain    ${prof_out}    DPD: interval ${prof}[keepalive_interval], retry-interval ${prof}[keepalive_retries], on-demand
         END

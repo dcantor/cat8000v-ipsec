@@ -17,7 +17,8 @@
       "encryption": "AES-256-CBC",
       "integrity": "SHA256",
       "dh_group": "14",
-      "lifetime": 86400
+      "lifetime": 86400,
+      "authentication": "certificate"
     },
     "ipsec": {
       "encryption": "AES-256-CBC",
@@ -37,6 +38,14 @@
       "ikev2_profile": "VPN-IKEV2",
       "transform_set": "VPN-TS",
       "ipsec_profile": "VPN-IPSEC"
+    },
+    "pki": {
+      "trustpoint": "LAB-CA",
+      "keypair": "LAB-VPN",
+      "key_bits": 2048,
+      "validity_days": 365,
+      "renew_before_days": 30,
+      "certificate_map": "LAB-CERT-MAP"
     }
   },
   "regions": [

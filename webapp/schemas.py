@@ -22,6 +22,14 @@ class IkePolicy(BaseModel):
     integrity: str = Field("SHA256", examples=["SHA256"])
     dh_group: str = Field("14", examples=["14"])
     lifetime: int = 86400
+    authentication: Literal["psk", "certificate"] = Field("psk", description="psk: one pre-shared key per spoke · certificate: every router enrols with the lab CA (rsa-sig); the keys stay in the intent, unused")
+
+
+class Pki(BaseModel):
+    """Certificate settings (IKE authentication `certificate`): names the routers use and the CA's issuing policy."""
+    trustpoint: str = "LAB-CA"; keypair: str = "LAB-VPN"; certificate_map: str = "LAB-CERT-MAP"
+    key_bits: int = Field(2048, description="RSA modulus generated on each router (2048 / 3072 / 4096)")
+    validity_days: int = Field(365, description="lifetime of a router certificate"); renew_before_days: int = Field(30, description="the pki step renews a certificate this close to expiry")
 
 
 class IpsecPolicy(BaseModel):
@@ -41,6 +49,7 @@ class Profile(BaseModel):
     ike: IkePolicy
     ipsec: IpsecPolicy
     dpd: Dpd
+    pki: Optional[Pki] = Field(None, description="certificate settings; used when ike.authentication is certificate")
     ios: dict[str, str] = Field(..., description="Cisco object names (ikev2_proposal, ikev2_policy, ikev2_keyring, ikev2_profile, transform_set, ipsec_profile)")
 
 
@@ -141,11 +150,11 @@ class RemoveSpec(BaseModel):
 
 class RunRequest(BaseModel):
     """Start a pipeline run. Which body fields matter depends on `mode`."""
-    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome"] = Field(..., description=(
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew"] = Field(..., description=(
         "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
-        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`)"))
+        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`)"))
     intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
-    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]}")
+    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router}")
     hub: Optional[HubSpec] = None
     options: RunOptions = RunOptions()
 
