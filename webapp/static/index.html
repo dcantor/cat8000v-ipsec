@@ -186,7 +186,7 @@
   <div class="modal" style="width:min(420px,100%)">
     <h2 style="margin:0 0 6px;font-size:16px">Sign in</h2>
     <div class="hint" style="margin-bottom:12px">Lab portal — local users. Roles: <b>viewer</b> reads, <b>operator</b> provisions and changes, <b>approver</b> also removes spokes and manages users.</div>
-    <form id="login-form" onsubmit="return false">
+    <form id="login-form">
       <div><label>Username</label><input id="login-user" autocomplete="username" autofocus></div>
       <div style="margin-top:8px"><label>Password</label><input id="login-pass" type="password" autocomplete="current-password"></div>
       <div id="login-problems" class="problems" style="margin-top:8px"></div>
@@ -668,12 +668,15 @@ function applyRoles() {
   $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span> <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
 }
 async function whoami() { const r = await (await _fetch('/api/me')).json(); ME = r.user; applyRoles(); if (!ME) $('login').hidden = false; return ME; }
-$('login-form').onsubmit = async () => {
+async function signIn(e) {
+  if (e) e.preventDefault();   // an async handler returns a Promise, which does not stop the native submit: the page reloaded mid-login
   $('login-problems').textContent = '';
   const r = await _fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: $('login-user').value, password: $('login-pass').value }) });
   if (!r.ok) { const e = await r.json().catch(() => ({})); $('login-problems').textContent = e.detail || 'sign-in failed'; return; }
   $('login').hidden = true; $('login-pass').value = ''; await whoami(); load(); loadRuns(); showView();
-};
+}
+$('login-form').addEventListener('submit', signIn);
+['login-user', 'login-pass'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') signIn(e); }));   // Enter in either field
 async function logout() { await _fetch('/api/logout', { method: 'POST' }); ME = null; applyRoles(); $('login').hidden = false; }
 async function loadAudit() {
   const q = new URLSearchParams({ limit: 300 }); if ($('audit-user').value.trim()) q.set('user', $('audit-user').value.trim()); if ($('audit-action').value) q.set('action', $('audit-action').value);
