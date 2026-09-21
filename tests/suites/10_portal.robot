@@ -60,6 +60,22 @@ Every router has a page: identity, authentication, its tunnels with live state, 
     ${missing}=    Portal Request    GET    /api/branch/fw-east    user=viewer    password=viewer
     Should Be Equal As Integers    ${missing}[status]    404    msg=a firewall has no branch page
 
+The Branches list names every router with its health, method, certificate and host, and each row opens the router's page
+    ${l}=    Portal Get    /api/branches
+    Length Should Be    ${l}[routers]    ${{ len($ROUTER_NAMES) }}
+    FOR    ${b}    IN    @{l}[routers]
+        Should Contain    ${ROUTER_NAMES}    ${b}[name]
+        Should Be Equal    ${b}[health]    up
+        Should Be Equal As Integers    ${b}[tunnels_up]    ${b}[tunnels]
+        Should Be Equal    ${b}[host]    ${HOST_OF}[${b}[name]]
+        Should Be Equal    ${b}[host_state]    running
+        IF    '${b}[role]' == 'spoke'    Should Be Equal    ${b}[authentication]    ${SPOKE_AUTH}[${b}[name]]
+        Run Keyword If    $b['name'] in $CERT_ROUTERS    Should Be True    ${b}[cert_days] > 30
+        Run Keyword If    $b['name'] not in $CERT_ROUTERS    Should Be Equal    ${b}[cert_days]    ${None}
+        ${p}=    Portal Get    /api/branch/${b}[name]
+        Should Be Equal    ${p}[name]    ${b}[name]
+    END
+
 Single sign-on is offered and starts an authorization-code flow with PKCE at the provider
     ${o}=    Portal Get    /api/oidc
     Skip If    not $o['enabled']    OIDC is not configured on this portal (webapp/oidc.json)

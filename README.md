@@ -165,7 +165,7 @@ reads, **operator** provisions and changes, **approver** also removes spokes and
 request — who, from where, the spec with secrets redacted, the run it started — lands in an append-only audit trail (Audit tab,
 `GET /api/audit`); runs record who started them. `python3 webapp/auth.py add NAME --role …` manages local users. Runs execute
 one at a time: a second operator's run **queues** behind the executing one (place in line shown; cancellable until it starts).
-Every router has its own page (`#branch/<name>`): tunnels with live state, authentication and certificate, the firewall rules
+Every router has its own page (the **Branches** tab, or `#branch/<name>`): tunnels with live state, authentication and certificate, the firewall rules
 and log touching it, its LAN host, the runs that involved it, and the day-2 actions.
 
 ### Day-2: re-home a branch
@@ -270,7 +270,7 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 49 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 50 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke

@@ -865,6 +865,27 @@ def auth_plan(name: str, method: str = Query(..., pattern="^(psk|certificate)$")
     return {"ok": not problems, "problems": problems, **(details or {})}
 
 
+@app.get("/api/branches", tags=["inventory"], summary="Every branch and headend in one list: health of its tunnels, IKE method, certificate days left, LAN host state, last run")
+def branches(refresh: bool = Query(False, description="re-collect the tunnels' live state now")):
+    I = intent_mod.load(); st = lab_ca.status()["devices"] or {}; vms = _vm_states(); hosts = {h["router"]: h for h in lan_hosts(False)["hosts"]}
+    try: inv_d = inv().get(refresh=refresh, with_live=True)
+    except Exception as e: inv_d = {"tunnels": [], "headends": [], "error": str(e)}  # noqa: BLE001
+    runs = registry.list(300); out = []
+    for d in sorted(I["devices"], key=lambda x: (x["role"] != "hub", x["name"])):
+        if d["role"] not in ("hub", "spoke"): continue
+        tuns = [t for t in inv_d.get("tunnels", []) if d["name"] in (t.get("headend"), t.get("spoke"))]
+        health = [(t.get("live") or {}).get("health") for t in tuns]
+        last = next((r for r in runs if (r.get("spoke") or {}).get("name") == d["name"] or (r.get("hub") or {}).get("name") == d["name"]), None)
+        cert = st.get(d["name"]) if d["name"] in intent_mod.cert_routers(I) else None
+        he = next((h for h in inv_d.get("headends", []) if h["name"] == d["name"]), None)
+        out.append({"name": d["name"], "role": d["role"], "site": d.get("site"), "city": d.get("city"), "region": d.get("region"), "asn": d.get("asn"), "mgmt_ip": d["mgmt_ip"], "lan": d.get("lan"),
+                    "state": vms.get((d["name"], d["role"]), "undefined"), "tunnels": len(tuns), "tunnels_up": sum(1 for h in health if h == "up"), "health": "up" if tuns and all(h == "up" for h in health) else ("down" if tuns and all(h == "down" for h in health) else ("degraded" if tuns else "none")),
+                    "authentication": intent_mod.spoke_auth(I, d["name"]) if d["role"] == "spoke" else None, "methods": sorted(intent_mod.router_auths(I, d["name"])),
+                    "cert_days": cert and cert.get("days_left"), "cert_expired": bool(cert and cert.get("expired")), "host": (hosts.get(d["name"]) or {}).get("name"), "host_state": (hosts.get(d["name"]) or {}).get("state"),
+                    "free_slots": he and he.get("effective_free"), "last_run": last and {"id": last["id"], "mode": last["mode"], "status": last["status"], "started": last["started"], "user": last.get("user")}})
+    return {"generated": time.time(), "routers": out, "inventory_error": inv_d.get("error")}
+
+
 @app.get("/api/branch/{name}", tags=["inventory"], summary="One router's page: identity, authentication and certificate, tunnels with live state, firewall rules and log lines touching it, its LAN host, the runs that involved it")
 def branch_page(name: str, refresh: bool = Query(False, description="re-collect the tunnels' live state now")):
     """Everything the portal knows about one branch (or headend) in one document — read from the same caches the other pages use:

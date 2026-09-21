@@ -271,9 +271,11 @@ way. The same lines feed the *Firewalls* row of the Grafana IPsec dashboard (dro
 source, top dropped flows, the raw log) and two vmalert-logs rules: `FirewallDropBurst` (more than 20 packets from one source
 dropped in 5 minutes) and `FirewallDroppingPeerTraffic` (IKE or ESP hitting the drop rule — the policy and the wiring disagree).
 
-### Per-branch page
+### Branches tab and per-branch page
 
-Every router name in the Routers table (⧉) and in the tunnel tables links to `#branch/<name>` (`GET /api/branch/{name}`): identity
+The **Branches** tab (`GET /api/branches`) lists every branch and headend with VM state, tunnels up, IKE method, certificate days
+left, LAN host state, free slots (headends) and the last run that named it; a row opens the router's page. Every router name in
+the Routers table (*page ⧉*) and in the tunnel tables links there too: `#branch/<name>` (`GET /api/branch/{name}`) — identity
 (site, router-id, LAN, WAN addresses, the firewall in front of a headend), IKE authentication (the spoke's method, or the methods a
 headend serves; the certificate with days left; whether a key is held), the day-2 actions (Change auth, Renew cert, Rotate PSK,
 Re-home, Remove — the same dialogs), its tunnels with live IKE SA / VTI / eBGP / ESP counters (and a headend's capacity line), the

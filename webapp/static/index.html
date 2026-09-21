@@ -87,7 +87,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span></div>
 </header>
 <main>
@@ -209,6 +209,13 @@
       <span class="hint">window</span><select id="fw-hours"><option value="1">1 h</option><option value="3" selected>3 h</option><option value="6">6 h</option><option value="24">24 h</option><option value="72">3 days</option><option value="168" data-logs>7 days</option><option value="720" data-logs>30 days</option></select><button type="button" onclick="loadFirewalls(true)">Refresh</button></span></h2>
     <div class="hint" id="fw-note"></div>
     <div id="fw-cards"></div>
+  </div>
+</main>
+<main id="view-branches" hidden style="grid-template-columns:1fr">
+  <div class="card">
+    <h2>Branches and headends <small id="brs-note">every router with its page: tunnels, authentication, certificate, firewall rules, LAN host, runs — click a row</small>
+      <span style="float:right"><button type="button" onclick="loadBranches(true)">Refresh live</button></span></h2>
+    <div class="wide"><table id="brs-table"><thead><tr><th>Router</th><th>Role</th><th>Site</th><th>AS</th><th>Site LAN</th><th>VM</th><th>Tunnels</th><th>IKE auth</th><th>Certificate</th><th>LAN host</th><th>Free slots</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
 </main>
 <main id="view-branch" hidden style="grid-template-columns:1fr">
@@ -413,7 +420,7 @@ function fill(I) {
   I.devices.forEach((d, i) => {
     if (d.role === 'host') return;   // the LAN hosts live on the Inventory page (LAN hosts card); the intent keeps them at their router's site
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="white-space:nowrap"><input data-dev="${i}" data-k="name" value="${d.name}" style="width:120px">${d.role !== 'firewall' ? ` <a href="#branch/${encodeURIComponent(d.name)}" title="open ${esc(d.name)}'s page">⧉</a>` : ''}</td><td><input readonly value="${d.mgmt_ip}"></td>
+    tr.innerHTML = `<td style="white-space:nowrap"><input data-dev="${i}" data-k="name" value="${d.name}" style="width:120px">${d.role !== 'firewall' ? ` <a href="#branch/${encodeURIComponent(d.name)}" title="open ${esc(d.name)}'s page" style="font-size:11px;white-space:nowrap">page ⧉</a>` : ''}</td><td><input readonly value="${d.mgmt_ip}"></td>
       <td><span class="pill ${d.role}">${d.role}</span></td>
       <td><select data-dev="${i}" data-k="region">${(I.regions || []).map(r => `<option ${r === d.region ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td>
       <td><input data-dev="${i}" data-k="site" value="${esc(d.site || '')}" style="min-width:90px"></td>
@@ -772,11 +779,27 @@ $('rm-go').onclick = async () => {
 function showView() {
   const h = (location.hash || '#provision').slice(1); const v = h.startsWith('branch/') ? 'branch' : h;
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch';
-  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v));
-  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false);
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches';
+  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches')));
+  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false);
 }
 const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open ${esc(n)}'s page">${esc(n)}</a>`;
+
+// ---- branches list --------------------------------------------------------------------------------------------------
+async function loadBranches(refresh) {
+  $('brs-note').textContent = refresh ? 'collecting live state from the headends…' : 'loading…';
+  const r = await fetch('/api/branches' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('brs-note').textContent = `HTTP ${r.status}`; return; }
+  const d = await r.json(); const nm = a => a === 'certificate' ? 'certificate' : 'PSK';
+  $('brs-note').textContent = `${d.routers.length} routers · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
+  $('brs-table').querySelector('tbody').innerHTML = d.routers.map(b => `<tr style="cursor:pointer" onclick="location.hash='branch/${encodeURIComponent(b.name)}'">
+    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${b.role === 'hub' ? 'headend' : 'branch'}</span></td><td>${esc(b.city || b.site || '')}<div class="hint">${esc(b.region || '')}</div></td><td class="cred">${esc(b.asn)}</td><td class="cred">${esc(b.lan || '')}</td>
+    <td><span class="pill ${b.state === 'running' ? '' : 'fail'}">${esc(b.state)}</span></td><td><span class="health ${esc(b.health)}"></span> ${b.tunnels_up}/${b.tunnels} up</td>
+    <td>${b.role === 'spoke' ? `<span class="pill ${b.authentication === 'certificate' ? 'hub' : ''}">${nm(b.authentication)}</span>` : `<span class="hint">${b.methods.map(nm).join(' + ') || '-'}</span>`}</td>
+    <td>${b.cert_days == null ? '<span class="hint">-</span>' : `<span class="pill ${b.cert_expired ? 'fail' : b.cert_days < 30 ? 'warn' : ''}">${b.cert_expired ? 'expired' : Math.floor(b.cert_days) + ' d'}</span>`}</td>
+    <td>${b.host ? `${esc(b.host)} <span class="pill ${b.host_state === 'running' ? '' : 'fail'}">${esc(b.host_state)}</span>` : '<span class="hint">none</span>'}</td><td class="num">${b.free_slots ?? ''}</td>
+    <td>${b.last_run ? `<span class="status ${b.last_run.status}">${esc(b.last_run.mode)}</span> <span class="hint">${new Date(b.last_run.started * 1000).toLocaleDateString()}${b.last_run.user ? ' · ' + esc(b.last_run.user) : ''}</span>` : '<span class="hint">-</span>'}</td>
+    <td><a href="#branch/${encodeURIComponent(b.name)}"><button type="button" class="small">Open</button></a></td></tr>`).join('');
+}
 
 // ---- per-branch page ------------------------------------------------------------------------------------------------
 async function loadBranch(name, refresh) {
@@ -788,7 +811,7 @@ async function loadBranch(name, refresh) {
   const actions = isSpoke ? `<button type="button" class="auth" data-name="${esc(name)}" data-current="${d.authentication}" onclick="openAuth('${esc(name)}','${d.authentication}')">Change auth…</button> ${d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button> ` : ''}${d.authentication === 'psk' ? `<button type="button" class="rot" onclick="openRotate('${esc(name)}')">Rotate PSK…</button> ` : ''}<button type="button" class="rh" onclick="openRehome('${esc(name)}')">Re-home…</button> <button type="button" class="rm" onclick="openRemove('${esc(name)}')">Remove…</button>`
                           : (d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button>` : '');
   $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span> <small>${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
-      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadBranch('${esc(name)}', true)">Refresh live</button> <a href="#inventory" class="hint">inventory</a></span></h2>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadBranch('${esc(name)}', true)">Refresh live</button> <a href="#branches" class="hint">all branches</a></span></h2>
     <div class="review" style="margin-top:8px"><div class="box"><h4>Identity</h4><dl>
       <dt>Site</dt><dd>${esc(dev.site || '')}${dev.site_code ? ' (' + esc(dev.site_code) + ')' : ''}${dev.contact ? ' · ' + esc(dev.contact) : ''}</dd>
       <dt>Router-id</dt><dd class="cred">${esc(dev.router_id)}</dd><dt>Site LAN</dt><dd class="cred">${esc(dev.lan)} <span class="hint">(.1 on the LAN port${d.host ? ', host .2' : ''})</span></dd>
