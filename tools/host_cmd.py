@@ -3,7 +3,7 @@
    host_cmd.py run HOST CMD        run a command on one host (HOST = name from lab.conf or an address)
    host_cmd.py matrix [--json] [host ...]   ping every host from every other host over their LANs / the tunnels; prints the matrix
                                             (exit 1 unless every pair answers)"""
-import concurrent.futures, json, os, re, subprocess, sys
+import concurrent.futures, json, os, re, subprocess, sys, threading
 from pathlib import Path
 import paramiko
 
@@ -20,27 +20,49 @@ def hosts():
     return out
 
 
+_sessions, _session_lock = {}, threading.Lock()
+
+
+def _client(host):
+    """One SSH session per host, kept open between calls (the live mesh polls every few seconds); reopened when it dropped."""
+    with _session_lock:
+        c = _sessions.get(host)
+        if c is not None and c.get_transport() is not None and c.get_transport().is_active(): return c
+        c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        c.connect(host, username=USER, password=PASS, timeout=20, look_for_keys=False, allow_agent=False, banner_timeout=30)
+        _sessions[host] = c; return c
+
+
 def run(host, cmd, timeout=60):
-    c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    c.connect(host, username=USER, password=PASS, timeout=20, look_for_keys=False, allow_agent=False)
+    c = _client(host)
     try:
         _, out, err = c.exec_command(cmd, timeout=timeout)
         rc = out.channel.recv_exit_status(); text = out.read().decode() + err.read().decode()
-    finally: c.close()
+    except Exception:
+        with _session_lock: _sessions.pop(host, None)
+        raise
     return rc, text
 
 
 def matrix(names=None, count=2):
+    """Every host pings every other host's LAN address: results[src][dst] = {"ok", "ms" (average round trip), "loss"}."""
     inv = hosts(); names = names or sorted(inv, key=lambda n: (not n.startswith("host-") or "spoke" in n, n))
     def row(src):
-        # one SSH session per source: every destination pinged from there, sequentially
-        cmd = " ; ".join(f"ping -c {count} -W 2 -q {inv[d]['lan_ip']} >/dev/null 2>&1 && echo {d}=ok || echo {d}=FAIL" for d in names if d != src)
-        try: return src, dict(x.split("=") for x in run(inv[src]["mgmt_ip"], cmd, timeout=len(names) * count * 4 + 20)[1].split())
+        # one SSH session per source: every destination pinged from there, sequentially; busybox prints "round-trip min/avg/max = a/b/c ms"
+        cmd = " ; ".join(f"echo '{d}=' $(ping -c {count} -W 1 -q {inv[d]['lan_ip']} 2>/dev/null | grep -E 'packets transmitted|round-trip' | tr '\\n' ' ')" for d in names if d != src)
+        try:
+            out = run(inv[src]["mgmt_ip"], cmd, timeout=len(names) * count * 3 + 20)[1]; res = {}
+            for line in out.splitlines():
+                if "=" not in line: continue
+                d, rest = line.split("=", 1); m = re.search(r"(\d+) packets transmitted, (\d+) (?:packets )?received", rest); r = re.search(r"= [\d.]+/([\d.]+)/", rest)
+                got = int(m.group(2)) if m else 0
+                res[d.strip()] = {"ok": got > 0, "ms": round(float(r.group(1)), 2) if r else None, "loss": (int(m.group(1)) - got) if m else count}
+            return src, {d: res.get(d, {"ok": False, "ms": None, "loss": count}) for d in names if d != src}
         except Exception as e:  # noqa: BLE001
-            return src, {d: f"ssh:{e.__class__.__name__}" for d in names if d != src}
+            return src, {d: {"ok": False, "ms": None, "loss": count, "error": f"ssh:{e.__class__.__name__}"} for d in names if d != src}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex: res = dict(ex.map(row, names))
-    return {"hosts": {n: inv[n] for n in names}, "results": res, "ok": all(v == "ok" for r in res.values() for v in r.values()),
-            "pairs": sum(len(r) for r in res.values()), "failed": [(s, d) for s, r in res.items() for d, v in r.items() if v != "ok"]}
+    return {"hosts": {n: inv[n] for n in names}, "results": res, "count": count, "ok": all(v["ok"] for r in res.values() for v in r.values()),
+            "pairs": sum(len(r) for r in res.values()), "failed": [(s, d) for s, r in res.items() for d, v in r.items() if not v["ok"]]}
 
 
 if __name__ == "__main__":
@@ -54,7 +76,8 @@ if __name__ == "__main__":
         names = list(m["hosts"]); w = max(len(n) for n in names) + 2
         print(f"{'from \\ to':{w}s}" + "".join(f"{t:>{w}s}" for t in names))
         for src in names:
-            print(f"{src:{w}s}" + "".join(f"{'·' if d == src else ('ok' if m['results'][src].get(d) == 'ok' else 'FAIL'):>{w}s}" for d in names))
+            cell = lambda d: '·' if d == src else (f"{m['results'][src][d]['ms']} ms" if m['results'][src][d]['ok'] and m['results'][src][d]['ms'] is not None else ('ok' if m['results'][src][d]['ok'] else 'FAIL'))
+            print(f"{src:{w}s}" + "".join(f"{cell(d):>{w}s}" for d in names))
         print(f"\n{m['pairs'] - len(m['failed'])}/{m['pairs']} pairs reachable" + (f"; failed: {', '.join(f'{s}->{d}' for s, d in m['failed'])}" if m["failed"] else " — full mesh"))
         sys.exit(0 if m["ok"] else 1)
     else: sys.exit(__doc__)

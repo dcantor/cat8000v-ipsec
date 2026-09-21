@@ -22,7 +22,7 @@
   .cap.sub { padding:4px 0; border:0 } .cap-l { width:230px; padding-left:14px; color:var(--muted); font-size:13px } .cap-r { width:360px; font-size:13px }
   .cap.agg .cap-l, .cap.agg .cap-r { color:var(--ink) } .cap.agg .bar { height:16px; outline:1px solid var(--ink); outline-offset:1px }
   .cap .bar { position:relative; overflow:visible } .cap .bar > div { border-radius:4px } .bar .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--bad); opacity:.7 }
-  .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:var(--ink) } .pill.warn { background:#fef3c7 } .pill.fail { background:#fee2e2 }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:var(--ink) } .pill.warn { background:#fef3c7 } .pill.fail { background:#fee2e2; color:#991b1b } .pill.ok { background:#dcfce7; color:#166534 }
   .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
   .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
   .num { text-align:right; font-variant-numeric:tabular-nums }
@@ -289,7 +289,7 @@
   </div>
   <div class="card">
     <h2>LAN hosts <small>one small Alpine VM behind every router (eth1 = .2 of the site LAN, the router's LAN port .1 as gateway; OOB eth0, lab / lab) — every host must reach every other host over the tunnels</small>
-      <span style="float:right"><button type="button" id="hosts-ping">Ping mesh</button></span></h2>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" id="hosts-ping">Ping mesh</button><button type="button" id="hosts-live" title="ping every pair once every 5 seconds and show the round-trip time live">▶ Live</button></span></h2>
     <div class="hint" id="hosts-note"></div>
     <div class="grid" style="grid-template-columns:1fr;gap:16px;align-items:start">
       <div class="wide"><table id="inv-hosts"><thead><tr><th>Host</th><th>Behind</th><th>LAN address</th><th>Gateway</th><th>OOB</th><th>VM</th></tr></thead><tbody></tbody></table></div>
@@ -806,6 +806,7 @@ function showView() {
   document.querySelector('main:not([id])').hidden = v !== 'provision';
   $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches';
   document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches')));
+  if (v !== 'inventory' && typeof stopLive === 'function') stopLive();
   if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false);
 }
 const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open ${esc(n)}'s page">${esc(n)}</a>`;
@@ -998,19 +999,32 @@ async function loadTools() {
 // ---- inventory --------------------------------------------------------------
 const age = s => s == null ? '' : s >= 86400 ? Math.floor(s / 86400) + 'd ' + Math.floor(s % 86400 / 3600) + 'h' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : Math.floor(s / 60) + 'm';
 const bps = n => n == null ? '' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' Mb/s' : n >= 1e3 ? (n / 1e3).toFixed(0) + ' kb/s' : n + ' b/s';
-async function loadHosts(ping) {
-  $('hosts-note').textContent = ping ? 'pinging every host from every other host…' : '';
-  const r = await fetch('/api/hosts' + (ping ? '?ping=true' : '')); if (!r.ok) { $('hosts-note').textContent = `HTTP ${r.status}`; return; }
+let liveTimer = null, liveBusy = false;
+async function loadHosts(ping, live) {
+  if (!live) $('hosts-note').textContent = ping ? 'pinging every host from every other host…' : '';
+  const r = await fetch('/api/hosts' + (ping ? '?ping=true' + (live ? '&live=true' : '') : '')); if (!r.ok) { $('hosts-note').textContent = `HTTP ${r.status}`; return; }
   const d = await r.json();
-  $('inv-hosts').querySelector('tbody').innerHTML = d.hosts.map(h => `<tr><td class="cred">${esc(h.name)}</td><td><span class="pill ${h.router.endsWith('headend') ? 'hub' : 'spoke'}">${esc(h.router)}</span> <span class="hint">${esc(h.lan_if)}</span></td><td class="cred">${esc(h.lan_ip)}/24</td><td class="cred">${esc(h.gateway)}</td><td class="cred">${esc(h.mgmt_ip)}</td><td><span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></td></tr>`).join('');
-  if (d.matrix) {
-    const names = Object.keys(d.matrix.hosts), res = d.matrix.results;
-    $('hosts-matrix').innerHTML = `<table style="font-size:12px"><thead><tr><th>from \\ to</th>${names.map(n => `<th>${esc(n.replace('host-', ''))}</th>`).join('')}</tr></thead><tbody>${names.map(s => `<tr><td class="cred">${esc(s.replace('host-', ''))}</td>${names.map(t => t === s ? '<td class="hint">·</td>' : `<td><span class="pill ${res[s][t] === 'ok' ? '' : 'fail'}">${res[s][t] === 'ok' ? 'ok' : esc(res[s][t])}</span></td>`).join('')}</tr>`).join('')}</tbody></table>
-      <div class="hint" style="margin-top:6px">${d.matrix.pairs - d.matrix.failed.length} / ${d.matrix.pairs} pairs reachable${d.matrix.ok ? ' — full mesh' : ' — failed: ' + d.matrix.failed.map(p => p.join(' → ')).join(', ')} · ${new Date(d.matrix.generated * 1000).toLocaleTimeString()}</div>`;
-    $('hosts-note').textContent = '';
-  }
+  $('inv-hosts').querySelector('tbody').innerHTML = d.hosts.map(h => `<tr><td class="cred">${esc(h.name)}</td><td><span class="pill ${h.router.endsWith('headend') ? 'hub' : 'spoke'}">${esc(h.router)}</span> <span class="hint">${esc(h.lan_if)}</span></td><td class="cred">${esc(h.lan_ip)}/24</td><td class="cred">${esc(h.gateway)}</td><td class="cred">${esc(h.mgmt_ip)}</td><td><span class="pill ${h.state === 'running' ? 'ok' : 'fail'}">${esc(h.state)}</span></td></tr>`).join('');
+  if (d.matrix) renderMesh(d.matrix);
+  if (!live) $('hosts-note').textContent = '';
 }
-$('hosts-ping').onclick = () => loadHosts(true);
+function renderMesh(m) {
+  // one cell per ordered pair: green with the round-trip time when the ping answered, red when it did not
+  const names = Object.keys(m.hosts), res = m.results;
+  const cell = (s, t) => { if (t === s) return '<td class="hint" style="text-align:center">·</td>'; const x = res[s][t] || {};
+    return `<td style="text-align:center"><span class="pill ${x.ok ? 'ok' : 'fail'}" title="${esc(s)} → ${esc(t)} (${esc(m.hosts[t].lan_ip)})${x.error ? ': ' + esc(x.error) : ''}">${x.ok ? (x.ms != null ? x.ms.toFixed(x.ms < 10 ? 2 : 1) + ' ms' : 'ok') : '✕'}</span></td>`; };
+  $('hosts-matrix').innerHTML = `<table style="font-size:12px"><thead><tr><th>from \\ to</th>${names.map(n => `<th style="text-align:center">${esc(n.replace('host-', ''))}</th>`).join('')}</tr></thead><tbody>${names.map(s => `<tr><td class="cred">${esc(s.replace('host-', ''))}</td>${names.map(t => cell(s, t)).join('')}</tr>`).join('')}</tbody></table>
+    <div class="hint" style="margin-top:6px">${m.pairs - m.failed.length} / ${m.pairs} pairs reachable${m.ok ? ' — full mesh' : ' — failed: ' + m.failed.map(p => p.join(' → ')).join(', ')} · ${m.live ? 'live, one probe per pair every 5 s' : m.count + ' pings per pair'} · ${new Date(m.generated * 1000).toLocaleTimeString()}</div>`;
+}
+async function liveTick() {
+  if (liveBusy) return; liveBusy = true;
+  try { await loadHosts(true, true); $('hosts-note').textContent = `live · updated ${new Date().toLocaleTimeString()} · next in 5 s`; }
+  catch (e) { $('hosts-note').textContent = 'live: ' + e; }
+  finally { liveBusy = false; }
+}
+function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; $('hosts-live').textContent = '▶ Live'; $('hosts-note').textContent = ''; } }
+$('hosts-live').onclick = () => { if (liveTimer) { stopLive(); return; } $('hosts-live').textContent = '■ Stop'; liveTick(); liveTimer = setInterval(liveTick, 5000); };
+$('hosts-ping').onclick = () => { stopLive(); loadHosts(true); };
 
 async function loadInventory(refresh) {
   loadHosts(false);

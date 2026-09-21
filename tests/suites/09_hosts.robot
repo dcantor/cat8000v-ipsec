@@ -46,6 +46,13 @@ Every host reaches every other host: the full ping mesh over the tunnels
     Log    ${m}[results]
     Should Be True    ${m}[ok]    msg=${m}[failed] of ${m}[pairs] pairs failed: ${m}[failed]
     Should Be Equal As Integers    ${m}[pairs]    ${{ len($LAN_HOSTS) * (len($LAN_HOSTS) - 1) }}
+    # every answered pair carries its round-trip time (the portal's mesh shows it, green; a failed pair is red)
+    ${slow}=    Evaluate    [(s, d, v['ms']) for s, r in $m['results'].items() for d, v in r.items() if v['ms'] is None or v['ms'] > 500]
+    Should Be Empty    ${slow}    msg=pairs without a round-trip time or slower than 500 ms: ${slow}
+    ${live}=    Portal Get    /api/hosts    ping=true    live=true
+    Should Be True    ${live}[matrix][live]
+    Should Be Equal As Integers    ${live}[matrix][count]    1
+    Should Be True    ${live}[matrix][ok]    msg=live mesh: ${live}[matrix][failed]
 
 The path between two branch hosts goes through the branch routers and a headend's tunnels
     ${a}=    Set Variable    ${HOST_OF}[${SPOKES}[0]]

@@ -1008,7 +1008,8 @@ def branch_page(name: str, refresh: bool = Query(False, description="re-collect 
 
 _hosts_cache = {}
 @app.get("/api/hosts", tags=["monitoring"], summary="The LAN hosts (one Alpine VM behind every router) and, with ?ping=true, the full host-to-host ping mesh over the tunnels")
-def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (every host pings every other host, ~15 s; cached 60 s)")):
+def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (every host pings every other host, ~15 s; cached 60 s)"),
+              live: bool = Query(False, description="with ping: one probe per pair with the round-trip time, cached 3 s (the Inventory page's live mesh polls this every 5 s)")):
     """From the intent: each host, its router, its LAN address (.2 of the router's site LAN) and gateway (.1, the router's LAN port); VM state
     from virsh. `ping=true` runs tools/host_cmd.py's matrix (SSH into every host in parallel, `ping -c 2` to every other LAN address)."""
     sys.path.insert(0, str(LAB / "tools")); import host_cmd
@@ -1019,9 +1020,10 @@ def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (ev
               "state": vms.get((d["name"], "host"), "undefined")} for d in I["devices"] if d["role"] == "host"]
     out = {"hosts": sorted(hosts, key=lambda h: (not h["router"].endswith("headend"), h["router"])), "matrix": None}
     if ping:
-        c = _hosts_cache.get("matrix")
-        if not c or time.time() - c["generated"] > 60:
-            m = host_cmd.matrix(); c = {"generated": time.time(), **m}; _hosts_cache["matrix"] = c
+        key, ttl, count = ("live", 3, 1) if live else ("matrix", 60, 2)
+        c = _hosts_cache.get(key)
+        if not c or time.time() - c["generated"] > ttl:
+            m = host_cmd.matrix(count=count); c = {"generated": time.time(), "live": live, **m}; _hosts_cache[key] = c
         out["matrix"] = c
     return out
 
