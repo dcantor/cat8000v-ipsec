@@ -94,12 +94,22 @@ and the portal streams each step's status and log.
 - **Site / Routers / VPN service / Crypto profile** — the whole intent is a form: site metadata, every
   router (hostname, region, branch site, AS, router-id, LAN, **its own pre-shared key** for spokes,
   comments), the VPN service (name, change ticket, owner) and its tunnels, the IKEv2/IPsec suite.
-- **Deploy configuration**, **Dry run** (through `terraform plan`, nothing pushed), **Run tests only**.
+- **Internet breakout** (per region, nearest headend) and the **IKE authentication** default.
+- **Deploy configuration**, **Dry run** (through `terraform plan`, nothing pushed), **Run tests only**. Runs execute one at a
+  time; a second operator's run queues (cancellable until it starts).
 - **Deployment status**: steps with results, live log, parsed test report with links to the Robot
   report, log, per-router config backups and the pre/post diff. Runs are kept and a failed or
   interrupted run can be **resumed from the failed step**.
 
 ![Deployment status](docs/screenshots/portal-run.png)
+
+### Routers table — per-branch authentication and day-2 actions
+Every router row shows its **IKE authentication** (each branch chooses pre-shared key or certificate; a headend shows the
+methods its spokes use), the **certificate** it holds (days left), and the actions: **Change auth…**, **Renew cert…**,
+**Rotate PSK…**, **Re-home…**, **Remove…** — plus a link to the router's own page.
+
+![Routers table](docs/screenshots/portal-routers.png)
+![Change authentication](docs/screenshots/portal-change-auth.png)
 
 ### Add a spoke — guided wizard
 1. **Identity & metadata** — hostname, management IP, **region** (picks the nearest headends), branch
@@ -147,9 +157,41 @@ schematic view as the alternative.
 ![Headend capacity](docs/screenshots/portal-capacity.png)
 ![Tunnel report](docs/screenshots/portal-tunnels.png)
 
+The **LAN hosts** card lists the Alpine VM behind every router and **Ping mesh** runs the full host-to-host matrix over the tunnels.
+
+![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
+
+### Branches tab and the router page
+**Branches** lists every branch and headend — VM state, tunnels up, IKE method, certificate days left, LAN host, free slots,
+last run — and each row opens the router's page: identity, authentication and certificate, the internet breakout preference,
+the day-2 actions, its tunnels with live IKE / VTI / eBGP / ESP state, the firewall rules and log lines touching it, its LAN
+host, the runs that involved it, **live show commands**, and its **configuration** — the running config read over SSH, the
+intended config and last backup from Nautobot's Golden Config with the compliance verdict per feature, a running-vs-intended
+diff, the backup history from Gitea with per-commit diffs, and a **dark / light toggle** for the code panes.
+
+![Branches](docs/screenshots/portal-branches.png)
+![Router page](docs/screenshots/portal-branch.png)
+![Router configuration, dark mode](docs/screenshots/portal-branch-config.png)
+
+### Firewalls tab
+Per VyOS firewall: interfaces, the live forward-filter rule set with counters (IKE / ESP admitted only between the modelled WAN
+addresses, the internet breakout rule, everything else dropped and logged) and the firewall log — from the firewall's journal or,
+for up to 30 days, from VictoriaLogs.
+
+![Firewalls](docs/screenshots/portal-firewalls.png)
+
+### Sign-in and audit
+Local users or single sign-on (OpenID Connect; the lab's Gitea is the provider), three roles, and an audit trail of every login and
+change request with the spec (secrets redacted) and the run it started.
+
+| Sign-in | Audit trail |
+|---|---|
+| ![](docs/screenshots/portal-login.png) | ![](docs/screenshots/portal-audit.png) |
+
 ### REST API
 Everything the UI does is an API call — typed and documented with Swagger at **`/docs`** (ReDoc at
-`/redoc`): intent, inventory, spoke/headend suggestions and validation, removal plans, runs and resume.
+`/redoc`): intent, inventory, spoke/headend suggestions and validation, removal / rotation / re-home / authentication / renewal
+plans, the branch pages, hosts and the ping mesh, firewalls, PKI, runs (queue, resume, cancel), audit and SSO.
 
 ![Swagger](docs/screenshots/portal-swagger.png)
 

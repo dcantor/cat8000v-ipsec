@@ -7,3 +7,6 @@
   the test coverage map and the file map.
 - `workflows.html` is the source (Mermaid diagrams); rebuild the PDF with
   `webapp/.venv/bin/python docs/build_pdf.py` (headless Chrome via Playwright).
+- `screenshots/` — the README's screenshots of the portal and of Nautobot; re-capture them with
+  `webapp/.venv/bin/python docs/screenshots.py` (headless Chrome via Playwright, signs into the portal as the lab's default
+  approver and into Nautobot as admin; the lab must be up — it runs the ping mesh and reads the routers).
