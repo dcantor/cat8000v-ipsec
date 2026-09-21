@@ -36,12 +36,18 @@ def address_names(I):
 
 def parse_rules(show_fw, config):
     """`show firewall` -> [{ruleset, rule, action, protocol, packets, bytes, conditions, description, log}]."""
-    desc = {}; logged = set()
+    desc = {}; logged = set(); match = {}   # match[(ruleset, rule)] = {"source": {"address", "port"}, "destination": {...}, "state": [...], "inbound", "outbound"}
     for line in config.splitlines():
         m = re.match(r"set firewall ipv4 (\S+ \S+) rule (\d+) description '(.*)'", line)
-        if m: desc[(m[1], m[2])] = m[3]
+        if m: desc[(m[1], m[2])] = m[3]; continue
         m = re.match(r"set firewall ipv4 (\S+ \S+) rule (\d+) log$", line)
-        if m: logged.add((m[1], m[2]))
+        if m: logged.add((m[1], m[2])); continue
+        m = re.match(r"set firewall ipv4 (\S+ \S+) rule (\d+) (source|destination) (address|port) '?([^']+)'?$", line)
+        if m: match.setdefault((m[1], m[2]), {}).setdefault(m[3], {})[m[4]] = m[5]; continue
+        m = re.match(r"set firewall ipv4 (\S+ \S+) rule (\d+) state '?(\w+)'?$", line)
+        if m: match.setdefault((m[1], m[2]), {}).setdefault("state", []).append(m[3]); continue
+        m = re.match(r"set firewall ipv4 (\S+ \S+) rule (\d+) (inbound|outbound)-interface name '?([^']+)'?$", line)
+        if m: match.setdefault((m[1], m[2]), {})[m[3]] = m[4]
     out = []; ruleset = None
     for line in show_fw.splitlines():
         m = re.match(r'^ipv4 Firewall "(.+)"', line)
@@ -49,7 +55,10 @@ def parse_rules(show_fw, config):
         m = re.match(r"^(\d+|default)\s+(\w+)\s+(\S+)\s+(\d+)\s+(\d+)\s*(.*)$", line)
         if m and ruleset:
             key = (ruleset, m[1])
+            mt = match.get(key, {}); src, dst = mt.get("source", {}), mt.get("destination", {})
             out.append({"ruleset": ruleset, "rule": m[1], "action": m[2], "protocol": m[3], "packets": int(m[4]), "bytes": int(m[5]), "conditions": m[6].strip(),
+                        "source": src.get("address", "any"), "source_port": src.get("port", "any"), "destination": dst.get("address", "any"), "destination_port": dst.get("port", "any"),
+                        "state": mt.get("state", []), "inbound": mt.get("inbound", "any"), "outbound": mt.get("outbound", "any"),
                         "description": desc.get(key, "default action" if m[1] == "default" else ""), "log": key in logged})
     return out
 
