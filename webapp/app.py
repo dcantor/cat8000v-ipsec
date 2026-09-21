@@ -18,6 +18,7 @@ from labportal import RunBase, RunRegistry, install_runs_api, metric_line, run_m
 
 from fastapi import FastAPI, HTTPException, Query, Path as PathParam, Request, Response
 import auth
+import firewalls as fw_mod
 from fastapi.openapi.docs import get_swagger_ui_html
 import schemas as S
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -604,6 +605,14 @@ def _vm_states():
     try: running = set(subprocess.run(["sg", "libvirt", "-c", "virsh list --name"], capture_output=True, text=True, timeout=20).stdout.split())
     except Exception: running = set()  # noqa: BLE001
     return {(n["node"], n["role"]): ("running" if n["node"] in running else "shut off") for n in intent_mod.nodes().values()}
+
+
+@app.get("/api/firewalls", tags=["monitoring"], summary="The Firewalls page: each VyOS firewall's interfaces, live rule set with counters, and its firewall log for the last hours")
+def firewalls_page(hours: int = Query(3, ge=1, le=168, description="how far back to read the firewall log"), refresh: bool = Query(False, description="collect again now (otherwise cached for 60 s)")):
+    """Collected over SSH from every firewall: `show interfaces`, `show firewall` (rules, packets, bytes, conditions) joined with the rule
+    descriptions from the configuration, and `show log firewall` parsed into fields (rule, verdict, in / out, source / destination with the
+    lab device names, protocol, ports) plus the same entries grouped per flow."""
+    return fw_mod.collect(hours, refresh)
 
 
 @app.get("/api/tools", tags=["monitoring"], summary="The Tools page: every tool's URL, and how to reach each router / firewall (lab credentials)")

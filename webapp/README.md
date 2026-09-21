@@ -217,6 +217,17 @@ At least two headends must remain. The run (`mode: rehome`, `spoke: {name, hubs}
 Measured: drop east from spoke2 — 6 min, no reboot, 11 Nautobot objects and 11 terraform resources removed; add east to spoke4
 — 13 min including the reboot, Tunnel12 up on east-headend.
 
+### Firewalls page
+
+The **Firewalls** tab (`GET /api/firewalls?hours=3&refresh=`) shows, per VyOS firewall (the one in front of each headend):
+its interfaces (address, state, description — which spoke each port faces), the live **forward filter** rule set as
+`show firewall` prints it (rule, action, protocol, packet and byte counters, match conditions) joined with the rule
+descriptions from the configuration, and the **firewall log** (`show log firewall`) for the last 1 h – 3 days: every entry
+parsed into rule, verdict, in → out interface, source and destination (resolved to the lab's device names from the intent's
+links, tunnels and loopbacks), protocol, ports and TCP flags — grouped by flow with hit counts first, every entry underneath.
+Collected over SSH from all firewalls in parallel, cached for 60 s; Refresh collects again. Rule 900 is the "log everything
+else" drop, so the log is the list of what the policy refused (e.g. the suites' SSH probe from a spoke to its headend).
+
 ### Tools page
 
 The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,
