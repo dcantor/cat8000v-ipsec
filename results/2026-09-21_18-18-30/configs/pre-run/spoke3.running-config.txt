@@ -1,0 +1,408 @@
+! spoke3 (10.2.0.14) show running-config captured 2026-09-21 18:18:30
+Building configuration...
+
+Current configuration : 10967 bytes
+!
+! Last configuration change at 21:39:28 UTC Mon Sep 21 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname spoke3
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-3120729236
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-3120729236
+ revocation-check none
+ rsakeypair TP-self-signed-3120729236
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+!
+!
+crypto pki certificate chain TP-self-signed-3120729236
+ certificate self-signed 01
+  30820330 30820218 A0030201 02020101 300D0609 2A864886 F70D0101 0D050030 
+  31312F30 2D060355 04030C26 494F532D 53656C66 2D536967 6E65642D 43657274 
+  69666963 6174652D 33313230 37323932 3336301E 170D3236 30393133 31363031 
+  33345A17 0D333630 39313231 36303133 345A3031 312F302D 06035504 030C2649 
+  4F532D53 656C662D 5369676E 65642D43 65727469 66696361 74652D33 31323037 
+  32393233 36308201 22300D06 092A8648 86F70D01 01010500 0382010F 00308201 
+  0A028201 01008AC2 6F5CCD10 7E3734BC 78FE473E 3A844481 D1C39294 8949C382 
+  CCE5BECF 49C5F0D6 F20FE595 97ADAF63 96C749E8 51336F83 CCB2829A 69BFC843 
+  F660B912 1F31DB72 2B5E8038 E6C410E3 6802FE4B D6E0827F 4B2D7995 AE815F7F 
+  85BE0D41 76479606 601CCD07 CF55B65E 439BC2E4 B8A79EF7 0B4EABD8 54B7CF99 
+  2B84C5C7 5A107111 AFB858ED B4224EAF F461637A C4A822C9 2FF41E99 76B4500B 
+  7AD3AA53 B9F30EE1 8F5CDBD3 7FB655E6 DE84BFCC 098007E9 33AA61D9 CCDF9C6B 
+  BD7B8A4F 1040FFEF 5D6C12F3 DDACD2CD 1178CAB4 3D2A94A4 824C0828 1BED3DB8 
+  B1F180B7 527BE180 68CA1C3E F2685E11 B96C962A 074F4B4E C8F1893C 3AA587BA 
+  84F3CAE8 7A650203 010001A3 53305130 1D060355 1D0E0416 0414DFBB 7F4A8E22 
+  09E878F4 75F67AD1 E3B91B56 B471301F 0603551D 23041830 168014DF BB7F4A8E 
+  2209E878 F475F67A D1E3B91B 56B47130 0F060355 1D130101 FF040530 030101FF 
+  300D0609 2A864886 F70D0101 0D050003 82010100 5E944E7E 8D26AA6E E5D5D36F 
+  A601119A 4721C61E 3474E0C5 F03081B0 297AF5C2 BAF10AC3 6E480FCA 4E65AB42 
+  8E24886B 1E8BA04B 0AC876DB 5B26C5B7 FF9341B2 62CB9B7C BF0312E0 C51A35EF 
+  E808ED60 136CC3A8 4B0CEAE1 8D6CA8B0 336C5E16 84823B6D EEC280C5 DE61C1E5 
+  4B0673E7 C4A16252 B5DD3FD9 4692419C E5F5B00A 7EA23E9A 1358B0FD 180C3BDF 
+  2CF6D891 FA6F5B3C 34C54530 AF1D46D0 86C1D094 DA6E3B73 84520158 651D0D6A 
+  D813FE4B A1C4ACBC D2565D54 AA318C25 D427060B 14200E2F 5B1E69C7 B92A403C 
+  9A856B38 4433C877 3BFF4D47 4501F526 47811639 582C0E7A 065013B0 D09D5A10 
+  CA6FF34D 142E9CEF BA122D05 5556FB49 05893778
+  	quit
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01
+  30820321 30820209 A0030201 02020101 300D0609 2A864886 F70D0101 0B050030 
+  32310E30 0C060355 040A1305 43697363 6F312030 1E060355 04031317 43697363 
+  6F204C69 63656E73 696E6720 526F6F74 20434130 1E170D31 33303533 30313934 
+  3834375A 170D3338 30353330 31393438 34375A30 32310E30 0C060355 040A1305 
+  43697363 6F312030 1E060355 04031317 43697363 6F204C69 63656E73 696E6720 
+  526F6F74 20434130 82012230 0D06092A 864886F7 0D010101 05000382 010F0030 
+  82010A02 82010100 A6BCBD96 131E05F7 145EA72C 2CD686E6 17222EA1 F1EFF64D 
+  CBB4C798 212AA147 C655D8D7 9471380D 8711441E 1AAF071A 9CAE6388 8A38E520 
+  1C394D78 462EF239 C659F715 B98C0A59 5BBB5CBD 0CFEBEA3 700A8BF7 D8F256EE 
+  4AA4E80D DB6FD1C9 60B1FD18 FFC69C96 6FA68957 A2617DE7 104FDC5F EA2956AC 
+  7390A3EB 2B5436AD C847A2C5 DAB553EB 69A9A535 58E9F3E3 C0BD23CF 58BD7188 
+  68E69491 20F320E7 948E71D7 AE3BCC84 F10684C7 4BC8E00F 539BA42B 42C68BB7 
+  C7479096 B4CB2D62 EA2F505D C7B062A4 6811D95B E8250FC4 5D5D5FB8 8F27D191 
+  C55F0D76 61F9A4CD 3D992327 A8BB03BD 4E6D7069 7CBADF8B DF5F4368 95135E44 
+  DFC7C6CF 04DD7FD1 02030100 01A34230 40300E06 03551D0F 0101FF04 04030201 
+  06300F06 03551D13 0101FF04 05300301 01FF301D 0603551D 0E041604 1449DC85 
+  4B3D31E5 1B3E6A17 606AF333 3D3B4C73 E8300D06 092A8648 86F70D01 010B0500 
+  03820101 00507F24 D3932A66 86025D9F E838AE5C 6D4DF6B0 49631C78 240DA905 
+  604EDCDE FF4FED2B 77FC460E CD636FDB DD44681E 3A5673AB 9093D3B1 6C9E3D8B 
+  D98987BF E40CBD9E 1AECA0C2 2189BB5C 8FA85686 CD98B646 5575B146 8DFC66A8 
+  467A3DF4 4D565700 6ADF0F0D CF835015 3C04FF7C 21E878AC 11BA9CD2 55A9232C 
+  7CA7B7E6 C1AF74F6 152E99B7 B1FCF9BB E973DE7F 5BDDEB86 C71E3B49 1765308B 
+  5FB0DA06 B92AFE7F 494E8A9E 07B85737 F3A58BE1 1A48A229 C37C1E69 39F08678 
+  80DDCD16 D6BACECA EEBC7CF9 8428787B 35202CDC 60E4616A B623CDBD 230E3AFB 
+  418616A9 4093E049 4D10AB75 27E86F73 932E35B5 8862FDAE 0275156F 719BB2F0 
+  D697DF7F 28
+  	quit
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 9PX1ZVPGZF6
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$fRmRZw36yi4Mu.$5B/1hsJdFAsqm2W4MmbXNCUJWW01aSq9y8yapPrioXA
+!
+username admin privilege 15 secret 9 $9$kudJ88wWHZZFJU$kSj4hS1THKOZQRLNvnThqxKL4kd2VWSNzNTjq/NqSGY
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer central-headend
+  address 100.64.2.2
+  pre-shared-key 6lC1QKo6gk0F769MJ1SdOQrh
+ !
+ peer east-headend
+  address 100.64.1.2
+  pre-shared-key 6lC1QKo6gk0F769MJ1SdOQrh
+ !
+ peer west-headend
+  address 100.64.3.2
+  pre-shared-key 6lC1QKo6gk0F769MJ1SdOQrh
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2-PSK
+ match identity remote address 100.64.1.2 255.255.255.255 
+ match identity remote address 100.64.2.2 255.255.255.255 
+ match identity remote address 100.64.3.2 255.255.255.255 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC-PSK
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2-PSK
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.4 255.255.255.255
+!
+interface Tunnel3
+ description IPsec VTI to east-headend
+ ip address 172.17.3.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.1.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel6
+ description IPsec VTI to central-headend
+ ip address 172.17.6.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet3
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.2.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel10
+ description IPsec VTI to west-headend
+ ip address 172.17.10.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet4
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.3.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.14 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to fw-east eth4
+ ip address 100.65.3.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ description WAN to fw-central eth4
+ ip address 100.65.6.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet4
+ description WAN to fw-west eth4
+ ip address 100.65.10.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet5
+ description site LAN 192.168.13.0/24 (host-spoke3 eth1)
+ ip address 192.168.13.1 255.255.255.0
+ negotiation auto
+ cdp enable
+!
+router bgp 65203
+ bgp router-id 10.255.1.4
+ bgp log-neighbor-changes
+ neighbor 172.17.3.1 remote-as 65200
+ neighbor 172.17.3.1 description eBGP east-headend (Tunnel3)
+ neighbor 172.17.6.1 remote-as 65204
+ neighbor 172.17.6.1 description eBGP central-headend (Tunnel6)
+ neighbor 172.17.10.1 remote-as 65206
+ neighbor 172.17.10.1 description eBGP west-headend (Tunnel10)
+ !
+ address-family ipv4
+  network 10.255.1.4 mask 255.255.255.255
+  network 192.168.13.0
+  neighbor 172.17.3.1 activate
+  neighbor 172.17.3.1 route-map BREAKOUT-east-headend in
+  neighbor 172.17.6.1 activate
+  neighbor 172.17.6.1 route-map BREAKOUT-central-headend in
+  neighbor 172.17.10.1 activate
+  neighbor 172.17.10.1 route-map BREAKOUT-west-headend in
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route 100.64.1.2 255.255.255.255 100.65.3.1 name via-fw-east
+ip route 100.64.2.2 255.255.255.255 100.65.6.1 name via-fw-central
+ip route 100.64.3.2 255.255.255.255 100.65.10.1 name via-fw-west
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip prefix-list DEFAULT-ROUTE description the default route the headends originate (internet breakout)
+ip prefix-list DEFAULT-ROUTE seq 5 permit 0.0.0.0/0
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+route-map BREAKOUT-central-headend permit 10 
+ description default route from central-headend: preference #2 (nearest headend first)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference 150
+!
+route-map BREAKOUT-central-headend permit 20 
+ description everything else unchanged
+!
+route-map BREAKOUT-east-headend permit 10 
+ description default route from east-headend: preference #3 (nearest headend first)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference 100
+!
+route-map BREAKOUT-east-headend permit 20 
+ description everything else unchanged
+!
+route-map BREAKOUT-west-headend permit 10 
+ description default route from west-headend: preference #1 (nearest headend first)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference 200
+!
+route-map BREAKOUT-west-headend permit 20 
+ description everything else unchanged
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

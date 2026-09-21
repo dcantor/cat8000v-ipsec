@@ -39,6 +39,10 @@ elif "connected_interface { name device { name role { name } }" not in Q:   # fi
     Q = Q.replace("                 vpn_tunnel_endpoints_tunnel { source_interface { name } source_ipaddress { address }\n",
                   "                 connected_interface { name device { name role { name } } ip_addresses { address } }\n"
                   "                 vpn_tunnel_endpoints_tunnel { role { name } source_interface { name } source_ipaddress { address interfaces { name } }\n")
+ROLE = "    name hostname: name platform { network_driver } primary_ip4 { address }\n"
+if ROLE in Q and "device_role: role" not in Q: Q = Q.replace(ROLE, "    name hostname: name platform { network_driver } primary_ip4 { address } device_role: role { name }\n")   # hub or spoke: the breakout renders differently
+PEER = "        peer { source_ip { address } autonomous_system { asn } }\n"
+if PEER in Q: Q = Q.replace(PEER, "        peer { source_ip { address } autonomous_system { asn } routing_instance { device { name } } }\n")   # the peer's device: the breakout route-map per headend
 if Q != gq.query:
     requests.patch(f"{a.url}/api/extras/graphql-queries/{gq.id}/", json={"query": Q}, headers=H, timeout=30).raise_for_status()
     print("  extended GraphQL query golden-config-lab (vpn tunnel endpoints)")

@@ -155,6 +155,15 @@ def is_lan_link(I, link):
     roles = {d["name"]: d.get("role") for d in I["devices"]}
     return "host" in (roles.get(link.get("a")), roles.get(link.get("b")))
 
+def internet(I):
+    """The internet breakout settings (intent `internet`): enabled, the firewalls' uplink port, and — per spoke — the headends in the
+    order it should prefer for its default route (its own region first, then by region distance)."""
+    b = dict(I.get("internet") or {}); b.setdefault("enabled", False); b.setdefault("uplink_port", 9)
+    hubs = [d for d in I["devices"] if d["role"] == "hub"]
+    b["preference"] = {d["name"]: [h["name"] for h in sorted((h for h in hubs if any(t["hub"] == h["name"] and t["spoke"] == d["name"] for t in I.get("tunnels") or [])),
+                                                            key=lambda h: (region_distance(I, d.get("region"), h.get("region")), h["name"]))] for d in I["devices"] if d["role"] == "spoke"}
+    return b
+
 def firewall_of(I, hub):
     """The firewall fronting a headend (None when the headend is wired directly)."""
     return next((d["name"] for d in I["devices"] if d.get("role") == "firewall" and d.get("hub") == hub), None)
@@ -317,6 +326,9 @@ def validate(intent):
         if (d.get("lat") is None) != (d.get("lon") is None): errs.append(f"{d.get('name')}: lat and lon go together")
         if d.get("lat") is not None and not (-90 <= float(d["lat"]) <= 90 and -180 <= float(d["lon"]) <= 180): errs.append(f"{d.get('name')}: lat/lon out of range")
         sites[d.get("site")] = d.get("region")
+    inet = intent.get("internet") or {}
+    if inet and not isinstance(inet.get("enabled", False), bool): errs.append("internet.enabled: true or false")
+    if inet and not (1 <= int(inet.get("uplink_port", 9)) <= 20): errs.append("internet.uplink_port: 1..20")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", (intent.get("vpn") or {}).get("name", "")): errs.append("VPN name: letters/digits/_-")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", pr.get("name", "")): errs.append("profile name: letters/digits/_-")
     return errs

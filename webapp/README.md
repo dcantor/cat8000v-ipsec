@@ -271,6 +271,13 @@ way. The same lines feed the *Firewalls* row of the Grafana IPsec dashboard (dro
 source, top dropped flows, the raw log) and two vmalert-logs rules: `FirewallDropBurst` (more than 20 packets from one source
 dropped in 5 minutes) and `FirewallDroppingPeerTraffic` (IKE or ESP hitting the drop rule — the policy and the wiring disagree).
 
+### Internet breakout
+
+The *Internet breakout* card on the Provision page toggles `internet.enabled` (and the firewalls' uplink port) in the intent; a
+deploy then pushes the NAT / breakout rules and return routes to the firewalls (`render_vyos.py`) and the default origination,
+static default, prefix-list and per-headend route-maps to the routers (NaC). The preferred headend per branch is computed from
+the regions (`intent.internet()`), shown on the card and on each branch's page (with a link to the live default route).
+
 ### Branches tab and per-branch page
 
 The **Branches** tab (`GET /api/branches`) lists every branch and headend with VM state, tunnels up, IKE method, certificate days

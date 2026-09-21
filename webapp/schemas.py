@@ -101,6 +101,7 @@ class Intent(BaseModel):
     domain_name: str = "lab.local"
     capacity: dict[str, int] = Field(default={"tunnels_per_headend": 50, "bandwidth_per_tunnel_mbps": 8},
                                      description="tunnels_per_headend: slots per headend; bandwidth_per_tunnel_mbps: what every tunnel commits of its headend firewall's bandwidth_mbps")
+    internet: Optional[dict[str, Any]] = Field(None, description="internet breakout: {enabled: bool, uplink_port: N} — each firewall NATs the site LANs out of ethN, headends originate a default route, spokes prefer the nearest headend")
 
 
 class RunOptions(BaseModel):

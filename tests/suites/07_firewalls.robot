@@ -29,7 +29,7 @@ Firewall interfaces carry the modelled addresses and face the right neighbours
     FOR    ${dev}    IN    @{d}[devices]
         Should Be Equal    ${dev}[platform][name]    vyos
         Should Be Equal    ${dev}[location][name]    ${FIREWALLS}[${dev}[name]][site]
-        ${wired}=    Evaluate    [i for i in $dev['interfaces'] if i['enabled'] and i['name'] != 'eth0']
+        ${wired}=    Evaluate    [i for i in $dev['interfaces'] if i['enabled'] and i['name'] not in ('eth0', $INTERNET_UPLINK)]   # the uplink is on the NAT network: no cable, DHCP
         FOR    ${i}    IN    @{wired}
             Should Not Be Equal    ${i}[connected_interface]    ${None}    msg=${dev}[name]/${i}[name] enabled but not cabled
             Length Should Be    ${i}[ip_addresses]    1

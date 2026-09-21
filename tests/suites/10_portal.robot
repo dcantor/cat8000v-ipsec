@@ -44,9 +44,10 @@ Every router has a page: identity, authentication, its tunnels with live state, 
         END
         IF    '${ROUTERS}[${r}][role]' == 'spoke'
             Should Be Equal    ${p}[authentication]    ${SPOKE_AUTH}[${r}]
-            Should Be True    len($p['firewalls']) >= 1    msg=${r}: no firewall rule names its WAN addresses
-            FOR    ${f}    IN    @{p}[firewalls]
-                Should Be True    len($f['rules']) >= 2    msg=${r}: ${f}[name] should admit its IKE and ESP
+            ${in_path}=    Evaluate    [f for f in $p['firewalls'] if f['in_path']]
+            Should Be True    len($in_path) >= 1    msg=${r}: no firewall in its path
+            FOR    ${f}    IN    @{in_path}
+                Should Be True    len($f['rules']) >= 2    msg=${r}: ${f}[name] (in front of ${f}[hub]) should admit its IKE and ESP
             END
         ELSE
             Should Be Equal    ${p}[methods]    ${ROUTER_AUTHS}[${r}]

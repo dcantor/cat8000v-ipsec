@@ -170,15 +170,31 @@ def render(dev):
     for p in sorted(profiles.values(), key=lambda p: p["name"]):
         if cert_auth(p): templates.append({"name": f"ikev2_cert_auth_{name}", "type": "cli", "content": cert_auth_cli(p)})
     ri = bgp_ri[name]
-    neighbors, afn = [], []
+    # internet breakout (config context `internet`): a headend originates a default route to every spoke (and holds a static default via its
+    # firewall); a spoke ranks the defaults it hears by the context's preference (its region's headend first): local preference per neighbour
+    inet = ctx.get("internet") or {}; breakout = bool(inet.get("enabled")); is_hub = norm((dev.get("role") or {}).get("name", "")) == "VPN_HUB"
+    pref_order = (inet.get("preference") or {}).get(name) or []
+    neighbors, afn, route_maps, prefix_lists = [], [], [], []
     for ep in sorted(ri["endpoints"], key=lambda e: e["peer"]["source_ip"]["address"] if e["peer"] else ""):
         if not ep["enabled"] or not ep["peer"]: continue
-        peer_ip = ep["peer"]["source_ip"]["address"].split("/")[0]
+        peer_ip = ep["peer"]["source_ip"]["address"].split("/")[0]; peer_dev = ((ep["peer"].get("routing_instance") or {}).get("device") or {}).get("name")
         neighbors.append({"ip": peer_ip, "remote_as": ep["peer"]["autonomous_system"]["asn"], "description": ep["description"]})
-        afn.append({"ip": peer_ip, "activate": True})
+        af = {"ip": peer_ip, "activate": True}
+        if breakout and is_hub: af["default_originate"] = True
+        if breakout and not is_hub and peer_dev in pref_order:
+            rm = f"BREAKOUT-{peer_dev}"; af["route_maps"] = [{"direction": "in", "name": rm}]
+            route_maps.append({"name": rm, "entries": [{"seq": 10, "operation": "permit", "description": f"default route from {peer_dev}: preference #{pref_order.index(peer_dev) + 1} (nearest headend first)",
+                                                        "match": {"ipv4_address_prefix_lists": ["DEFAULT-ROUTE"]}, "set": {"local_preference": 200 - 50 * pref_order.index(peer_dev)}},
+                                                       {"seq": 20, "operation": "permit", "description": "everything else unchanged"}]})
+        afn.append(af)
+    if route_maps: prefix_lists.append({"name": "DEFAULT-ROUTE", "description": "the default route the headends originate (internet breakout)", "seqs": [{"seq": 5, "action": "permit", "prefix": "0.0.0.0/0"}]})
     bgp = {"as_number": ri["autonomous_system"]["asn"], "router_id": ri["router_id"]["address"].split("/")[0],
            "log_neighbor_changes": bool((ri["extra_attributes"] or {}).get("log_neighbor_changes", True)), "neighbors": neighbors,
            "address_family": {"ipv4_unicast": {"neighbors": afn, "networks": sorted(networks, key=lambda x: (x.get("mask") != "255.255.255.255", ipaddress.IPv4Address(x["network"])))}}}
+    statics = static_routes(dev)
+    if breakout and is_hub:   # the headend's own default: via its firewall (the far end of its WAN link), which NATs
+        wan = next((i for i in dev["interfaces"] if (i.get("connected_interface") or {}).get("device", {}).get("role", {}).get("name") == "vpn-firewall" and i.get("ip_addresses")), None)
+        if wan: statics.append({"prefix": "0.0.0.0", "mask": "0.0.0.0", "next_hops": [{"ip": wan["connected_interface"]["ip_addresses"][0]["address"].split("/")[0], "name": f"internet-via-{wan['connected_interface']['device']['name']}"}]})
     group = next((t["vpn"]["extra_attributes"].get("nac_device_group") for t in templates_vpn if t.get("vpn")), "IPSEC_VPN")
     return {"name": name, "host": dev["primary_ip4"]["address"].split("/")[0], "protocol": "restconf", "device_groups": [group],
             "templates": [t["name"] for t in templates], "_templates": templates,
@@ -186,7 +202,8 @@ def render(dev):
             "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
                               **({"crypto": crypto_model(profiles, dev)} if profiles else {}),
                               "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks, "tunnels": sorted(tunnels, key=lambda t: int(t["name"]))},
-                              "routing": {"bgp": bgp, **({"static_routes": static_routes(dev)} if static_routes(dev) else {})}}}
+                              **({"prefix_lists": prefix_lists} if prefix_lists else {}), **({"route_maps": route_maps} if route_maps else {}),
+                              "routing": {"bgp": bgp, **({"static_routes": statics} if statics else {})}}}
 
 rendered = [render(d) for d in devices]
 templates = [t for d in rendered for t in d.pop("_templates")]

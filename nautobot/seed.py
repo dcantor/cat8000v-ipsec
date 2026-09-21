@@ -188,6 +188,7 @@ def drop_legacy_tunnel_model(t):
     for x in ep.filter(destination_id=t.id) + ep.filter(source_id=t.id):
         if str(getattr(x.relationship, "key", "")) in ("tunnel_source", "tunnel_peer"): x.delete(); created.append(f"removed relationship {x.relationship.key} on {t.device.name}/{t.name}")
 
+INET = intent_mod.internet(I)
 CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # policy for the VyOS firewalls between a headend and its spokes: only what the tunnels need may cross
        # peers_only: IKE and ESP only between the modelled WAN addresses (the headend behind the firewall, the spokes cabled to it) — address groups
@@ -196,7 +197,11 @@ CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # management.syslog: the firewalls ship their syslog (the kernel's firewall log included) to VictoriaLogs on the NMS, which sits on the
        # OOB network as .10 — the Grafana drops panel, the FirewallDropBurst alert and the portal's log history read from there
        "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "peers_only": True, "log_drops": True, "log_accepts": True},
-                    "management": {"ssh": True, "lldp": True, "syslog": {"host": str(ipaddress.IPv4Network(I["oob"]["prefix"])[10]), "port": 5514, "protocol": "udp", "level": "info"}}}}
+                    "management": {"ssh": True, "lldp": True, "syslog": {"host": str(ipaddress.IPv4Network(I["oob"]["prefix"])[10]), "port": 5514, "protocol": "udp", "level": "info"}}},
+       # internet breakout: each firewall's uplink port (DHCP on the libvirt NAT network) masquerades the site LANs; only LAN -> uplink may cross
+       # (rendered by render_vyos.py); the headend behind it holds a static default via the firewall and originates a default route to its spokes,
+       # and every spoke prefers the nearest headend's default (render_nac.py: local preference per neighbour from `preference`)
+       "internet": {"enabled": bool(INET["enabled"]), "uplink": f"eth{INET['uplink_port']}", "nat_sources": sorted(d["lan"] for d in I["devices"] if d["role"] in ("hub", "spoke")), "preference": INET["preference"]}}
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})
@@ -312,6 +317,8 @@ if FIREWALLS:
         for port in PORTS["firewall"]:
             wired = WIRED.get((f, port))
             gi[(f, port)] = ensure_iface(dev, f"eth{port}", "1000base-t", (f"to {wired}" if wired else "unwired"), enabled=bool(wired), mac=f"{OUI}:{idx:02x}:{port:02x}")
+        up = int(INET["uplink_port"])   # the internet uplink: DHCP on the libvirt NAT network, so it carries no modelled address
+        ensure_iface(dev, f"eth{up}", "1000base-t", "internet uplink (libvirt NAT network, DHCP; NAT for the site LANs)" if INET["enabled"] else "internet uplink (breakout disabled)", enabled=bool(INET["enabled"]), mac=f"{OUI}:{idx:02x}:{up:02x}")
         devs[f] = dev
 
 # WAN point-to-point links: addresses, cables

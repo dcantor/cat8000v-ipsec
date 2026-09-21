@@ -46,10 +46,33 @@ ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.
 {%-     if line not in routes %}{% set _ = routes.append(line) %}{% endif %}
 {%-   endif %}
 {%- endfor +%}
+{%- set inet = config_context.internet or {} %}
+{%- set is_hub = device_role.name == 'vpn-hub' if device_role else False %}
+{%- if inet.enabled and is_hub %}
+{%-   for i in interfaces if i.connected_interface and i.connected_interface.device.role.name == 'vpn-firewall' and i.connected_interface.ip_addresses %}
+{%-     if loop.first %}{% set _ = routes.append('ip route 0.0.0.0 0.0.0.0 ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name internet-via-' ~ i.connected_interface.device.name) %}{% endif %}
+{%-   endfor %}
+{%- endif +%}
 {% for r in routes | sort %}
 {{ r }}
 {% endfor %}
 !
+{% set pref = (inet.preference or {})[hostname] if inet.enabled and not is_hub else [] -%}
+{% if pref %}
+ip prefix-list DEFAULT-ROUTE description the default route the headends originate (internet breakout)
+ip prefix-list DEFAULT-ROUTE seq 5 permit 0.0.0.0/0
+!
+{% for h in pref %}
+route-map BREAKOUT-{{ h }} permit 10
+ description default route from {{ h }}: preference #{{ loop.index }} (nearest headend first)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference {{ 200 - 50 * loop.index0 }}
+!
+route-map BREAKOUT-{{ h }} permit 20
+ description everything else unchanged
+!
+{% endfor %}
+{% endif %}
 ip access-list standard {{ config_context.oob.acl }}
  10 remark OOB management network
  20 permit {{ config_context.oob.prefix | ipaddress_network('network_address') }} {{ config_context.oob.prefix | ipaddress_network('hostmask') }}
@@ -175,6 +198,11 @@ router bgp {{ ri.autonomous_system.asn }}
 {% endfor %}
 {% for ep in ri.endpoints | sort(attribute='peer.source_ip.address') if ep.enabled and ep.peer %}
   neighbor {{ ep.peer.source_ip.address.split('/')[0] }} activate
+{% if inet.enabled and is_hub %}
+  neighbor {{ ep.peer.source_ip.address.split('/')[0] }} default-originate
+{% elif pref and ep.peer.routing_instance and ep.peer.routing_instance.device.name in pref %}
+  neighbor {{ ep.peer.source_ip.address.split('/')[0] }} route-map BREAKOUT-{{ ep.peer.routing_instance.device.name }} in
+{% endif %}
 {% endfor %}
  exit-address-family
 !

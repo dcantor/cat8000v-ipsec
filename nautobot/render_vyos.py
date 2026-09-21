@@ -26,11 +26,16 @@ fws = [d for d in r.json()["data"]["devices"] if not a.names or d["name"] in a.n
 
 def commands(dev):
     fw = (dev["config_context"] or {}).get("firewall") or {}; fwd = fw.get("forward") or {}; allow = fwd.get("allow") or []
+    inet = (dev["config_context"] or {}).get("internet") or {}; uplink = inet.get("uplink") if inet.get("enabled") else None
     out = []
     for i in sorted(dev["interfaces"], key=lambda x: int(x["name"][3:]) if x["name"].startswith("eth") and x["name"][3:].isdigit() else 999):
         if not i["name"].startswith("eth") or i["mgmt_only"] or i["name"] == "eth0": continue
         out.append(f"delete interfaces ethernet {i['name']}")
         if i.get("mac_address"): out.append(f"set interfaces ethernet {i['name']} hw-id {i['mac_address'].lower()}")   # pins the name to the NIC across reboots (VyOS renames unmatched NICs)
+        if i["name"] == uplink:   # the internet uplink: DHCP on the libvirt NAT network, no modelled address
+            out += [f"set interfaces ethernet {i['name']} address dhcp", f"set interfaces ethernet {i['name']} description '{i['description'] or 'internet uplink'}'"]; continue
+        if i["name"] == inet.get("uplink"):   # breakout disabled: the port stays down
+            out += [f"set interfaces ethernet {i['name']} description 'internet uplink (breakout disabled)'", f"set interfaces ethernet {i['name']} disable"]; continue
         if i["enabled"] and i["ip_addresses"]:
             ci = i.get("connected_interface") or {}
             out += [f"set interfaces ethernet {i['name']} address {i['ip_addresses'][0]['address']}",
@@ -69,6 +74,17 @@ def commands(dev):
             if peers_only: between(n + 1, "HEADEND-WAN", "SPOKE-WAN", "esp", "IPsec ESP, headend -> spoke")
         elif what == "icmp": out += [f"set firewall ipv4 forward filter rule {n} action accept", f"set firewall ipv4 forward filter rule {n} protocol icmp"] + ([f"set firewall ipv4 forward filter rule {n} log"] if log_accepts else []) + [f"set firewall ipv4 forward filter rule {n} description 'ICMP (underlay reachability tests)'"]
         n += 10
+    # internet breakout: the site LANs (a network group from the config context) may leave through the uplink from the headend side and
+    # nothing may come in from it; source NAT (masquerade) on the uplink. The NAT block is replaced whole like the firewall.
+    out += ["delete nat source", "delete protocols static route"]
+    if uplink and inet.get("nat_sources"):
+        out += ["set firewall group network-group SITE-LANS description 'site LANs behind the headend and its spokes (internet breakout)'"] + [f"set firewall group network-group SITE-LANS network {p}" for p in inet["nat_sources"]]
+        out += ["set firewall ipv4 forward filter rule 50 action accept", "set firewall ipv4 forward filter rule 50 inbound-interface name eth1", f"set firewall ipv4 forward filter rule 50 outbound-interface name {uplink}",
+                "set firewall ipv4 forward filter rule 50 source group network-group SITE-LANS"] + (["set firewall ipv4 forward filter rule 50 log"] if log_accepts else []) + ["set firewall ipv4 forward filter rule 50 description 'internet breakout: site LANs -> uplink (NAT)'"]
+        out += [f"set nat source rule 100 outbound-interface name {uplink}", "set nat source rule 100 source group network-group SITE-LANS", "set nat source rule 100 translation address masquerade",
+                "set nat source rule 100 description 'internet breakout: masquerade the site LANs'"]
+        # the return path: every site LAN sits behind the headend (the far end of eth1) — replies from the internet go back that way
+        if peers["hub"]: out += [f"set protocols static route {p} next-hop {peers['hub'][0][0]}" for p in inet["nat_sources"]]   # (no description leaf on VyOS static routes)
     if fwd.get("log_drops", True): out += ["set firewall ipv4 forward filter rule 900 action drop", "set firewall ipv4 forward filter rule 900 log", "set firewall ipv4 forward filter rule 900 description 'log everything else'"]
     mgmt = fw.get("management") or {}
     if mgmt.get("lldp", True): out += ["delete service lldp", "set service lldp interface all"]

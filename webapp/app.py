@@ -994,11 +994,15 @@ def branch_page(name: str, refresh: bool = Query(False, description="re-collect 
         rules = [r for r in fw["rules"] if any(ip in (r.get("source", "") + " " + r.get("destination", "")) for ip in my_wans)]
         log = [e for e in fw.get("log", []) if e.get("src") in my_wans or e.get("dst") in my_wans][:50]
         flows = [x for x in fw.get("flows", []) if x.get("src") in my_wans or x.get("dst") in my_wans]
-        if rules or log or (dev["role"] == "hub" and fw.get("hub") == name): touching.append({"name": fw["name"], "hub": fw.get("hub"), "error": fw.get("error"), "rules": rules, "log": log, "flows": flows, "collected": fw.get("collected")})
+        in_path = fw.get("hub") == name or any(t["hub"] == fw.get("hub") and t["spoke"] == name for t in I["tunnels"])   # fronts this headend, or one of this spoke's headends
+        if rules or log or in_path: touching.append({"name": fw["name"], "hub": fw.get("hub"), "in_path": in_path, "error": fw.get("error"), "rules": rules, "log": log, "flows": flows, "collected": fw.get("collected")})
     host = next((h for h in lan_hosts(False)["hosts"] if h["router"] == name), None)
+    inet = intent_mod.internet(I)
+    breakout = {"enabled": inet["enabled"], "preference": inet["preference"].get(name, []) if dev["role"] == "spoke" else None,
+                "breaks_out": dev["role"] == "hub" and inet["enabled"], "spokes_preferring": sorted(s for s, hs in inet["preference"].items() if hs and hs[0] == name) if dev["role"] == "hub" else None}
     runs = [r for r in registry.list(200) if (r.get("spoke") or {}).get("name") == name or (r.get("hub") or {}).get("name") == name or (r.get("mode") == "deploy" and name in (r.get("devices") or []))][:15]
     return {"name": name, "role": dev["role"], "device": {k: v for k, v in dev.items() if k != "psk"}, "psk_set": bool(dev.get("psk")), "authentication": auth_method, "methods": methods, "default_authentication": intent_mod.default_auth(I),
-            "certificate": cert, "wan_addresses": my_wans, "tunnels": tunnels, "headend": headend, "firewalls": touching, "host": host, "runs": runs, "generated": time.time(),
+            "certificate": cert, "wan_addresses": my_wans, "tunnels": tunnels, "headend": headend, "firewalls": touching, "host": host, "runs": runs, "generated": time.time(), "internet": breakout,
             "firewall": intent_mod.firewall_of(I, name) if dev["role"] == "hub" else None}
 
 
@@ -1026,7 +1030,8 @@ def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (ev
 def pki_status():
     I = intent_mod.load(); st = lab_ca.status()
     return {"authentication": intent_mod.default_auth(I), "pki": I.get("profile", {}).get("pki") or {}, "in_use": sorted(intent_mod.auths_in_use(I)),
-            "spokes": {d["name"]: intent_mod.spoke_auth(I, d["name"]) for d in I["devices"] if d["role"] == "spoke"}, "cert_routers": intent_mod.cert_routers(I), **st}
+            "spokes": {d["name"]: intent_mod.spoke_auth(I, d["name"]) for d in I["devices"] if d["role"] == "spoke"}, "cert_routers": intent_mod.cert_routers(I),
+            "internet": intent_mod.internet(I)["enabled"], "preference": intent_mod.internet(I)["preference"], **st}
 
 
 @app.get("/api/spokes/{name}/rotation", tags=["provisioning"], summary="Plan a PSK rotation for a spoke (what it touches; the current key's fingerprint)")

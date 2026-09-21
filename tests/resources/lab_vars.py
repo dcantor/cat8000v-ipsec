@@ -64,6 +64,10 @@ ROUTER_AUTHS = {r: sorted(intent_mod.router_auths(_I, r)) for r in ROUTER_NAMES}
 CERT_ROUTERS = intent_mod.cert_routers(_I)                                    # routers holding a certificate (any certificate-authenticated tunnel)
 PSK_ROUTERS = sorted(r for r in ROUTER_NAMES if "psk" in ROUTER_AUTHS[r])       # routers holding a keyring
 PROFILE_NAMES = {a: intent_mod.profile_names(_I, a) for a in ("psk", "certificate")}   # Cisco / Nautobot names per method
+# internet breakout: enabled?, the firewalls' uplink port, and per spoke the headends in preference order (nearest first)
+INTERNET = intent_mod.internet(_I)
+INTERNET_UPLINK = f"eth{INTERNET['uplink_port']}"
+BREAKOUT_PREF = INTERNET["preference"]
 PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP", "validity_days": 365, "renew_before_days": 30}, **(_I["profile"].get("pki") or {})}
 IKE_AUTH_SHOW = "RSA" if IKE_AUTH == "certificate" else "PSK"                 # as `show crypto ikev2 sa detail` prints Auth sign / verify (lab default)
 IKE_AUTH_METHOD = "rsa-sig" if IKE_AUTH == "certificate" else "pre-share"     # as `show crypto ikev2 profile` prints the authentication method (lab default)

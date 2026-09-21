@@ -53,6 +53,21 @@ and cabled to the LAN port), and the intent lists them (role `host`, `router`); 
 branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Inventory page has the
 same under **LAN hosts → Ping mesh** (`GET /api/hosts?ping=true`), and Robot suite 09 asserts the full mesh and the path.
 
+### Internet breakout — per region, nearest headend
+`internet.enabled` in the intent (the *Internet breakout* card on the Provision page) gives every branch an internet path
+without any branch having a real uplink: each VyOS firewall's **eth9** sits on the libvirt NAT network (`default`, DHCP; the
+VM has that NIC — `FW_INTERNET_PORT` / `INTERNET_NET` in `lab.conf`) and **masquerades the site LANs** (a network group
+from the config context; forward rule 50 admits LAN → uplink from the headend side only, static routes send the replies back
+to the headend). Each headend holds a static default via its firewall and **originates a default route** to every spoke
+(`neighbor … default-originate`); each spoke ranks the defaults it hears with an inbound route-map per headend (`ip
+prefix-list DEFAULT-ROUTE`, `route-map BREAKOUT-<hub>`: local preference 200 / 150 / 100 — its own region's headend first,
+then by region distance, the order the seed writes into the config context as `internet.preference`), so a branch in the West
+breaks out through `west-headend` and falls back to Central, then East. Nautobot models the uplink interfaces; NaC renders the
+default origination, the static default, the prefix-list and route-maps (`bgp-policy` and `static-routes` compliance
+features); the router page shows the preferred headend and the live default route. Suite 11 proves it: NAT and the return
+routes on every firewall, the defaults and route-maps on every router, every LAN host reaching 1.1.1.1 through its region's
+headend with the firewall logging the flow.
+
 ### The firewalls
 Each headend sits behind a **VyOS** firewall (1 vCPU / 1 GB, built once from the rolling ISO by
 `tools/vyos_install.py` into `images/vyos-base.qcow2`, overlays per node, day-0 over the serial console).
@@ -271,15 +286,16 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 52 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 56 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
 compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
-renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; and suite 10 — the portal itself (run queue and cancel, every
-router's page, the single sign-on flow).
+renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
+router's page, the single sign-on flow); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+preference, every host on the internet through its region's headend).
 Each run keeps pre/post config backups and a diff under `results/`.
 
 ## What is where
@@ -291,7 +307,7 @@ Each run keeps pre/post config backups and a diff under `results/`.
 | `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, certificate enrolment (`pki.py`), rename tool, saved GraphQL query, Jinja template |
 | `pki/` | the lab CA (`ca.py`; `ca/ca.crt` public, `ca/ca.key` never committed), issued router certificates and the index |
 | `nac/` | Terraform root and NAC data |
-| `tests/` | Robot suites 01–10, keyword library, `lab_vars.py` derived from the intent |
+| `tests/` | Robot suites 01–11, keyword library, `lab_vars.py` derived from the intent |
 | `webapp/` | the portal (FastAPI + single-page UI), API schemas, spoke/headend provisioning, inventory collector, run records, demo recorders, `lab-webapp.service`, `restart.sh` |
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |

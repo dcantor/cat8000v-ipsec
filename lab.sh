@@ -18,7 +18,7 @@ nodes_or_all() { [[ $# -gt 0 ]] && echo "$*" || echo "${ALL_NODES[*]}"; }
 # ---- networks -------------------------------------------------------------
 ensure_networks() {
   local n
-  for n in "$OOB_NET"; do
+  for n in "$OOB_NET" ${INTERNET_NET:-}; do
     if ! V net-info "$n" &>/dev/null; then
       V net-define "$LAB_DIR/networks/$n.xml"
       V net-autostart "$n" >/dev/null
@@ -190,6 +190,16 @@ X
     </interface>
 X
   done
+  if [[ -n "${FW_INTERNET_PORT:-}" ]]; then cat <<X
+    <!-- eth$FW_INTERNET_PORT: internet uplink on the libvirt NAT network '$INTERNET_NET' (DHCP; NAT for the site LANs) -->
+    <interface type='network'>
+      <mac address='$(mac "$n" "$FW_INTERNET_PORT")'/>
+      <source network='$INTERNET_NET'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='$(printf '0x%02x' $((3+FW_INTERNET_PORT)))' function='0x0'/>
+    </interface>
+X
+  fi
   serial_xml "$n"
   cat <<X
     <memballoon model='none'/>
