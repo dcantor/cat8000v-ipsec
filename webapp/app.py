@@ -97,7 +97,7 @@ async def auth_and_audit(request: Request, call_next):
             detail["mode"] = body.get("mode"); detail["spec"] = body.get("spoke") or body.get("hub") or ({"intent": "..."} if body.get("intent") else None); detail["options"] = body.get("options")
         rid = getattr(request.state, "run_id", None)
         if rid: detail["run_id"] = rid
-        auth.audit(AUDIT, user, "run.start" if request.url.path == "/api/runs" else ("run.resume" if request.url.path.endswith("/resume") else "write"), request.client.host if request.client else None, **detail)
+        auth.audit(AUDIT, user, "run.start" if request.url.path == "/api/runs" else ("run.resume" if request.url.path.endswith("/resume") else ("run.cancel" if request.method == "DELETE" and request.url.path.startswith("/api/runs/") else "write")), request.client.host if request.client else None, **detail)
     return response
 
 
@@ -117,6 +117,38 @@ def logout(request: Request, response: Response):
     response.delete_cookie(auth.COOKIE)
     if request.state.user: auth.audit(AUDIT, request.state.user, "logout", request.client.host if request.client else None)
     return {"ok": True}
+
+
+@app.get("/api/oidc", tags=["auth"], summary="Is single sign-on configured (provider name for the login button)")
+def oidc_info():
+    cfg = auth.oidc_config()
+    return {"enabled": bool(cfg), "provider": cfg.get("provider") if cfg else None}
+
+
+@app.get("/api/oidc/login", tags=["auth"], summary="Start the OpenID Connect login (redirects to the provider)")
+def oidc_login(request: Request):
+    cfg = auth.oidc_config()
+    if not cfg: raise HTTPException(404, "OIDC is not configured (webapp/oidc.json)")
+    try: url, flow = auth.oidc_begin(cfg)
+    except Exception as e: raise HTTPException(502, f"provider discovery failed: {e}")  # noqa: BLE001
+    from fastapi.responses import RedirectResponse
+    resp = RedirectResponse(url, status_code=302); resp.set_cookie("portal_oidc", flow, max_age=600, httponly=True, samesite="lax"); return resp
+
+
+@app.get("/api/oidc/callback", tags=["auth"], summary="The provider sends the browser back here with the code; sets the session cookie and returns to the portal")
+def oidc_callback(request: Request, code: str = Query(None), state: str = Query(None), error: str = Query(None), error_description: str = Query(None)):
+    from fastapi.responses import RedirectResponse
+    cfg = auth.oidc_config()
+    if not cfg: raise HTTPException(404, "OIDC is not configured")
+    ip = request.client.host if request.client else None
+    if error or not code:
+        auth.audit(AUDIT, None, "login.oidc.failed", ip, error=error or "no code", detail=error_description); return RedirectResponse(f"/?login_error={error or 'no code'}", status_code=302)
+    try: who = auth.oidc_finish(cfg, code, state, request.cookies.get("portal_oidc"))
+    except Exception as e:  # noqa: BLE001
+        auth.audit(AUDIT, None, "login.oidc.failed", ip, error=str(e)[:300]); return RedirectResponse(f"/?login_error=oidc", status_code=302)
+    auth.audit(AUDIT, {"name": who["name"], "role": who["role"]}, "login.oidc", ip, provider=who.get("provider"), groups=who.get("groups"))
+    resp = RedirectResponse("/", status_code=302); resp.delete_cookie("portal_oidc")
+    resp.set_cookie(auth.COOKIE, auth.make_session(who["name"], who["role"], oidc=True), max_age=auth.SESSION_HOURS * 3600, httponly=True, samesite="lax"); return resp
 
 
 @app.get("/api/me", tags=["auth"], summary="Who am I (name, role) — null when not logged in")
@@ -833,6 +865,37 @@ def auth_plan(name: str, method: str = Query(..., pattern="^(psk|certificate)$")
     return {"ok": not problems, "problems": problems, **(details or {})}
 
 
+@app.get("/api/branch/{name}", tags=["inventory"], summary="One router's page: identity, authentication and certificate, tunnels with live state, firewall rules and log lines touching it, its LAN host, the runs that involved it")
+def branch_page(name: str, refresh: bool = Query(False, description="re-collect the tunnels' live state now")):
+    """Everything the portal knows about one branch (or headend) in one document — read from the same caches the other pages use:
+    the intent (identity, LAN, authentication), pki/index.json (certificate), the inventory (tunnels + live IKE / VTI / BGP), the
+    firewalls (rules whose address groups contain its WAN addresses, log lines from or to them; the firewall's own SSH view, 3 h),
+    the LAN host, and the runs whose spec named it."""
+    I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None or dev["role"] not in ("hub", "spoke"): raise HTTPException(404, "no such router")
+    wans = intent_mod.tunnel_wans(I); my_wans = sorted({(t["spoke_wan"] if dev["role"] == "spoke" else t["hub_wan"]) for t in wans if name in (t["hub"], t["spoke"])})
+    auth_method = intent_mod.spoke_auth(I, name) if dev["role"] == "spoke" else None
+    methods = sorted(intent_mod.router_auths(I, name))
+    cert = (lab_ca.status()["devices"] or {}).get(name) if name in intent_mod.cert_routers(I) else None
+    try: inv_d = inv().get(refresh=refresh, with_live=True)
+    except Exception as e: inv_d = {"tunnels": [], "headends": [], "error": str(e)}  # noqa: BLE001
+    tunnels = [t for t in inv_d.get("tunnels", []) if name in (t.get("headend"), t.get("spoke"))]
+    for t in tunnels: t["auth"] = intent_mod.spoke_auth(I, t["spoke"])
+    headend = next((h for h in inv_d.get("headends", []) if h["name"] == name), None)
+    # firewalls: the rules that admit this router (its WAN addresses are in an address group) and the log lines it appears in
+    fws = fw_mod.collect(3, False, "ssh"); touching = []
+    for fw in fws["firewalls"]:
+        rules = [r for r in fw["rules"] if any(ip in (r.get("source", "") + " " + r.get("destination", "")) for ip in my_wans)]
+        log = [e for e in fw.get("log", []) if e.get("src") in my_wans or e.get("dst") in my_wans][:50]
+        flows = [x for x in fw.get("flows", []) if x.get("src") in my_wans or x.get("dst") in my_wans]
+        if rules or log or (dev["role"] == "hub" and fw.get("hub") == name): touching.append({"name": fw["name"], "hub": fw.get("hub"), "error": fw.get("error"), "rules": rules, "log": log, "flows": flows, "collected": fw.get("collected")})
+    host = next((h for h in lan_hosts(False)["hosts"] if h["router"] == name), None)
+    runs = [r for r in registry.list(200) if (r.get("spoke") or {}).get("name") == name or (r.get("hub") or {}).get("name") == name or (r.get("mode") == "deploy" and name in (r.get("devices") or []))][:15]
+    return {"name": name, "role": dev["role"], "device": {k: v for k, v in dev.items() if k != "psk"}, "psk_set": bool(dev.get("psk")), "authentication": auth_method, "methods": methods, "default_authentication": intent_mod.default_auth(I),
+            "certificate": cert, "wan_addresses": my_wans, "tunnels": tunnels, "headend": headend, "firewalls": touching, "host": host, "runs": runs, "generated": time.time(),
+            "firewall": intent_mod.firewall_of(I, name) if dev["role"] == "hub" else None}
+
+
 _hosts_cache = {}
 @app.get("/api/hosts", tags=["monitoring"], summary="The LAN hosts (one Alpine VM behind every router) and, with ?ping=true, the full host-to-host ping mesh over the tunnels")
 def lan_hosts(ping: bool = Query(False, description="run the ping matrix now (every host pings every other host, ~15 s; cached 60 s)")):
@@ -874,7 +937,7 @@ def spoke_removal(name: str = PathParam(..., description="spoke hostname", examp
 
 
 @app.post("/api/runs", tags=["runs"], summary="Start a pipeline run", response_model=S.Run, response_model_exclude_none=True, status_code=200,
-          responses={409: {"description": "a run is already in progress"}, 422: {"description": "validation problems ({detail: {problems: [...]}})"}})
+          responses={409: {"description": "the run could not be queued"}, 422: {"description": "validation problems ({detail: {problems: [...]}})"}})
 def start_run(body: S.RunRequest, request: Request):
     """Runs execute one at a time in the background. Modes:
 

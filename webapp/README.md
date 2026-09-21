@@ -210,7 +210,7 @@ A sign-in sets a signed session cookie (12 h; the secret is generated on first s
 | approver | + the destructive run (**remove** a spoke) and user management (`/api/users`) |
 
 What stays open without a login: `/metrics` and `/api/sd` (Prometheus), `GET /api/vpn-inventory` and `GET /api/runs*` (the lab
-hub and the Robot suites poll them), `/api/intent`, `/api/cities`, `/api/pki` (the CA and issued certificates: public data), the static files and `/docs`. Every other request answers 401
+hub and the Robot suites poll them), `/api/intent`, `/api/cities`, `/api/pki` (the CA and issued certificates: public data), `/api/hosts`, `/api/oidc*`, the static files and `/docs`. Every other request answers 401
 (the page then shows the sign-in dialog) or 403 with the role it needs; the page disables what the signed-in role may not do.
 
 The **audit trail** (`runs/audit.jsonl`, append-only, `GET /api/audit`, the Audit tab) records logins (and failed ones),
@@ -270,6 +270,36 @@ proto, dport, in, out)`), and the rules / interfaces still come live over SSH. T
 way. The same lines feed the *Firewalls* row of the Grafana IPsec dashboard (drops and new flows per 5 min per firewall, drops by
 source, top dropped flows, the raw log) and two vmalert-logs rules: `FirewallDropBurst` (more than 20 packets from one source
 dropped in 5 minutes) and `FirewallDroppingPeerTraffic` (IKE or ESP hitting the drop rule — the policy and the wiring disagree).
+
+### Per-branch page
+
+Every router name in the Routers table (⧉) and in the tunnel tables links to `#branch/<name>` (`GET /api/branch/{name}`): identity
+(site, router-id, LAN, WAN addresses, the firewall in front of a headend), IKE authentication (the spoke's method, or the methods a
+headend serves; the certificate with days left; whether a key is held), the day-2 actions (Change auth, Renew cert, Rotate PSK,
+Re-home, Remove — the same dialogs), its tunnels with live IKE SA / VTI / eBGP / ESP counters (and a headend's capacity line), the
+firewall rules whose address groups admit its WAN addresses plus its flows and log lines of the last 3 hours (per firewall in its
+path), its LAN host, and the runs that named it. Everything comes from the caches the other pages use; **Refresh live** re-collects
+the tunnel state.
+
+### Run queue
+
+Runs execute one at a time (one Terraform state, one `lab.conf`, one intent). A run started while another executes is **queued**
+(status `queued`, `queue_position`, `waiting_for` = the executing run's id) rather than refused; the status card shows the place in
+line and a **Cancel** (`DELETE /api/runs/{id}`, queued runs only, audited as `run.cancel`). The queue lives in the shared
+`labportal` run engine, so the SRv6 portal has it too. A restart interrupts the running run and the queued ones (they show as
+`interrupted`; resume the one that matters).
+
+### Single sign-on (OpenID Connect)
+
+Next to the local users, `webapp/oidc.json` (see `oidc.example.json`; `PORTAL_OIDC_*` variables override it) enables **Sign in with
+<provider>** on the login dialog. Any OpenID Connect issuer with discovery works; the lab uses **Gitea on the NMS** as the provider
+(an OAuth2 application registered under the `lab` user with the callback `http://192.168.50.231:8090/api/oidc/callback`). The flow
+is authorization code + PKCE: `GET /api/oidc/login` signs state / nonce / verifier into a 10-minute cookie and redirects to the
+provider (`public_url` when the browser reaches it by another name than the lab host does — Gitea's issuer is `10.0.0.10`),
+`GET /api/oidc/callback` exchanges the code, verifies the id_token against the provider's JWKS (issuer, audience, expiry, nonce),
+reads the userinfo and maps the role — `users` (login name → role), else the highest role any `groups` claim value maps to
+(Gitea sends org and org:team names), else `default_role` (viewer). The session cookie is the same as a local login's, marked
+OIDC so it is trusted without a users.json entry; logins land in the audit trail as `login.oidc` (failures `login.oidc.failed`).
 
 ### LAN hosts (Inventory page)
 

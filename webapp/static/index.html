@@ -67,7 +67,7 @@
   @keyframes pulse { 50% { opacity:.3 } }
   .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
   pre.log { background:#0f172a; color:#d1e3ff; padding:10px; border-radius:6px; max-height:360px; overflow:auto; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
-  .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed, .status.interrupted { color:var(--bad) } .status.running, .status.queued { color:var(--run) }
+  .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed, .status.interrupted { color:var(--bad) } .status.running, .status.queued { color:var(--run) } .status.cancelled { color:var(--muted) }
   .test-pass { color:var(--ok); font-weight:600 } .test-fail { color:var(--bad); font-weight:600 }
   .msg { color:var(--bad); font-size:12px; white-space:pre-wrap }
   .bar { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin:6px 0 } .bar > div { height:100%; background:var(--ok) }
@@ -199,6 +199,7 @@
       <div id="login-problems" class="problems" style="margin-top:8px"></div>
       <div class="actions" style="margin-top:14px"><button type="submit" class="primary" id="login-go" style="margin-left:auto">Sign in</button></div>
     </form>
+    <div id="login-sso" hidden style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)"><div class="hint" style="margin-bottom:8px">or single sign-on — your role comes from the provider's account / groups</div><a id="login-sso-link" href="/api/oidc/login"><button type="button" style="width:100%">Sign in with <span id="login-sso-name">SSO</span></button></a></div>
   </div>
 </div>
 <main id="view-firewalls" hidden style="grid-template-columns:1fr">
@@ -208,6 +209,15 @@
       <span class="hint">window</span><select id="fw-hours"><option value="1">1 h</option><option value="3" selected>3 h</option><option value="6">6 h</option><option value="24">24 h</option><option value="72">3 days</option><option value="168" data-logs>7 days</option><option value="720" data-logs>30 days</option></select><button type="button" onclick="loadFirewalls(true)">Refresh</button></span></h2>
     <div class="hint" id="fw-note"></div>
     <div id="fw-cards"></div>
+  </div>
+</main>
+<main id="view-branch" hidden style="grid-template-columns:1fr">
+  <div class="card" id="br-head"><h2>Branch <span class="hint">loading…</span></h2></div>
+  <div class="card"><h2>Tunnels <small>modelled in Nautobot · live IKEv2 SA, VTI, eBGP and ESP counters from the headend</small></h2><div class="wide"><table id="br-tunnels"><thead><tr><th>Health</th><th>Tunnel</th><th>Peer</th><th>WAN → WAN</th><th>Tunnel subnet</th><th>Auth</th><th>IKE SA</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps / decaps</th><th class="num">Errors</th></tr></thead><tbody></tbody></table></div><div id="br-capacity" class="hint" style="margin-top:6px"></div></div>
+  <div class="card"><h2>Firewall rules and log touching this router <small>the firewalls in front of its headends: the rules whose address groups admit its WAN addresses, and its log lines (last 3 h, the firewall's journal)</small></h2><div id="br-firewalls"></div></div>
+  <div class="grid g2">
+    <div class="card"><h2>LAN host <small>the Alpine VM behind the router</small></h2><div id="br-host"></div></div>
+    <div class="card"><h2>Runs that touched it <small>newest first</small></h2><table id="br-runs"><thead><tr><th>When</th><th>Run</th><th>Status</th><th>By</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   </div>
 </main>
 <main id="view-audit" hidden style="grid-template-columns:1fr">
@@ -403,7 +413,7 @@ function fill(I) {
   I.devices.forEach((d, i) => {
     if (d.role === 'host') return;   // the LAN hosts live on the Inventory page (LAN hosts card); the intent keeps them at their router's site
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input data-dev="${i}" data-k="name" value="${d.name}"></td><td><input readonly value="${d.mgmt_ip}"></td>
+    tr.innerHTML = `<td style="white-space:nowrap"><input data-dev="${i}" data-k="name" value="${d.name}" style="width:120px">${d.role !== 'firewall' ? ` <a href="#branch/${encodeURIComponent(d.name)}" title="open ${esc(d.name)}'s page">⧉</a>` : ''}</td><td><input readonly value="${d.mgmt_ip}"></td>
       <td><span class="pill ${d.role}">${d.role}</span></td>
       <td><select data-dev="${i}" data-k="region">${(I.regions || []).map(r => `<option ${r === d.region ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td>
       <td><input data-dev="${i}" data-k="site" value="${esc(d.site || '')}" style="min-width:90px"></td>
@@ -491,12 +501,14 @@ async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
   render(r);
-  if (r.status === 'success' || r.status === 'failed') { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (['spoke', 'hub', 'remove', 'rotate', 'rehome'].includes(r.mode)) load(); }
+  if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (['spoke', 'hub', 'remove', 'rotate', 'rehome', 'auth', 'renew'].includes(r.mode)) load(); }
 }
 
 function render(r) {
   $('run-id').textContent = r.id;
-  $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode}${r.spoke ? ' ' + esc(r.spoke.name || '') : ''} · started ${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}${r.resume_of ? ' · resumed from ' + esc(r.resume_of) : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '') + ((r.status === 'failed' || r.status === 'interrupted') ? `<div style="margin-top:6px"><button type="button" onclick="resumeRun('${r.id}')">Resume from the failed step</button></div>` : '');
+  $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode}${r.spoke ? ' ' + esc(r.spoke.name || '') : ''}${r.user ? ' · by ' + esc(r.user) : ''} · ${r.status === 'queued' ? 'queued ' : 'started '}${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}${r.resume_of ? ' · resumed from ' + esc(r.resume_of) : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '')
+    + (r.status === 'queued' ? `<div class="msg" style="margin-top:6px">Waiting: #${r.queue_position || '?'} in line${r.waiting_for ? ` behind run <a onclick="watch('${r.waiting_for}')">${esc(r.waiting_for)}</a>` : ''} — runs execute one at a time (one Terraform state, one intent). <button type="button" class="small" onclick="cancelRun('${r.id}')">Cancel</button></div>` : '')
+    + ((r.status === 'failed' || r.status === 'interrupted') ? `<div style="margin-top:6px"><button type="button" onclick="resumeRun('${r.id}')">Resume from the failed step</button></div>` : '');
   $('steps').innerHTML = r.steps.map(s => `<li><span class="dot ${s.status}"></span><div class="t">${s.title}<div class="s">${esc(s.summary || '')}</div></div><span class="d">${s.status}${s.started ? ' · ' + dur(s.started, s.finished || Date.now() / 1000) : ''}</span></li>`).join('');
   if (r.log && r.log.length) {
     const el = $('log'); const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -517,9 +529,15 @@ async function loadRuns() {
   const rs = await (await fetch('/api/runs')).json();
   const live = rs.find(r => r.status === 'running' || r.status === 'queued');
   if (live && !current) watch(live.id);
-  $('runs').innerHTML = rs.map(r => `<tr><td><a onclick="watch('${r.id}')">${new Date(r.started * 1000).toLocaleString()}</a></td><td>${r.mode}</td><td class="status ${r.status}">${r.status}</td><td>${esc(r.vpn || '')}</td><td>${esc(r.change_ticket || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">none yet</td></tr>';
+  $('runs').innerHTML = rs.map(r => `<tr><td><a onclick="watch('${r.id}')">${new Date(r.started * 1000).toLocaleString()}</a></td><td>${r.mode}${r.spoke && r.spoke.name ? ' <span class="hint">' + esc(r.spoke.name) + '</span>' : ''}${r.user ? ' <span class="hint">by ' + esc(r.user) + '</span>' : ''}</td><td class="status ${r.status}">${r.status}${r.status === 'queued' && r.queue_position ? ' #' + r.queue_position : ''}</td><td>${esc(r.vpn || '')}</td><td>${esc(r.change_ticket || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">none yet</td></tr>';
 }
 
+async function cancelRun(id) {
+  if (!confirm('Cancel this queued run? It has not started; nothing was changed.')) return;
+  const r = await fetch(`/api/runs/${id}`, { method: 'DELETE' });
+  if (!r.ok) { alert((await r.json()).detail); return; }
+  poll();
+}
 async function resumeRun(id) {
   const r = await fetch(`/api/runs/${id}/resume`, { method: 'POST' });
   if (!r.ok) { alert((await r.json()).detail); return; }
@@ -752,11 +770,47 @@ $('rm-go').onclick = async () => {
 
 // ---- views ----------------------------------------------------------------
 function showView() {
-  const v = (location.hash || '#provision').slice(1);
+  const h = (location.hash || '#provision').slice(1); const v = h.startsWith('branch/') ? 'branch' : h;
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls';
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch';
   document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v));
-  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false);
+  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false);
+}
+const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open ${esc(n)}'s page">${esc(n)}</a>`;
+
+// ---- per-branch page ------------------------------------------------------------------------------------------------
+async function loadBranch(name, refresh) {
+  $('br-head').innerHTML = `<h2>${esc(name)} <span class="hint">loading…</span></h2>`;
+  const r = await fetch(`/api/branch/${encodeURIComponent(name)}${refresh ? '?refresh=true' : ''}`); if (!r.ok) { $('br-head').innerHTML = `<h2>${esc(name)} <span class="msg">${r.status === 404 ? 'no such router' : 'HTTP ' + r.status}</span></h2>`; return; }
+  const d = await r.json(); const dev = d.device; const isSpoke = d.role === 'spoke';
+  const nm = a => a === 'certificate' ? 'certificate' : 'PSK';
+  const cert = d.certificate ? `<span class="pill ${d.certificate.expired ? 'fail' : Math.floor(d.certificate.days_left) < 30 ? 'warn' : ''}" title="serial ${esc(d.certificate.serial)} · SHA-1 ${esc(d.certificate.fingerprint)}">${d.certificate.expired ? 'expired' : Math.floor(d.certificate.days_left) + ' d left'}</span> <span class="hint">until ${esc((d.certificate.not_after || '').slice(0, 10))}, issued ${esc((d.certificate.issued || '').slice(0, 10))}</span>` : '<span class="hint">none (keys only)</span>';
+  const actions = isSpoke ? `<button type="button" class="auth" data-name="${esc(name)}" data-current="${d.authentication}" onclick="openAuth('${esc(name)}','${d.authentication}')">Change auth…</button> ${d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button> ` : ''}${d.authentication === 'psk' ? `<button type="button" class="rot" onclick="openRotate('${esc(name)}')">Rotate PSK…</button> ` : ''}<button type="button" class="rh" onclick="openRehome('${esc(name)}')">Re-home…</button> <button type="button" class="rm" onclick="openRemove('${esc(name)}')">Remove…</button>`
+                          : (d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button>` : '');
+  $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span> <small>${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadBranch('${esc(name)}', true)">Refresh live</button> <a href="#inventory" class="hint">inventory</a></span></h2>
+    <div class="review" style="margin-top:8px"><div class="box"><h4>Identity</h4><dl>
+      <dt>Site</dt><dd>${esc(dev.site || '')}${dev.site_code ? ' (' + esc(dev.site_code) + ')' : ''}${dev.contact ? ' · ' + esc(dev.contact) : ''}</dd>
+      <dt>Router-id</dt><dd class="cred">${esc(dev.router_id)}</dd><dt>Site LAN</dt><dd class="cred">${esc(dev.lan)} <span class="hint">(.1 on the LAN port${d.host ? ', host .2' : ''})</span></dd>
+      <dt>WAN</dt><dd class="cred">${d.wan_addresses.map(esc).join(', ')}</dd>${d.role === 'hub' && d.firewall ? `<dt>Firewall</dt><dd>${esc(d.firewall)}</dd>` : ''}${dev.comments ? `<dt>Comments</dt><dd>${esc(dev.comments)}</dd>` : ''}</dl></div>
+    <div class="box"><h4>IKE authentication</h4><dl>
+      ${isSpoke ? `<dt>Method</dt><dd><span class="pill ${d.authentication === 'certificate' ? 'hub' : ''}">${nm(d.authentication)}</span>${dev.ike_authentication ? ' <span class="hint">chosen for this branch</span>' : ' <span class="hint">lab default</span>'}</dd>` : `<dt>Serves</dt><dd>${d.methods.map(m => `<span class="pill ${m === 'certificate' ? 'hub' : ''}">${nm(m)}</span>`).join(' ')} <span class="hint">spokes</span></dd>`}
+      <dt>Certificate</dt><dd>${cert}</dd>${isSpoke ? `<dt>Pre-shared key</dt><dd>${d.psk_set ? 'held in the intent' + (d.authentication === 'certificate' ? ' (unused while on a certificate)' : '') : 'none'}${dev.psk_rotated ? ' · rotated ' + esc(dev.psk_rotated) : ''}</dd>` : ''}</dl>
+      <div style="margin-top:8px" class="actions">${actions}</div></div></div>`;
+  applyRoles();
+  const H = { up: 'up', degraded: 'degraded', down: 'down' };
+  $('br-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; const peer = isSpoke ? t.headend : t.spoke;
+    return `<tr><td><span class="health ${esc(H[l.health] || '')}"></span> ${esc(l.health || 'no data')}</td><td class="cred"><a href="${esc(t.url)}" target="_blank">Tunnel${esc(t.tunnel_id)}</a></td><td>${branchLink(peer)}</td><td class="cred">${isSpoke ? esc(t.spoke_src_ip) + ' → ' + esc(t.headend_src_ip) : esc(t.headend_src_ip) + ' → ' + esc(t.spoke_src_ip)}</td><td class="cred">${esc(t.headend_tunnel_ip || '')} / ${esc(t.spoke_tunnel_ip || '')}</td><td><span class="pill ${t.auth === 'certificate' ? 'hub' : ''}">${nm(t.auth)}</span></td>
+      <td>${esc(l.ike_status || '-')}${l.ike_active_s ? ` <span class="hint">${Math.round(l.ike_active_s / 60)} min</span>` : ''}</td><td>${esc(l.line_protocol || '-')}</td><td>${l.bgp_state != null ? (String(l.bgp_state).match(/^\d+$/) ? `Established <span class="hint">${l.bgp_prefixes} pfx · ${esc(l.bgp_updown || '')}</span>` : esc(l.bgp_state)) : '-'}</td><td class="num">${l.encaps ?? '-'} / ${l.decaps ?? '-'}</td><td class="num ${(l.send_errors || l.recv_errors) ? 'test-fail' : ''}">${(l.send_errors ?? 0) + (l.recv_errors ?? 0)}</td></tr>`; }).join('') || '<tr><td colspan="11" class="hint">no tunnels</td></tr>';
+  $('br-capacity').innerHTML = d.headend ? `Capacity: ${d.headend.tunnels} / ${d.headend.capacity} tunnels, ${d.headend.bandwidth_used_mbps} / ${d.headend.bandwidth_mbps} Mbps on ${esc(d.headend.firewall || '')}, CPU ${d.headend.cpu_pct ?? '?'}% — <b>${d.headend.effective_free} free slot${d.headend.effective_free === 1 ? '' : 's'}</b> (binding: ${esc(d.headend.binding || '')})` : '';
+  const who = e => e.src_name ? `${esc(e.src)} <span class="hint">${esc(e.src_name)}</span>` : esc(e.src); const whom = e => e.dst_name ? `${esc(e.dst)} <span class="hint">${esc(e.dst_name)}</span>` : esc(e.dst);
+  const port = e => e.proto === 'ICMP' ? 'icmp' : `${esc((e.proto || '').toLowerCase())}${e.dport ? '/' + esc(e.dport) : ''}`;
+  $('br-firewalls').innerHTML = d.firewalls.map(f => `<h3 style="font-size:13px;margin:10px 0 6px">${esc(f.name)} <span class="hint">in front of ${esc(f.hub || '?')}${f.error ? ' · ' + esc(f.error) : ''}</span></h3>
+    ${f.rules.length ? `<table><thead><tr><th>Rule</th><th>Action</th><th>Source</th><th>Destination</th><th>Proto / ports</th><th class="num">Packets</th><th>Description</th></tr></thead><tbody>${f.rules.map(r => `<tr><td class="cred">${esc(r.rule)}</td><td><span class="pill ${r.action === 'accept' ? '' : 'fail'}">${esc(r.action)}</span></td><td class="cred">${esc(r.source)}</td><td class="cred">${esc(r.destination)}</td><td class="cred">${esc(r.protocol)}${r.destination_port !== 'any' ? ' → ' + esc(r.destination_port) : ''}</td><td class="num">${r.packets.toLocaleString()}</td><td>${esc(r.description)}</td></tr>`).join('')}</tbody></table>` : '<div class="hint">no rule names this router\'s addresses</div>'}
+    ${f.flows.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Flows in the last 3 h (${f.flows.length}) · ${f.log.length} log line${f.log.length === 1 ? '' : 's'} shown</summary><table><thead><tr><th>Verdict</th><th>Source</th><th>Destination</th><th>Service</th><th class="num">Hits</th><th>Last</th></tr></thead><tbody>${f.flows.map(x => `<tr><td><span class="pill ${x.verdict === 'drop' ? 'fail' : ''}">${esc(x.verdict)}</span></td><td>${who(x)}</td><td>${whom(x)}</td><td class="cred">${port(x)}</td><td class="num">${x.hits}</td><td class="cred">${esc(x.last.slice(11))}</td></tr>`).join('')}</tbody></table></details>` : '<div class="hint">nothing logged for it in the last 3 h</div>'}`).join('') || '<div class="hint">no firewall in the path of this router</div>';
+  const h = d.host;
+  $('br-host').innerHTML = h ? `<dl class="review"><div class="box"><dl><dt>Host</dt><dd class="cred">${esc(h.name)} <span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></dd><dt>LAN</dt><dd class="cred">${esc(h.lan_ip)}/24 via ${esc(h.gateway)} (${esc(h.lan_if)})</dd><dt>OOB</dt><dd class="cred">${esc(h.mgmt_ip)} <span class="hint">ssh lab@ (lab)</span></dd></dl></div></dl><div class="hint" style="margin-top:6px">The full host-to-host ping mesh is on the <a href="#inventory">Inventory</a> page (LAN hosts → Ping mesh).</div>` : '<div class="hint">no LAN host behind this router</div>';
+  $('br-runs').querySelector('tbody').innerHTML = d.runs.map(r => `<tr><td>${new Date(r.started * 1000).toLocaleString()}</td><td><a onclick="location.hash='provision';watch('${r.id}')">${esc(r.mode)}</a></td><td class="status ${r.status}">${r.status}</td><td>${esc(r.user || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">none</td></tr>';
 }
 window.addEventListener('hashchange', showView);
 
@@ -775,9 +829,14 @@ function applyRoles() {
   const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
   document.querySelectorAll('button.rot, button.rh, button.renew, button.auth').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
   document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
-  $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span> <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
+  $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span>${ME.via === 'oidc' ? ' <span class="hint">SSO</span>' : ''} <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
 }
-async function whoami() { const r = await (await _fetch('/api/me')).json(); ME = r.user; applyRoles(); if (!ME) $('login').hidden = false; return ME; }
+async function whoami() {
+  const r = await (await _fetch('/api/me')).json(); ME = r.user; applyRoles(); if (!ME) $('login').hidden = false;
+  try { const o = await (await _fetch('/api/oidc')).json(); $('login-sso').hidden = !o.enabled; if (o.enabled) $('login-sso-name').textContent = o.provider || 'SSO'; } catch (e) { }
+  const err = new URLSearchParams(location.search).get('login_error'); if (err) { $('login-problems').textContent = 'single sign-on failed (' + err + ') — see the audit trail'; history.replaceState(null, '', location.pathname + location.hash); }
+  return ME;
+}
 async function signIn(e) {
   if (e) e.preventDefault();   // an async handler returns a Promise, which does not stop the native submit: the page reloaded mid-login
   $('login-problems').textContent = '';
@@ -898,8 +957,8 @@ async function loadInventory(refresh) {
   $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
     <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
     <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
-    <td>${esc(t.vpn)}</td><td>${esc(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
-    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${esc(t.spoke || '')}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_region || '')}<div class="hint">${esc(t.spoke_site || '')}</div></td>
+    <td>${esc(t.vpn)}</td><td>${branchLink(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
+    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${t.spoke ? branchLink(t.spoke) : ''}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_region || '')}<div class="hint">${esc(t.spoke_site || '')}</div></td>
     <td>${esc(t.headend_tunnel_ip)}<div class="hint">${esc(t.spoke_tunnel_ip)}</div></td>
     <td>${esc(t.encapsulation || '')}<div class="hint">${esc(t.profile || '')}: ${esc(t.ike)}, ${esc(t.ipsec)}, DPD ${esc(t.dpd)}</div></td>
     <td class="${l.ike_status === 'READY' ? 'test-pass' : 'test-fail'}">${esc(l.ike_status || '')}</td><td>${age(l.ike_active_s)}</td>

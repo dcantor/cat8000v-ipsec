@@ -159,10 +159,14 @@ the top dropped flows and the raw kernel log; `FirewallDropBurst` (>20 drops fro
 `FirewallDroppingPeerTraffic` (IKE / ESP hitting the drop rule) are evaluated by vmalert-logs from the same lines.
 
 ### Sign-in, roles, audit
-The portal asks for a login (local users, lab defaults admin/admin · operator/operator · viewer/viewer): **viewer** reads,
-**operator** provisions and changes, **approver** also removes spokes and manages users. Every login and every change request —
-who, from where, the spec with secrets redacted, the run it started — lands in an append-only audit trail (Audit tab,
-`GET /api/audit`); runs record who started them. `python3 webapp/auth.py add NAME --role …` manages users.
+The portal asks for a login (local users, lab defaults admin/admin · operator/operator · viewer/viewer — or **single sign-on**
+through OpenID Connect, the lab's Gitea acting as the provider; `webapp/oidc.json` maps accounts and groups to roles): **viewer**
+reads, **operator** provisions and changes, **approver** also removes spokes and manages users. Every login and every change
+request — who, from where, the spec with secrets redacted, the run it started — lands in an append-only audit trail (Audit tab,
+`GET /api/audit`); runs record who started them. `python3 webapp/auth.py add NAME --role …` manages local users. Runs execute
+one at a time: a second operator's run **queues** behind the executing one (place in line shown; cancellable until it starts).
+Every router has its own page (`#branch/<name>`): tunnels with live state, authentication and certificate, the firewall rules
+and log touching it, its LAN host, the runs that involved it, and the day-2 actions.
 
 ### Day-2: re-home a branch
 **Re-home…** on a spoke row moves a branch onto a different set of headends (at least two): headends to add get a link, a
@@ -266,14 +270,15 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 46 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 49 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
 compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
-renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels.
+renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; and suite 10 — the portal itself (run queue and cancel, every
+router's page, the single sign-on flow).
 Each run keeps pre/post config backups and a diff under `results/`.
 
 ## What is where
@@ -285,7 +290,7 @@ Each run keeps pre/post config backups and a diff under `results/`.
 | `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, certificate enrolment (`pki.py`), rename tool, saved GraphQL query, Jinja template |
 | `pki/` | the lab CA (`ca.py`; `ca/ca.crt` public, `ca/ca.key` never committed), issued router certificates and the index |
 | `nac/` | Terraform root and NAC data |
-| `tests/` | Robot suites 01–09, keyword library, `lab_vars.py` derived from the intent |
+| `tests/` | Robot suites 01–10, keyword library, `lab_vars.py` derived from the intent |
 | `webapp/` | the portal (FastAPI + single-page UI), API schemas, spoke/headend provisioning, inventory collector, run records, demo recorders, `lab-webapp.service`, `restart.sh` |
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |

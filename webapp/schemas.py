@@ -181,8 +181,11 @@ class TestReport(BaseModel):
 
 class Run(BaseModel):
     id: str = Field(..., examples=["2026-09-13_14-40-20-0fa9"])
-    mode: str; status: Literal["queued", "running", "success", "failed", "interrupted"]
+    mode: str; status: Literal["queued", "running", "success", "failed", "interrupted", "cancelled"]
     started: float; finished: Optional[float] = None
+    queue_position: Optional[int] = Field(None, description="queued runs: place in line (runs execute one at a time, in the order they were started)")
+    waiting_for: Optional[str] = Field(None, description="queued runs: the id of the run executing now")
+    user: Optional[str] = Field(None, description="who started the run")
     steps: list[Step]
     tests: Optional[TestReport] = None
     results_dir: Optional[str] = Field(None, description="results/<dir>/ holds report.html, log.html and config backups")

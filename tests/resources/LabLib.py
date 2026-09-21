@@ -149,6 +149,18 @@ class LabLib:
         return r.json()
 
     @keyword
+    def portal_request(self, method, path, body=None, user="operator", password="operator", allow_redirects=True):
+        """Any request to the portal as a logged-in user -> {status, headers, json|text}; redirects can be left unfollowed."""
+        url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090"); s = requests.Session()
+        if user:
+            r = s.post(f"{url}/api/login", json={"username": user, "password": password}, timeout=30); r.raise_for_status()
+        r = s.request(method, f"{url}{path}", json=body, timeout=300, allow_redirects=allow_redirects)
+        logger.info(f"{method} {r.url} -> {r.status_code}\n{r.text[:1200]}")
+        try: data = r.json()
+        except ValueError: data = None
+        return {"status": r.status_code, "headers": dict(r.headers), "json": data, "text": r.text}
+
+    @keyword
     def victorialogs_query(self, query):
         """One LogsQL query against VictoriaLogs on the NMS (VICTORIALOGS_URL, default http://10.0.0.10:9428) -> list of result rows."""
         url = os.environ.get("VICTORIALOGS_URL", "http://10.0.0.10:9428")

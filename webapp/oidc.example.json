@@ -1,0 +1,12 @@
+{
+  "provider": "Gitea (lab SSO)",
+  "issuer": "http://10.0.0.10:3000/",
+  "public_url": "http://192.168.50.231:3000/",
+  "client_id": "<from the provider: Settings -> Applications -> OAuth2 (Gitea), or the API user/applications/oauth2>",
+  "client_secret": "<its secret>",
+  "redirect_uri": "http://192.168.50.231:8090/api/oidc/callback",
+  "scopes": "openid profile email groups",
+  "users": { "lab": "approver" },
+  "groups": { "lab-operators": "operator", "lab-approvers": "approver" },
+  "default_role": "viewer"
+}
