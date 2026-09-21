@@ -85,8 +85,8 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#tools" data-view="tools">Tools</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
-  <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span></div>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#tools" data-view="tools">Tools</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span></div>
 </header>
 <main>
 <section>
@@ -182,6 +182,25 @@
 </section>
 </main>
 
+<div class="modal-bg" id="login" hidden>
+  <div class="modal" style="width:min(420px,100%)">
+    <h2 style="margin:0 0 6px;font-size:16px">Sign in</h2>
+    <div class="hint" style="margin-bottom:12px">Lab portal — local users. Roles: <b>viewer</b> reads, <b>operator</b> provisions and changes, <b>approver</b> also removes spokes and manages users.</div>
+    <form id="login-form" onsubmit="return false">
+      <div><label>Username</label><input id="login-user" autocomplete="username" autofocus></div>
+      <div style="margin-top:8px"><label>Password</label><input id="login-pass" type="password" autocomplete="current-password"></div>
+      <div id="login-problems" class="problems" style="margin-top:8px"></div>
+      <div class="actions" style="margin-top:14px"><button type="submit" class="primary" id="login-go" style="margin-left:auto">Sign in</button></div>
+    </form>
+  </div>
+</div>
+<main id="view-audit" hidden style="grid-template-columns:1fr">
+  <div class="card">
+    <h2>Audit trail <small>who did what: logins and every change request, with the spec (secrets redacted) and the run it started — newest first</small>
+      <span style="float:right"><input id="audit-user" placeholder="user" style="width:120px"> <select id="audit-action"><option value="">any action</option><option>login</option><option>run.start</option><option>run.resume</option><option>write</option><option>denied</option></select> <button type="button" onclick="loadAudit()">Filter</button></span></h2>
+    <div class="wide"><table id="audit-table" style="min-width:1100px"><thead><tr><th>When</th><th>User</th><th>Role</th><th>From</th><th>Action</th><th>What</th><th>Result</th><th>Run</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
 <main id="view-tools" hidden style="grid-template-columns:1fr">
   <div class="disclaimer" id="tools-disclaimer"></div>
   <div class="card">
@@ -341,8 +360,10 @@ function fill(I) {
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
   I.tunnels.forEach((t, i) => {
-    const l = I.links.find(l => (l.a === t.hub && l.b === t.spoke) || (l.b === t.hub && l.a === t.spoke)) || {};
-    const hp = l.a === t.hub ? l.a_port : l.b_port, sp = l.a === t.hub ? l.b_port : l.a_port;
+    // the tunnel rides the spoke's link to the hub, or to the firewall in front of the hub (same site)
+    const hubDev = I.devices.find(d => d.name === t.hub) || {}; const edges = new Set([t.hub, ...I.devices.filter(d => d.role === 'firewall' && d.site === hubDev.site).map(d => d.name)]);
+    const l = I.links.find(l => (edges.has(l.a) && l.b === t.spoke) || (edges.has(l.b) && l.a === t.spoke)) || {};
+    const hp = edges.has(l.a) ? l.a_port : l.b_port, sp = edges.has(l.a) ? l.b_port : l.a_port;
     const li = I.links.indexOf(l);
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><span class="pill hub" data-hub="${t.hub}">${t.hub}</span></td><td><span class="pill spoke" data-spoke="${t.spoke}">${t.spoke}</span></td><td><input readonly value="GigabitEthernet${hp}"></td><td><input readonly value="GigabitEthernet${sp}"></td>
@@ -353,6 +374,7 @@ function fill(I) {
   tb.querySelectorAll('button.rm').forEach(b => b.onclick = () => openRemove(b.dataset.name));
   tb.querySelectorAll('button.rot').forEach(b => b.onclick = () => openRotate(b.dataset.name));
   tb.querySelectorAll('button.rh').forEach(b => b.onclick = () => openRehome(b.dataset.name));
+  applyRoles();
   // keep spoke labels in sync with hostname edits
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
     const d = I.devices[inp.dataset.dev];
@@ -380,7 +402,7 @@ function collect() {
   // hostnames may have been renamed: rewrite links/tunnels to the new names
   I.links.forEach(l => { l.a = names[l.a] || l.a; l.b = names[l.b] || l.b; });
   I.tunnels.forEach(t => { t.spoke = names[t.spoke] || t.spoke; t.hub = names[t.hub] || t.hub; });
-  document.querySelectorAll('#tunnels input[data-link]').forEach(el => { I.links[el.dataset.link][el.dataset.k] = el.value.trim(); });
+  document.querySelectorAll('#tunnels input[data-link]').forEach(el => { if (I.links[el.dataset.link]) I.links[el.dataset.link][el.dataset.k] = el.value.trim(); });
   document.querySelectorAll('#tunnels input[data-tun]').forEach(el => { I.tunnels[el.dataset.tun][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
   return I;
 }
@@ -622,11 +644,46 @@ $('rm-go').onclick = async () => {
 function showView() {
   const v = (location.hash || '#provision').slice(1);
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools';
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit';
   document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v));
-  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools();
+  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit();
 }
 window.addEventListener('hashchange', showView);
+
+// ---- login, roles, audit ---------------------------------------------------------------------------------------------
+let ME = null; const RANK = { viewer: 0, operator: 1, approver: 2 };
+const can = role => !!ME && RANK[ME.role] >= RANK[role];
+const _fetch = window.fetch;
+window.fetch = async (url, opts) => {   // a 401 from the API means "not signed in": open the sign-in dialog instead of failing quietly
+  const r = await _fetch(url, opts);
+  if (r.status === 401 && String(url).startsWith('/api/') && !String(url).includes('/api/login')) { $('login').hidden = false; }
+  return r;
+};
+function applyRoles() {
+  const op = can('operator'), ap = can('approver');
+  ['deploy', 'plan', 'testonly', 'add-spoke'].forEach(id => { const b = $(id); if (b) { b.disabled = !op; b.title = op ? '' : 'operator role required'; } });
+  const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
+  document.querySelectorAll('button.rot, button.rh').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
+  document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
+  $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span> <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
+}
+async function whoami() { const r = await (await _fetch('/api/me')).json(); ME = r.user; applyRoles(); if (!ME) $('login').hidden = false; return ME; }
+$('login-form').onsubmit = async () => {
+  $('login-problems').textContent = '';
+  const r = await _fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: $('login-user').value, password: $('login-pass').value }) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); $('login-problems').textContent = e.detail || 'sign-in failed'; return; }
+  $('login').hidden = true; $('login-pass').value = ''; await whoami(); load(); loadRuns(); showView();
+};
+async function logout() { await _fetch('/api/logout', { method: 'POST' }); ME = null; applyRoles(); $('login').hidden = false; }
+async function loadAudit() {
+  const q = new URLSearchParams({ limit: 300 }); if ($('audit-user').value.trim()) q.set('user', $('audit-user').value.trim()); if ($('audit-action').value) q.set('action', $('audit-action').value);
+  const rows = await (await fetch('/api/audit?' + q)).json(); if (!Array.isArray(rows)) return;
+  const what = r => { if (r.action.startsWith('login')) return r.action === 'login.failed' ? 'wrong password' : ''; const sp = r.spec || {}; const bits = [];
+    if (r.mode) bits.push(`<b>${esc(r.mode)}</b>`); if (sp.name) bits.push(esc(sp.name)); if (sp.hubs) bits.push('→ ' + sp.hubs.map(esc).join(', ')); if (sp.city) bits.push(esc(sp.city)); if (sp.psk) bits.push('key ' + esc(sp.psk));
+    if (r.path && !r.mode) bits.push(`<span class="cred">${esc(r.method)} ${esc(r.path)}</span>`); if (r.options) bits.push(`<span class="hint">${esc(Object.entries(r.options).map(([k, v]) => k + '=' + v).join(' '))}</span>`); return bits.join(' '); };
+  $('audit-table').querySelector('tbody').innerHTML = rows.map(r => `<tr><td class="cred">${esc(r.time)}</td><td><b>${esc(r.user || '-')}</b></td><td>${esc(r.role || '')}</td><td class="cred">${esc(r.ip || '')}</td><td>${esc(r.action)}</td><td>${what(r)}</td>
+      <td>${r.status != null ? `<span class="${r.status < 300 ? 'test-pass' : 'test-fail'}">${r.status}</span>` : ''}</td><td>${r.run_id ? `<a onclick="location.hash='provision';watch('${esc(r.run_id)}')">${esc(r.run_id)}</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">nothing yet</td></tr>';
+}
 
 // ---- tools: URLs of the shared services and how to reach every lab VM (lab credentials, with the disclaimer) -------------
 async function loadTools() {
@@ -807,7 +864,7 @@ function renderTopology(d) {
     ${bands.join('')}${wires}${edges}${hubs.map(node).join('')}${fws.map(node).join('')}${spokes.map(node).join('')}</svg>`;
 }
 
-load(); loadRuns(); showView();
+whoami().then(() => { load(); loadRuns(); showView(); });
 </script>
 </body>
 </html>

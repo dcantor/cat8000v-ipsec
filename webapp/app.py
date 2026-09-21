@@ -16,7 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from labportal import RunBase, RunRegistry, install_runs_api, metric_line, run_metrics, exposition, metrics_generated
 
-from fastapi import FastAPI, HTTPException, Query, Path as PathParam
+from fastapi import FastAPI, HTTPException, Query, Path as PathParam, Request, Response
+import auth
 from fastapi.openapi.docs import get_swagger_ui_html
 import schemas as S
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -61,6 +62,88 @@ app = FastAPI(title="VPN Provisioning Portal API", version="1.0",
               openapi_tags=TAGS, docs_url="/docs", redoc_url="/redoc")
 registry = RunRegistry(RUNS_DIR)
 inventory_svc = None   # created lazily (needs the Nautobot token)
+AUDIT = RUNS_DIR / "audit.jsonl"
+
+
+# ---- login, roles, audit (see auth.py) ------------------------------------------------------------------------------
+@app.middleware("http")
+async def auth_and_audit(request: Request, call_next):
+    """Every request: resolve the user (session cookie or bearer token), check the role the verb / path needs, and write
+    the audit record for anything that changes something (with the body, secrets redacted) once it has been handled."""
+    user = None
+    tok = request.headers.get("authorization", "")
+    if tok.lower().startswith("bearer "): user = auth.user_for_token(tok[7:].strip())
+    if user is None and request.cookies.get(auth.COOKIE): user = auth.read_session(request.cookies[auth.COOKIE])
+    request.state.user = user; auth.current_user.set(user)
+    body = None
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.headers.get("content-type", "").startswith("application/json"):
+        raw = await request.body()
+        try: body = json.loads(raw) if raw else None
+        except ValueError: body = None
+    need = auth.required_role(request.method, request.url.path, body)
+    if need and (user is None or auth.role_rank(user["role"]) < auth.role_rank(need)):
+        status = 401 if user is None else 403
+        if request.method != "GET": auth.audit(AUDIT, user, "denied", request.client.host if request.client else None, method=request.method, path=request.url.path, required_role=need, mode=(body or {}).get("mode") if isinstance(body, dict) else None, status=status)
+        return JSONResponse({"detail": "login required" if status == 401 else f"role {need} required (you are {user['role']})", "required_role": need}, status_code=status)
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and not request.url.path.endswith(("/login", "/logout", "/validate")):   # validation is read-only, not audited
+        detail = {"method": request.method, "path": request.url.path, "status": response.status_code}
+        if isinstance(body, dict):
+            detail["mode"] = body.get("mode"); detail["spec"] = body.get("spoke") or body.get("hub") or ({"intent": "..."} if body.get("intent") else None); detail["options"] = body.get("options")
+        rid = getattr(request.state, "run_id", None)
+        if rid: detail["run_id"] = rid
+        auth.audit(AUDIT, user, "run.start" if request.url.path == "/api/runs" else ("run.resume" if request.url.path.endswith("/resume") else "write"), request.client.host if request.client else None, **detail)
+    return response
+
+
+@app.post("/api/login", tags=["auth"], summary="Log in (local user); sets the session cookie")
+def login(body: dict, request: Request, response: Response):
+    name, pw = (body.get("username") or "").strip(), body.get("password") or ""
+    u = auth.load_users().get(name)
+    if not auth.check_password(u, pw):
+        auth.audit(AUDIT, {"name": name}, "login.failed", request.client.host if request.client else None); raise HTTPException(401, "wrong username or password")
+    response.set_cookie(auth.COOKIE, auth.make_session(name, u["role"]), max_age=auth.SESSION_HOURS * 3600, httponly=True, samesite="lax")
+    auth.audit(AUDIT, {"name": name, "role": u["role"]}, "login", request.client.host if request.client else None)
+    return {"name": name, "role": u["role"], "roles": auth.ROLES}
+
+
+@app.post("/api/logout", tags=["auth"], summary="Log out")
+def logout(request: Request, response: Response):
+    response.delete_cookie(auth.COOKIE)
+    if request.state.user: auth.audit(AUDIT, request.state.user, "logout", request.client.host if request.client else None)
+    return {"ok": True}
+
+
+@app.get("/api/me", tags=["auth"], summary="Who am I (name, role) — null when not logged in")
+def me(request: Request):
+    return {"user": request.state.user, "roles": auth.ROLES, "rules": {"viewer": "read everything", "operator": "+ start / resume runs that build or change", "approver": "+ remove a spoke, manage users"}}
+
+
+@app.get("/api/audit", tags=["auth"], summary="The audit trail: logins and every write, newest first")
+def audit_log(limit: int = Query(200, le=2000), user: str = Query(None), action: str = Query(None, description="prefix: login, run.start, run.resume, write")):
+    return auth.read_audit(AUDIT, limit, user, action)
+
+
+@app.get("/api/users", tags=["auth"], summary="Users and roles (approver)")
+def users_list():
+    return [{"name": n, "role": u["role"], "token": bool(u.get("token"))} for n, u in auth.load_users().items()]
+
+
+@app.post("/api/users", tags=["auth"], summary="Add or update a user: {name, role, password?} (approver)")
+def users_add(body: dict, request: Request):
+    name, role = (body.get("name") or "").strip(), body.get("role")
+    if not re.fullmatch(r"[a-z][a-z0-9_.-]{1,30}", name) or role not in auth.ROLES: raise HTTPException(422, "name: lowercase letters/digits/_.-; role: viewer, operator or approver")
+    users = auth.load_users(); u = users.get(name, {})
+    if body.get("password"): u["salt"], u["hash"] = auth.hash_password(body["password"])
+    elif not u.get("hash"): raise HTTPException(422, "a new user needs a password")
+    u["role"] = role; users[name] = u; auth.save_users(users)
+    return {"name": name, "role": role}
+
+
+@app.delete("/api/users/{name}", tags=["auth"], summary="Delete a user (approver)")
+def users_del(name: str, request: Request):
+    if request.state.user and request.state.user["name"] == name: raise HTTPException(422, "not yourself")
+    users = auth.load_users(); users.pop(name, None); auth.save_users(users); return {"ok": True}
 
 
 def nautobot_token():
@@ -73,10 +156,11 @@ def nautobot_token():
 class Run(RunBase):
     LAB = "cat8000v-ipsec"
     STEP_TITLES = STEP_TITLES
-    EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal", "rehome": "rehome"}
+    EXTRA = {"site": "site", "vpn": "vpn", "change_ticket": "change_ticket", "devices": "devices", "spoke": "spoke", "removal": "removal", "rehome": "rehome", "user": "user"}
 
     def __init__(self, mode, intent, options, spoke=None, resume_of=None):
         self.intent, self.spoke = intent, spoke
+        self.user = ((resume_of or {}).get("user") if resume_of else None) or ((auth.current_user.get() or {}).get("name"))   # who started it (a resume keeps the original starter, the resumer is in the audit trail)
         self.site, self.vpn = intent.get("site", {}).get("name"), intent.get("vpn", {}).get("name"); self.change_ticket = intent.get("vpn", {}).get("change_ticket")
         self.devices = [d["name"] for d in intent.get("devices", [])]
         self.removal = (resume_of or {}).get("removal") if mode == "remove" and resume_of and any(st["name"] == "rm_validate" and st["status"] == "success" for st in resume_of["steps"]) else None
@@ -531,7 +615,7 @@ def tools():
     vy_u, vy_p = os.environ.get("VYOS_USERNAME", "vyos"), os.environ.get("VYOS_PASSWORD", "vyos")
     tools = [
         {"name": "Lab hub", "url": f"http://{lan}:8088", "what": "every lab on this host at a glance; links to all of the below", "login": "none"},
-        {"name": "This portal", "url": f"http://{lan}:8090", "what": "VPN provisioning (C8000v IPsec lab); REST API at /docs", "login": "none"},
+        {"name": "This portal", "url": f"http://{lan}:8090", "what": "VPN provisioning (C8000v IPsec lab); REST API at /docs", "login": "local users — lab defaults admin / admin (approver), operator / operator, viewer / viewer; `python3 webapp/auth.py add …` to change"},
         {"name": "SRv6 core portal", "url": f"http://{lan}:8091", "what": "the SRv6 lab's tenant provisioning portal", "login": "none"},
         {"name": "Nautobot", "url": NAUTOBOT_PUBLIC_URL, "what": "source of truth: devices, locations (with coordinates), VPN app, BGP, Golden Config", "login": "superuser — see NAUTOBOT_SUPERUSER_* in lab@10.0.0.10:/opt/nautobot/.env"},
         {"name": "Grafana", "url": f"http://{lan}:3001", "what": "dashboards (C8000v IPsec overview, SRv6 core overview, node detail, fleet); anonymous viewing", "login": "admin / admin (edit)"},
@@ -659,7 +743,7 @@ def spoke_removal(name: str = PathParam(..., description="spoke hostname", examp
 
 @app.post("/api/runs", tags=["runs"], summary="Start a pipeline run", response_model=S.Run, response_model_exclude_none=True, status_code=200,
           responses={409: {"description": "a run is already in progress"}, 422: {"description": "validation problems ({detail: {problems: [...]}})"}})
-def start_run(body: S.RunRequest):
+def start_run(body: S.RunRequest, request: Request):
     """Runs execute one at a time in the background. Modes:
 
     * **deploy** – `intent` → save → Nautobot seed → render NAC → terraform plan → apply → Golden Config → tests
@@ -704,8 +788,10 @@ def start_run(body: S.RunRequest):
         intent = body.get("intent") if mode != "test" else intent_mod.load()
         problems = intent_mod.validate(intent or {})
         if problems: raise HTTPException(422, {"problems": problems})
-    try: return registry.start(Run(mode, intent, body.get("options") or {}, spoke))
+    try: run = registry.start(Run(mode, intent, body.get("options") or {}, spoke))
     except RuntimeError as e: raise HTTPException(409, str(e))
+    request.state.run_id = run["id"] if isinstance(run, dict) else getattr(run, "id", None)
+    return run
 
 
 def _resume(d):

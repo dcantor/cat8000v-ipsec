@@ -139,6 +139,12 @@ DRAM, IKE sessions, bandwidth committed vs the firewall's. The **C8000v IPsec ov
 (http://192.168.50.231:3001/d/cat8000v-ipsec-overview) draws all of it; alerts `TunnelDown`, `HeadendUnreachable`,
 `HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run.
 
+### Sign-in, roles, audit
+The portal asks for a login (local users, lab defaults admin/admin · operator/operator · viewer/viewer): **viewer** reads,
+**operator** provisions and changes, **approver** also removes spokes and manages users. Every login and every change request —
+who, from where, the spec with secrets redacted, the run it started — lands in an append-only audit trail (Audit tab,
+`GET /api/audit`); runs record who started them. `python3 webapp/auth.py add NAME --role …` manages users.
+
 ### Day-2: re-home a branch
 **Re-home…** on a spoke row moves a branch onto a different set of headends (at least two): headends to add get a link, a
 tunnel and an eBGP session allocated and built (the spoke VM is redefined and rebooted for the new NIC), headends to drop have

@@ -169,6 +169,31 @@ is generated). The run (`mode: rotate`, `POST /api/runs` with `spoke: {name, psk
 
 Measured: 4 min 23 s for a spoke with three headends; each tunnel is down for a few seconds.
 
+### Login, roles, audit
+
+The portal requires a sign-in (`auth.py`). Users are local — `users.json` (salted scrypt hashes; not committed) managed with
+`python3 auth.py add NAME --role viewer|operator|approver`, `del`, `list`, `token NAME` (a bearer token for machine access,
+`Authorization: Bearer …`, same role). Lab defaults: **admin / admin** (approver), **operator / operator**, **viewer / viewer**.
+A sign-in sets a signed session cookie (12 h; the secret is generated on first start in `.secret`). Roles are ordered:
+
+| role | may |
+|---|---|
+| viewer | read everything: inventory, runs, tools (with the lab credentials), audit |
+| operator | + start and resume runs that build or change: deploy, plan, test, spoke, hub, rotate, rehome; manage the intent |
+| approver | + the destructive run (**remove** a spoke) and user management (`/api/users`) |
+
+What stays open without a login: `/metrics` and `/api/sd` (Prometheus), `GET /api/vpn-inventory` and `GET /api/runs*` (the lab
+hub and the Robot suites poll them), `/api/intent`, `/api/cities`, the static files and `/docs`. Every other request answers 401
+(the page then shows the sign-in dialog) or 403 with the role it needs; the page disables what the signed-in role may not do.
+
+The **audit trail** (`runs/audit.jsonl`, append-only, `GET /api/audit`, the Audit tab) records logins (and failed ones),
+sign-outs, every write request — who, from where, method and path, the run mode, the spec with secrets redacted (a PSK
+becomes its fingerprint), the options, the HTTP result and the run id it produced — and every denied request with the role it
+lacked. A run record also carries `user`, the person who started it; a resume keeps that and is itself audited.
+
+OIDC: the middleware only needs `request.state.user = {name, role}`; an OIDC login (e.g. authlib with the provider's
+callback) would set the same session cookie and map groups to the three roles — nothing else changes.
+
 ### Per-spoke actions: Re-home
 
 **Re-home…** on a spoke row changes the set of headends the branch connects to — e.g. after capacity moved. The dialog lists every

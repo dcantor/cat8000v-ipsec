@@ -58,6 +58,10 @@ class Device(BaseModel):
     site_code: str = ""
     contact: str = ""
     psk: Optional[str] = Field(None, description="spoke's own pre-shared key (spokes only; never stored in Nautobot)")
+    bandwidth_mbps: Optional[int] = Field(None, description="firewall only: throughput it can carry (bounds the headend's capacity)", examples=[50])
+    city: Optional[str] = Field(None, description="where the site is (shown on the map)", examples=["Boston, MA"])
+    lat: Optional[float] = None; lon: Optional[float] = None
+    psk_rotated: Optional[str] = Field(None, description="when the spoke's key was last rotated")
 
 
 class Link(BaseModel):
