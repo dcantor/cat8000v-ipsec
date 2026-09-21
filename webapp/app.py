@@ -608,11 +608,14 @@ def _vm_states():
 
 
 @app.get("/api/firewalls", tags=["monitoring"], summary="The Firewalls page: each VyOS firewall's interfaces, live rule set with counters, and its firewall log for the last hours")
-def firewalls_page(hours: int = Query(3, ge=1, le=168, description="how far back to read the firewall log"), refresh: bool = Query(False, description="collect again now (otherwise cached for 60 s)")):
+def firewalls_page(hours: int = Query(3, ge=1, le=2160, description="how far back to read the firewall log (ssh: what the firewall's journal holds; logs: up to VictoriaLogs' 90-day retention)"),
+                   refresh: bool = Query(False, description="collect again now (otherwise cached for 60 s)"),
+                   source: str = Query("ssh", pattern="^(ssh|logs)$", description="where the log comes from: ssh = `show log firewall` on the box, logs = VictoriaLogs on the NMS (the firewalls' remote syslog)")):
     """Collected over SSH from every firewall: `show interfaces`, `show firewall` (rules, packets, bytes, conditions) joined with the rule
-    descriptions from the configuration, and `show log firewall` parsed into fields (rule, verdict, in / out, source / destination with the
-    lab device names, protocol, ports) plus the same entries grouped per flow."""
-    return fw_mod.collect(hours, refresh)
+    descriptions from the configuration, and — `source=ssh` — `show log firewall` parsed into fields (rule, verdict, in / out, source /
+    destination with the lab device names, protocol, ports) plus the same entries grouped per flow. With `source=logs` the log and the
+    per-flow summary come from VictoriaLogs instead (the firewalls ship their syslog there), aggregated over the whole window."""
+    return fw_mod.collect(hours, refresh, source)
 
 
 @app.get("/api/tools", tags=["monitoring"], summary="The Tools page: every tool's URL, and how to reach each router / firewall (lab credentials)")

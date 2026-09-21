@@ -48,8 +48,12 @@ The headend's single WAN interface faces its firewall; every spoke link terminat
 eth2–eth8; static routes on both sides go through it (rendered from Nautobot like everything else). The
 firewalls are Nautobot devices too (platform `vyos`, cables, addresses) and their configuration —
 interfaces plus the forward-filter policy from the config context — is rendered and pushed by
-`nautobot/render_vyos.py` (`./lab.sh nautobot vyos [--check]`) as a pipeline step before Terraform.
-Robot suite 07 proves they filter: ESP counters move, and an SSH attempt from a spoke to a headend is dropped.
+`nautobot/render_vyos.py` (`./lab.sh nautobot vyos [--check]`) as a pipeline step before Terraform. Their syslog
+(the kernel's firewall log included: accepts log the first packet of each flow, rule 900 every drop) goes to VictoriaLogs
+on the NMS — the portal's Firewalls tab reads the history from there, the Grafana IPsec dashboard charts drops per firewall,
+and `FirewallDropBurst` / `FirewallDroppingPeerTraffic` alert on it.
+Robot suite 07 proves they filter: ESP counters move, an SSH attempt from a spoke to a headend is dropped, and the drop
+shows up in VictoriaLogs and through the portal.
 
 ## The VPN provisioning portal
 
@@ -137,7 +141,10 @@ decaps / error counters and VTI rates; per headend tunnels modelled / up, capaci
 utilisation of the binding constraint (`lab_headend_binding{binding=tunnels|bandwidth|cpu}`), control-plane / QFP CPU,
 DRAM, IKE sessions, bandwidth committed vs the firewall's. The **C8000v IPsec overview** dashboard
 (http://192.168.50.231:3001/d/cat8000v-ipsec-overview) draws all of it; alerts `TunnelDown`, `HeadendUnreachable`,
-`HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run.
+`HeadendCapacityExhausted` and `HeadendCpuHigh` fire only while the hubs run. The dashboard's **Firewalls** row comes from
+VictoriaLogs (the VyOS firewalls' remote syslog): dropped packets and new flows per 5 minutes per firewall, drops by source,
+the top dropped flows and the raw kernel log; `FirewallDropBurst` (>20 drops from one source in 5 min) and
+`FirewallDroppingPeerTraffic` (IKE / ESP hitting the drop rule) are evaluated by vmalert-logs from the same lines.
 
 ### Sign-in, roles, audit
 The portal asks for a login (local users, lab defaults admin/admin · operator/operator · viewer/viewer): **viewer** reads,
@@ -228,7 +235,7 @@ compliant. Each run keeps pre/post config backups and a diff under `results/`.
 | `lab-intent.json`, `nautobot/intent.py` | the VPN service intent (site, regions, devices + PSKs, links, tunnels, crypto, capacity); generated from `lab.conf` once, edited by the portal |
 | `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, rename tool, saved GraphQL query, Jinja template |
 | `nac/` | Terraform root and NAC data |
-| `tests/` | Robot suites 01–06, keyword library, `lab_vars.py` derived from the intent |
+| `tests/` | Robot suites 01–07, keyword library, `lab_vars.py` derived from the intent |
 | `webapp/` | the portal (FastAPI + single-page UI), API schemas, spoke/headend provisioning, inventory collector, run records, demo recorders, `lab-webapp.service`, `restart.sh` |
 | `docs/` | the workflows/decision-tree PDF and its source, screenshots |
 | `results/` | one folder per test run |

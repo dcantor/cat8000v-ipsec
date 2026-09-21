@@ -122,7 +122,46 @@ Non-VPN traffic from a spoke to a headend is dropped by the firewall
     Should Match Regexp    ${out}    Connection timed out|Destination unreachable|Connection refused
     Wait Until Keyword Succeeds    30s    5s    Drops Increased    ${t}[firewall]    ${before}
 
+The firewalls ship their firewall log to VictoriaLogs, and the portal reads the history from there
+    [Documentation]    The config context sets the remote syslog target (VictoriaLogs on the NMS, UDP 5514); render_vyos pushes it. The kernel's
+    ...    forward-filter lines arrive tagged with the firewall's hostname, the same lines `show log firewall` prints, so the portal's Firewalls
+    ...    tab (source=logs) and the Grafana drops panel / FirewallDropBurst alert see every firewall.
+    FOR    ${f}    IN    @{FIREWALLS}
+        ${cfg}=    Vyos    ${f}    show configuration commands | match "syslog remote"
+        Should Match Regexp    ${cfg}    (?m)^set system syslog remote 10\.2\.0\.10 port '5514'$
+        Should Match Regexp    ${cfg}    (?m)^set system syslog remote 10\.2\.0\.10 facility all level 'info'$
+    END
+    # the previous test made ${TUNNEL_LIST}[0]'s firewall drop something; the accept rules log every new IKE flow on every firewall anyway
+    ${t}=    Set Variable    ${TUNNEL_LIST}[0]
+    Wait Until Keyword Succeeds    60s    5s    Victorialogs Has Firewall Lines    ${t}[firewall]    "FWD-filter-900-D"
+    FOR    ${f}    IN    @{FIREWALLS}
+        Wait Until Keyword Succeeds    60s    5s    Victorialogs Has Firewall Lines    ${f}    "FWD-filter"
+    END
+    ${d}=    Portal Get    /api/firewalls    hours=24    source=logs
+    Should Be Equal    ${d}[source]    logs
+    FOR    ${fw}    IN    @{d}[firewalls]
+        Should Not Contain    ${fw}    error    msg=${fw}[name]: ${fw}
+        Should Not Contain    ${fw}    log_error    msg=${fw}[name]: ${fw}
+        Should Be Equal    ${fw}[log_source]    logs
+        Should Be True    ${fw}[log_total] > 0    msg=${fw}[name]: nothing in VictoriaLogs for the last 24 h
+        Should Be True    len($fw['flows']) > 0
+    END
+    # the same window over SSH is the firewall's own journal (read after VictoriaLogs): the newest line VictoriaLogs holds is in it, same fields
+    ${s}=    Portal Get    /api/firewalls    hours=24    source=ssh    refresh=true
+    FOR    ${fw}    ${sf}    IN ZIP    ${d}[firewalls]    ${s}[firewalls]
+        Should Be Equal    ${fw}[name]    ${sf}[name]
+        ${key}=    Evaluate    lambda e: (e['time'], e['tag'], e['in'], e['out'], e['src'], e['dst'], e['proto'], e['sport'], e['dport'])
+        ${newest}=    Evaluate    $key($fw['log'][0])
+        ${journal}=    Evaluate    [$key(e) for e in $sf['log']]
+        Should Contain    ${journal}    ${newest}    msg=${fw}[name]: VictoriaLogs' newest line ${newest} is not in the firewall's own journal
+    END
+
 *** Keywords ***
+Victorialogs Has Firewall Lines
+    [Arguments]    ${f}    ${match}
+    ${rows}=    Victorialogs Query    hostname:${f} app_name:kernel ${match} _time:1h | stats count() as n
+    Should Be True    int($rows[0]['n']) > 0    msg=${f}: no ${match} line in VictoriaLogs in the last hour
+
 Vyos
     [Arguments]    ${f}    ${command}
     ${out}=    Run Vyos Command    ${FIREWALLS}[${f}][host]    ${command}

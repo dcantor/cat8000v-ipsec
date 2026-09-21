@@ -3,7 +3,8 @@
 
 Per firewall (role vpn-firewall at the lab location): interface addresses/descriptions from the model (eth1 = headend
 side, eth2.. = spokes; eth0 = management, left alone), the forward-filter policy from the config context `firewall`
-(IKE udp/500+4500, ESP, ICMP and established/related may cross; everything else is dropped and logged), LLDP.
+(IKE udp/500+4500, ESP, ICMP and established/related may cross; everything else is dropped and logged), LLDP, and the
+remote syslog target from the config context `firewall.management.syslog` (VictoriaLogs on the NMS).
 The managed sections are deleted and re-set inside ONE commit, so VyOS itself applies only the difference.
 Usage: NAUTOBOT_TOKEN=... render_vyos.py [--check] [--dry-run] [firewall ...]"""
 import argparse, os, sys
@@ -71,6 +72,13 @@ def commands(dev):
     if fwd.get("log_drops", True): out += ["set firewall ipv4 forward filter rule 900 action drop", "set firewall ipv4 forward filter rule 900 log", "set firewall ipv4 forward filter rule 900 description 'log everything else'"]
     mgmt = fw.get("management") or {}
     if mgmt.get("lldp", True): out += ["delete service lldp", "set service lldp interface all"]
+    # remote syslog (VictoriaLogs on the NMS): the kernel's firewall log travels with everything else at `level` and up. The remote
+    # block is replaced whole so a changed collector address never leaves the old one behind; the local syslog settings are untouched.
+    sl = mgmt.get("syslog") or {}
+    out.append("delete system syslog remote")
+    if sl.get("host"):
+        out += [f"set system syslog remote {sl['host']} port {sl.get('port', 514)}", f"set system syslog remote {sl['host']} protocol {sl.get('protocol', 'udp')}",
+                f"set system syslog remote {sl['host']} facility all level {sl.get('level', 'info')}"]
     return out
 
 def push(dev, cmds):

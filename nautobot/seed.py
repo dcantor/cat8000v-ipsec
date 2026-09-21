@@ -90,6 +90,15 @@ for key, label, typ, desc in (("psk_fingerprint", "PSK fingerprint", "text", "sh
     if key not in cf:
         cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=["vpn.vpntunnel"], grouping="VPN", description=desc); created.append(f"custom-field:{key}")
         cf[key].update({"description": desc})   # a second save: Nautobot's per-content-type field cache ignored a field created moments earlier (values were dropped silently)
+# the router certificates (IKE authentication "certificate"): what each router presents, written by nautobot/pki.py after an enrolment and
+# never touched by the seed — the model says which certificate a router runs, when it expires and when it was last renewed
+for key, label, typ, desc in (("cert_serial", "Certificate serial", "text", "serial (hex) of the router certificate the lab CA issued (pki/index.json), as IOS-XE shows it"),
+                              ("cert_subject", "Certificate subject", "text", "CN of the router certificate"),
+                              ("cert_expires", "Certificate expires", "date", "end of the router certificate's validity"),
+                              ("cert_renewed", "Certificate renewed", "date", "when the router last enrolled (pki.py, or the portal's Renew certificate action)")):
+    if key not in cf:
+        cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=["dcim.device"], grouping="VPN", description=desc); created.append(f"custom-field:{key}")
+        cf[key].update({"description": desc})   # second save, see above
 CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 if "firewall_bandwidth_mbps" not in cf:   # the second headend constraint: the bandwidth of the firewall in front of it
     cf["firewall_bandwidth_mbps"] = nb.extras.custom_fields.create(key="firewall_bandwidth_mbps", label="Firewall bandwidth (Mbps)", type="integer", content_types=["dcim.device"],
@@ -120,15 +129,21 @@ need = [ct for ct in ("vpn.vpn", "vpn.vpntunnel") if ct not in active.content_ty
 if need: active.update({"content_types": list(active.content_types) + need})
 vrole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["vpn.vpntunnelendpoint"]) for n, c in (("hub", "e91e63"), ("spoke", "f48fb1"))}
 ike, ipsec, dpd, ios = PROF["ike"], PROF["ipsec"], PROF["dpd"], PROF["ios"]
+# IKE authentication: the phase-1 policy carries it (PSK, or RSA = rsa-sig with certificates from the lab CA); the trustpoint / key pair /
+# certificate-map names the routers use travel with the other Cisco names in the profile's extra_options.ios
+CERT = ike.get("authentication", "psk") == "certificate"; AUTH_NB = "RSA" if CERT else "PSK"
+PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP"}, **{k: v for k, v in (PROF.get("pki") or {}).items() if k in ("trustpoint", "keypair", "certificate_map")}}
+ios = {**ios, **({"trustpoint": PKI["trustpoint"], "rsakeypair": PKI["keypair"], "certificate_map": PKI["certificate_map"]} if CERT else {})}
+ios = {k: v for k, v in ios.items() if CERT or k not in ("trustpoint", "rsakeypair", "certificate_map")}
 p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": ios["ikev2_profile"]}, description="IKEv2 SA (from lab-intent.json)")
 ensure(p1, ike_version="IKEv2", encryption_algorithm=[ike["encryption"]], integrity_algorithm=[ike["integrity"]], dh_group=[str(ike["dh_group"])],
-       lifetime_seconds=int(ike["lifetime"]), authentication_method="PSK", description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, PSK")
+       lifetime_seconds=int(ike["lifetime"]), authentication_method=AUTH_NB, description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, {AUTH_NB}")
 p2 = get_or_create(nb.vpn.vpn_phase_2_policies, {"name": ios["transform_set"]}, description="IPsec SA (from lab-intent.json)")
 ensure(p2, encryption_algorithm=[ipsec["encryption"]], integrity_algorithm=[ipsec["integrity"]], lifetime=int(ipsec["lifetime"]),
        description=f"IPsec SA: ESP {ipsec['encryption']} / {ipsec['integrity']}-HMAC, tunnel mode")
-prof = get_or_create(nb.vpn.vpn_profiles, {"name": PROF["name"]}, description="Static IPsec VTI, IKEv2 PSK")
+prof = get_or_create(nb.vpn.vpn_profiles, {"name": PROF["name"]}, description=f"Static IPsec VTI, IKEv2 {AUTH_NB}")
 ensure(prof, keepalive_enabled=bool(dpd["enabled"]), keepalive_interval=int(dpd["interval"]), keepalive_retries=int(dpd["retries"]), nat_traversal=False,
-       extra_options={"ios": ios}, description="Static IPsec VTI, IKEv2 PSK" + (", DPD on-demand" if dpd["enabled"] else ""))
+       extra_options={"ios": ios}, description=f"Static IPsec VTI, IKEv2 {'certificates (rsa-sig, lab CA)' if CERT else 'PSK'}" + (", DPD on-demand" if dpd["enabled"] else ""))
 # Nautobot 3.2.4 bug: POST to the profile<->policy assignment endpoints 500s ("unexpected keyword _custom_field_data")
 # and the profile serializer silently ignores vpn_phase1/2_policies on write, so these two rows go through the ORM
 # (nautobot-server nbshell inside the container on the NMS).
@@ -158,7 +173,10 @@ CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # peers_only: IKE and ESP only between the modelled WAN addresses (the headend behind the firewall, the spokes cabled to it) — address groups
        # rendered from Nautobot's cables and addresses; ICMP stays open for the underlay reachability tests. log_accepts: the IKE, ESP and
        # ICMP accept rules log too — one line per new flow, since every later packet of a known flow is taken by the established rule
-       "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "peers_only": True, "log_drops": True, "log_accepts": True}, "management": {"ssh": True, "lldp": True}}}
+       # management.syslog: the firewalls ship their syslog (the kernel's firewall log included) to VictoriaLogs on the NMS, which sits on the
+       # OOB network as .10 — the Grafana drops panel, the FirewallDropBurst alert and the portal's log history read from there
+       "firewall": {"forward": {"default_action": "drop", "allow": ["ike", "esp", "icmp"], "peers_only": True, "log_drops": True, "log_accepts": True},
+                    "management": {"ssh": True, "lldp": True, "syslog": {"host": str(ipaddress.IPv4Network(I["oob"]["prefix"])[10]), "port": 5514, "protocol": "udp", "level": "info"}}}}
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})

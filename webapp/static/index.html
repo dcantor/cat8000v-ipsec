@@ -201,8 +201,9 @@
 </div>
 <main id="view-firewalls" hidden style="grid-template-columns:1fr">
   <div class="card">
-    <h2>Firewalls <small>the VyOS firewall in front of each headend — interfaces, the live rule set with counters, and the firewall log · collected over SSH</small>
-      <span style="float:right;display:inline-flex;align-items:center;gap:8px"><span class="hint">log window</span><select id="fw-hours"><option value="1">1 h</option><option value="3" selected>3 h</option><option value="6">6 h</option><option value="24">24 h</option><option value="72">3 days</option></select><button type="button" onclick="loadFirewalls(true)">Refresh</button></span></h2>
+    <h2>Firewalls <small>the VyOS firewall in front of each headend — interfaces, the live rule set with counters, and the firewall log</small>
+      <span style="float:right;display:inline-flex;align-items:center;gap:8px"><span class="hint">log from</span><select id="fw-source" title="ssh: the firewall's own journal (show log firewall); history: VictoriaLogs on the NMS, where the firewalls ship their syslog (90 days)"><option value="ssh">the firewall (SSH)</option><option value="logs">history (VictoriaLogs)</option></select>
+      <span class="hint">window</span><select id="fw-hours"><option value="1">1 h</option><option value="3" selected>3 h</option><option value="6">6 h</option><option value="24">24 h</option><option value="72">3 days</option><option value="168" data-logs>7 days</option><option value="720" data-logs>30 days</option></select><button type="button" onclick="loadFirewalls(true)">Refresh</button></span></h2>
     <div class="hint" id="fw-note"></div>
     <div id="fw-cards"></div>
   </div>
@@ -704,16 +705,20 @@ async function loadAudit() {
 
 // ---- firewalls: rules with counters and the recent log, per firewall ------------------------------------------------
 async function loadFirewalls(refresh) {
-  const hours = $('fw-hours').value; $('fw-note').textContent = 'collecting from the firewalls…';
-  const r = await fetch(`/api/firewalls?hours=${hours}&refresh=${refresh ? 'true' : 'false'}`); if (!r.ok) { $('fw-note').textContent = `HTTP ${r.status}`; return; }
+  const source = $('fw-source').value;
+  for (const o of $('fw-hours').options) { o.hidden = o.dataset.logs !== undefined && source !== 'logs'; }   // the long windows only make sense against VictoriaLogs
+  if ($('fw-hours').selectedOptions[0].hidden) $('fw-hours').value = '72';
+  const hours = $('fw-hours').value; $('fw-note').textContent = source === 'logs' ? 'collecting from the firewalls and VictoriaLogs…' : 'collecting from the firewalls…';
+  const r = await fetch(`/api/firewalls?hours=${hours}&source=${source}&refresh=${refresh ? 'true' : 'false'}`); if (!r.ok) { $('fw-note').textContent = `HTTP ${r.status}`; return; }
   const d = await r.json();
-  $('fw-note').innerHTML = `collected ${new Date(d.generated * 1000).toLocaleTimeString()} · log window ${d.hours} h · policy from the Nautobot config context (IKEv2 / NAT-T, ESP and ICMP may cross, established / related return, everything else is dropped and logged)`;
+  const win = d.hours >= 48 ? `${d.hours / 24} days` : `${d.hours} h`;
+  $('fw-note').innerHTML = `collected ${new Date(d.generated * 1000).toLocaleTimeString()} · log window ${win}${d.source === 'logs' ? ' from VictoriaLogs (the firewalls\' remote syslog; the flow summary covers every line of the window)' : ' from each firewall\'s journal'} · times are the firewalls\' clock (UTC) · policy from the Nautobot config context (IKEv2 / NAT-T, ESP and ICMP may cross, established / related return, everything else is dropped and logged)`;
   const who = e => e.src_name ? `${esc(e.src)} <span class="hint">${esc(e.src_name)}</span>` : esc(e.src);
   const whom = e => e.dst_name ? `${esc(e.dst)} <span class="hint">${esc(e.dst_name)}</span>` : esc(e.dst);
   const port = e => e.proto === 'ICMP' ? 'icmp' : `${esc(e.proto.toLowerCase())}${e.dport ? '/' + esc(e.dport) : ''}`;
   $('fw-cards').innerHTML = d.firewalls.map(f => `<div class="card" style="margin-top:14px">
     <h2>${esc(f.name)} <span class="pill">in front of ${esc(f.hub || '?')}</span> <small>${esc(f.city || f.site || '')} · ${esc(f.mgmt_ip)}${f.bandwidth_mbps ? ' · ' + f.bandwidth_mbps + ' Mbps' : ''}${f.uptime ? ' · up ' + esc(f.uptime) : ''}</small></h2>
-    ${f.error ? `<div class="msg">${esc(f.error)}</div>` : ''}
+    ${f.error ? `<div class="msg">${esc(f.error)}</div>` : ''}${f.log_error ? `<div class="msg">${esc(f.log_error)}</div>` : ''}
     <div class="grid" style="grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:16px;align-items:start">
       <div><h3 style="font-size:13px;margin:0 0 6px">Interfaces</h3>
         <table><thead><tr><th>Port</th><th>Address</th><th>S/L</th><th>Description</th></tr></thead><tbody>${f.interfaces.map(i => `<tr><td class="cred">${esc(i.name)}</td><td class="cred">${esc(i.address)}</td><td>${esc(i.state)}</td><td>${esc(i.description)}</td></tr>`).join('')}</tbody></table></div>
@@ -725,14 +730,14 @@ async function loadFirewalls(refresh) {
           <td class="num">${r.packets.toLocaleString()}</td><td class="num">${r.bytes.toLocaleString()}</td><td>${esc(r.description)}</td></tr>`; }).join('')}</tbody></table>
         <div class="hint" style="margin-top:4px">IKEv2 and ESP are admitted only between the modelled WAN addresses (address groups rendered from Nautobot's cables: the headend behind this firewall, the spokes cabled to it); ICMP from anywhere for the underlay tests; hover a row for the nftables expression.</div></div>
     </div>
-    <h3 style="font-size:13px;margin:14px 0 6px">Log · last ${d.hours} h <span class="hint">${f.log_total} entr${f.log_total === 1 ? 'y' : 'ies'}${f.log_total > f.log.length ? ' (newest ' + f.log.length + ' shown)' : ''} · accepts log their first packet per flow (IKE, ESP, ICMP), rule 900 logs every drop; established / related traffic is not logged</span></h3>
+    <h3 style="font-size:13px;margin:14px 0 6px">Log · last ${win} <span class="pill">${f.log_source === 'logs' ? 'VictoriaLogs' : 'SSH'}</span> <span class="hint">${f.log_total} entr${f.log_total === 1 ? 'y' : 'ies'}${f.log_total > f.log.length ? ' (newest ' + f.log.length + ' shown)' : ''} · accepts log their first packet per flow (IKE, ESP, ICMP), rule 900 logs every drop; established / related traffic is not logged</span></h3>
     ${f.flows.length ? `<details open><summary style="cursor:pointer;font-size:13px">By flow (${f.flows.length})</summary><table><thead><tr><th>Verdict</th><th>Source</th><th>Destination</th><th>Service</th><th>In → out</th><th class="num">Hits</th><th>First</th><th>Last</th></tr></thead><tbody>
-      ${f.flows.map(x => `<tr><td><span class="pill ${x.verdict === 'drop' ? 'fail' : ''}">${esc(x.verdict)}</span></td><td>${who(x)}</td><td>${whom(x)}</td><td class="cred">${port(x)}</td><td class="cred">${esc(x.in)} → ${esc(x.out)}</td><td class="num">${x.hits}</td><td class="cred">${esc(x.first.slice(11))}</td><td class="cred">${esc(x.last.slice(11))}</td></tr>`).join('')}</tbody></table></details>
+      ${f.flows.map(x => `<tr><td><span class="pill ${x.verdict === 'drop' ? 'fail' : ''}">${esc(x.verdict)}</span></td><td>${who(x)}</td><td>${whom(x)}</td><td class="cred">${port(x)}</td><td class="cred">${esc(x.in)} → ${esc(x.out)}</td><td class="num">${x.hits}</td><td class="cred">${esc(d.hours > 24 ? x.first : x.first.slice(11))}</td><td class="cred">${esc(d.hours > 24 ? x.last : x.last.slice(11))}</td></tr>`).join('')}</tbody></table></details>
     <details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">Every entry (${f.log.length})</summary><div style="max-height:360px;overflow:auto"><table><thead><tr><th>Time</th><th>Rule</th><th>Verdict</th><th>In → out</th><th>Source</th><th>Destination</th><th>Service</th><th>Flags</th></tr></thead><tbody>
       ${f.log.map(e => `<tr><td class="cred">${esc(e.time)}</td><td class="cred">${esc(e.rule || e.tag)}</td><td><span class="pill ${e.verdict === 'drop' ? 'fail' : ''}">${esc(e.verdict)}</span></td><td class="cred">${esc(e.in)} → ${esc(e.out)}</td><td>${who(e)}${e.sport ? '<span class="hint">:' + esc(e.sport) + '</span>' : ''}</td><td>${whom(e)}</td><td class="cred">${port(e)}</td><td class="hint">${esc(e.flags)}</td></tr>`).join('')}</tbody></table></div></details>` : '<div class="hint">nothing logged in this window — no new flow and nothing dropped</div>'}
   </div>`).join('');
 }
-$('fw-hours').onchange = () => loadFirewalls(false);
+$('fw-hours').onchange = () => loadFirewalls(false); $('fw-source').onchange = () => loadFirewalls(false);
 
 // ---- tools: URLs of the shared services and how to reach every lab VM (lab credentials, with the disclaimer) -------------
 async function loadTools() {

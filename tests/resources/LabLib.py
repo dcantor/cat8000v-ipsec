@@ -125,6 +125,27 @@ class LabLib:
         return r.json()
 
     @keyword
+    def portal_get(self, path, **params):
+        """A read from the portal's API as a logged-in viewer (PORTAL_USER / PORTAL_PASSWORD, default viewer / viewer): the endpoints
+        behind the login, such as /api/firewalls. The session cookie is kept for the suite."""
+        url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090")
+        if not hasattr(self, "_portal"):
+            self._portal = requests.Session()
+            r = self._portal.post(f"{url}/api/login", json={"username": os.environ.get("PORTAL_USER", "viewer"), "password": os.environ.get("PORTAL_PASSWORD", "viewer")}, timeout=30)
+            logger.info(f"POST {url}/api/login -> {r.status_code}"); r.raise_for_status()
+        r = self._portal.get(f"{url}{path}", params=params, timeout=300)
+        logger.info(f"GET {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
+        return r.json()
+
+    @keyword
+    def victorialogs_query(self, query):
+        """One LogsQL query against VictoriaLogs on the NMS (VICTORIALOGS_URL, default http://10.0.0.10:9428) -> list of result rows."""
+        url = os.environ.get("VICTORIALOGS_URL", "http://10.0.0.10:9428")
+        r = requests.post(f"{url}/select/logsql/query", data={"query": query}, timeout=60)
+        logger.info(f"LogsQL {query} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
+        return [json.loads(l) for l in r.text.splitlines() if l.strip()]
+
+    @keyword
     def render_nac_check(self):
         url, token = self._nautobot()
         r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_nac.py"), "--check"], capture_output=True, text=True,

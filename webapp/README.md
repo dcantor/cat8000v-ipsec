@@ -234,6 +234,16 @@ from anywhere for the underlay tests; `log_accepts: true` — the accept rules l
 packet of a known flow is taken by the established / related rule 5, which never logs); rule 900 logs every drop. The rules
 table shows Source / Destination as the group name with its members; the log shows accepts and drops with their verdict.
 
+**Log history.** The firewalls also ship their syslog to VictoriaLogs on the NMS (config context `firewall.management.syslog`
+→ `set system syslog remote 10.2.0.10 port 5514`, rendered by `render_vyos.py`), so the same kernel lines are kept for 90 days
+tagged with the firewall's hostname. The tab's **log from** selector switches between the firewall's own journal (SSH, 1 h – 3 days)
+and **history (VictoriaLogs)** (`GET /api/firewalls?source=logs&hours=…`, up to 30 days): the newest 500 entries are parsed exactly
+like the SSH ones, the per-flow summary is aggregated by VictoriaLogs over every line of the window (`stats by (verdict, src, dst,
+proto, dport, in, out)`), and the rules / interfaces still come live over SSH. Timestamps are the firewalls' clock (UTC) either
+way. The same lines feed the *Firewalls* row of the Grafana IPsec dashboard (drops and new flows per 5 min per firewall, drops by
+source, top dropped flows, the raw log) and two vmalert-logs rules: `FirewallDropBurst` (more than 20 packets from one source
+dropped in 5 minutes) and `FirewallDroppingPeerTraffic` (IKE or ESP hitting the drop rule — the policy and the wiring disagree).
+
 ### Tools page
 
 The **Tools** tab (`GET /api/tools`) lists every shared service with its LAN URL and login (hub, both portals, Nautobot,
