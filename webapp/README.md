@@ -169,15 +169,22 @@ is generated). The run (`mode: rotate`, `POST /api/runs` with `spoke: {name, psk
 
 Measured: 4 min 23 s for a spoke with three headends; each tunnel is down for a few seconds.
 
-### Certificates: the `pki` steps and Renew cert
+### Certificates: per-spoke choice, the `pki` steps, Change auth and Renew cert
 
-With `profile.ike.authentication: certificate` (Provision page → *IKE authentication*), every pipeline that reaches Terraform
-carries two more steps: **pki** right after the render (`./lab.sh nautobot pki`: key pair, trustpoint with the CA fingerprint
+Each spoke authenticates IKEv2 with its pre-shared key or with a certificate: the wizard asks (*IKE authentication*, default =
+`profile.ike.authentication`), the Routers table shows the choice (*IKE auth* column; a headend shows the methods its spokes use)
+and **Change auth…** switches a deployed spoke (`mode: auth`, `POST /api/runs` with `spoke: {name, ike_authentication}`; plan with
+`GET /api/spokes/{name}/auth?method=`): validate → intent → Nautobot seed (the spoke's tunnels move to the other VPN profile; a
+headend gains or drops a profile) → render → pki (enrol, or retire the trustpoint) → plan → staged apply → SAs re-authenticated
+and verified as modelled → Golden Config (default on); tests optional. About five minutes; each tunnel of the spoke blips.
+**Rotate PSK…** shows for PSK spokes, **Renew cert…** for every router that holds a certificate. Every pipeline that reaches
+Terraform carries two more steps: **pki** right after the render (`./lab.sh nautobot pki`: key pair, trustpoint with the CA fingerprint
 pinned, CA certificate, router certificate enrolled or renewed when missing / foreign / within `renew_before_days` of expiry;
-Nautobot's `cert_*` device fields updated) and **pki_verify** right after the apply (`--post-apply`: keyrings removed, SAs still
-authenticated with a key cleared, every tunnel back READY with RSA both ways within 4 minutes). Both are no-ops in PSK mode.
-The PSK column and **Rotate PSK…** give way to a **Certificate** column (days left, expiry; serial and fingerprint on hover) and
-**Renew cert…** on every router row (operator). The run (`mode: renew`, `POST /api/runs` with `spoke: {name}`; plan with
+Nautobot's `cert_*` device fields updated; routers that no longer need a certificate retire their trustpoint) and **pki_verify**
+right after the apply (`--post-apply`: tunnels IOS shut while their profile was swapped re-enabled, the keyring removed from routers
+none of whose tunnels use a key, every SA authenticated the wrong way for its peer cleared, then each peer READY with the modelled
+method — `Auth sign / verify` RSA or PSK — within 4 minutes). The **Certificate** column shows days left and expiry (serial and
+fingerprint on hover) for routers holding one. The run (`mode: renew`, `POST /api/runs` with `spoke: {name}`; plan with
 `GET /api/routers/{name}/renewal`; the CA and every issued certificate at `GET /api/pki`):
 
 1. validate — the router, what the CA index says it holds, the tunnels that re-authenticate

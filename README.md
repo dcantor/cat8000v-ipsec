@@ -162,9 +162,18 @@ theirs destroyed and cleaned out of Nautobot; the run verifies the new tunnels u
 key) → NaC → terraform on the spoke and every headend → the spoke's IKEv2 SAs cleared → every tunnel verified READY with eBGP
 Established → Golden Config. About four minutes; the tunnels blip for seconds.
 
-### Certificates instead of pre-shared keys
-`profile.ike.authentication: certificate` in the intent (the *IKE authentication* selector on the Provision page) puts the whole
-lab on **IKEv2 rsa-sig with certificates from a lab CA** — `pki/ca.py` (openssl on the host: `pki/ca/ca.crt` public and
+### Pre-shared key or certificate — each branch decides
+Every spoke chooses how it authenticates IKEv2: **its own pre-shared key** or **a certificate from the lab CA** — picked in the
+spoke wizard (*IKE authentication*; `ike_authentication` on the device in the intent) and changeable later with **Change auth…**
+on its row (`mode: auth`). `profile.ike.authentication` is only the default for spokes that do not choose. The model follows the
+choice: Nautobot holds **one VPN profile per method in use** (the default keeps the intent's names, the other one is suffixed
+`-PSK` / `-CERT`), every tunnel references its spoke's profile, and a headend renders **one IKEv2 / IPsec profile per method its
+spokes use** — the PSK profile matching exactly its PSK peers' WAN addresses with a keyring of just those spokes, the certificate
+profile matching on the certificate map — so a headend serves both kinds of branch at once. A router holds a certificate only
+while one of its tunnels needs it; a spoke that moves to its key gives its trustpoint back (`pki.py` retires it, the CA index
+keeps the serial under `retired`, Nautobot's `cert_*` fields clear). Terraform changes of this kind are applied in stages
+(`tools/nac_apply.py`: creates, then in-place updates, then the destroys) because the NaC module has no edge between a tunnel and
+the profile it references. Certificates themselves work like this — `pki/ca.py` (openssl on the host: `pki/ca/ca.crt` public and
 committed, `ca.key` never committed, `pki/certs/*.crt` and `pki/index.json` the record of what was issued). The `pki`
 pipeline step (`nautobot/pki.py`, `./lab.sh nautobot pki`) enrols every router over SSH the way a real PKI would: an RSA
 key pair generated **on the router** (the private key never leaves it), a trustpoint with `enrollment terminal pem` and the
@@ -178,7 +187,9 @@ per router; the `pki_verify` step after the apply removes the keyrings (IOS refu
 still references them), clears SAs still on a key and verifies every tunnel back READY with `Auth sign: RSA, Auth verify:
 RSA`. The Golden Config template renders the trustpoint and the certificate map, and the crypto compliance rule covers them.
 
-Day-2: **Renew cert…** on any router row (headend or spoke; `mode: renew`) — a new CSR, signed, imported, Nautobot updated,
+Day-2: **Change auth…** on a spoke row (`mode: auth`: intent → Nautobot → render → certificates enrolled or retired → staged
+terraform on the spoke and its headends → every SA re-authenticated and verified as modelled → Golden Config; ≈5 min) and
+**Renew cert…** on any router row holding a certificate (`mode: renew`) — a new CSR, signed, imported, Nautobot updated,
 the router's SAs cleared, every tunnel verified back with RSA (≈1 min). The `pki` step also renews on its own within
 `renew_before_days` (30) of expiry on every deploy. `/metrics` exports `lab_cert_not_after_seconds` per router and
 `lab_ike_certificate_auth`; the shared monitoring alerts `CertificateExpiringSoon` / `CertificateExpired`. Switching back
@@ -243,20 +254,21 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 41 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 42 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
 keys on every router**, BGP model vs live sessions, rendered NAC data == committed, Golden Config
-compliant; and, in certificate mode, suite 08 — the CA pinned on every router, each router certificate issued by it to the router's
-own name and not near expiry, rsa-sig with no key left anywhere, Nautobot's record of it, and a real renewal through the portal.
+compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
+own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
+renewal and a real PSK ↔ certificate switch of a spoke through the portal.
 Each run keeps pre/post config backups and a diff under `results/`.
 
 ## What is where
 
 | Path | Purpose |
 |---|---|
-| `lab.conf`, `lab.sh`, `tools/`, `nodes/` | VM facts and libvirt controller (`up down bootstrap rebuild clean rename status console ssh nac nautobot test intent webapp`), console automation, day-0 template |
+| `lab.conf`, `lab.sh`, `tools/`, `nodes/` | VM facts and libvirt controller (`up down bootstrap rebuild clean rename status console ssh nac nautobot test intent webapp`), console automation, day-0 template, `tools/nac_apply.py` (staged terraform apply: creates, updates, then destroys) |
 | `lab-intent.json`, `nautobot/intent.py` | the VPN service intent (site, regions, devices + PSKs, links, tunnels, crypto, capacity); generated from `lab.conf` once, edited by the portal |
 | `nautobot/` | onboarding, seed (intent → Nautobot, idempotent), renderer, Golden Config, certificate enrolment (`pki.py`), rename tool, saved GraphQL query, Jinja template |
 | `pki/` | the lab CA (`ca.py`; `ca/ca.crt` public, `ca/ca.key` never committed), issued router certificates and the index |

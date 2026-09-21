@@ -77,7 +77,7 @@ def suggest(hubs=None, region=None):
     while any(d["site"] == site for d in I["devices"]): site += "a"
     city = cities.suggest_city(region, I["regions"], {d.get("city") for d in I["devices"]}); ll = cities.lookup(city) or (None, None)
     return {**ident, "role": "spoke", "comments": "", "region": region, "site": site, "site_code": f"{region[:2].upper()}-{n}", "contact": f"noc-{region.lower()}@lab.local",
-            "city": city, "lat": ll[0], "lon": ll[1], "psk": intent_mod.new_psk(), "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+            "city": city, "lat": ll[0], "lon": ll[1], "psk": intent_mod.new_psk(), "ike_authentication": intent_mod.default_auth(I), "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
             "links": suggest_links(I, f, ident["name"], chosen),
             "context": {"hubs": [{"name": h["name"], "region": h.get("region"), "distance": intent_mod.region_distance(I, region, h.get("region")),
                                   "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"], "edge": f["edge_of"](h["name"]),
@@ -107,6 +107,7 @@ def validate(spec):
         if ip not in ipaddress.IPv4Network(I["oob"]["prefix"]): errs.append(f"management IP must be in {I['oob']['prefix']}")
         if str(ip) in set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}: errs.append(f"management IP {ip} is in use")
     except ValueError: errs.append("management IP is not an IPv4 address")
+    if spec.get("ike_authentication") not in (None, "", "psk", "certificate"): errs.append("ike_authentication: psk or certificate")
     routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke")]
     try:
         if ipaddress.IPv4Address(spec.get("router_id", "")) in {ipaddress.IPv4Address(d["router_id"]) for d in routers}: errs.append("router-id in use")
@@ -216,7 +217,8 @@ def add_to_intent(spec):
                          "lan": spec["lan"], "comments": spec.get("comments", ""), "region": spec.get("region"), "site": spec.get("site"),
                          "site_code": spec.get("site_code", ""), "contact": spec.get("contact", ""),
                          **({"city": spec["city"], "lat": float(spec["lat"]), "lon": float(spec["lon"])} if spec.get("city") and spec.get("lat") is not None else {}),
-                         **({"psk": spec["psk"]} if spec.get("role", "spoke") == "spoke" else {})})
+                         **({"psk": spec["psk"]} if spec.get("role", "spoke") == "spoke" else {}),
+                         **({"ike_authentication": spec["ike_authentication"]} if spec.get("role", "spoke") == "spoke" and spec.get("ike_authentication") else {})})
     I["devices"].sort(key=lambda d: (d["role"] != "hub", d["name"]))
     for l in spec.get("links") or []:
         I["links"].append({"a": l.get("edge") or l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
@@ -377,6 +379,7 @@ def rotation_plan(name):
     dev = next((d for d in I["devices"] if d["name"] == name), None)
     if dev is None: errs.append(f"{name} is not in the intent")
     elif dev["role"] != "spoke": errs.append("only a spoke's key can be rotated (headends key per spoke)")
+    elif intent_mod.spoke_auth(I, name) != "psk": errs.append(f"{name} authenticates with a certificate: renew the certificate, or switch it to a pre-shared key first")
     if errs: return errs, None
     tunnels = []
     for t in (t for t in I["tunnels"] if t["spoke"] == name):
@@ -394,16 +397,47 @@ def renewal_plan(name):
     certificates."""
     import sys as _sys; _sys.path.insert(0, str(LAB / "pki")); import ca as lab_ca
     I = intent_mod.load(); errs = []
-    if (I.get("profile", {}).get("ike") or {}).get("authentication", "psk") != "certificate": errs.append("IKE authenticates with pre-shared keys (profile.ike.authentication): nothing to renew — rotate the key instead")
     dev = next((d for d in I["devices"] if d["name"] == name), None)
     if dev is None: errs.append(f"{name} is not in the intent")
     elif dev["role"] not in ("hub", "spoke"): errs.append("only a router's certificate can be renewed (firewalls hold none)")
+    elif name not in intent_mod.cert_routers(I): errs.append(f"no tunnel of {name} authenticates with a certificate — " + ("rotate its pre-shared key instead, or switch it to a certificate first" if dev["role"] == "spoke" else "its spokes all use pre-shared keys"))
     if errs: return errs, None
     tunnels = [{"hub": t["hub"], "spoke": t["spoke"], "tunnel_id": int(t["id"])} for t in I["tunnels"] if name in (t["hub"], t["spoke"])]
     if not tunnels: errs.append(f"{name} has no tunnels")
     entry = (lab_ca.status()["devices"] or {}).get(name) or {}
     return errs, {"name": name, "role": dev["role"], "mgmt_ip": dev["mgmt_ip"], "tunnels": tunnels, "peers": sorted({t["hub"] if t["spoke"] == name else t["spoke"] for t in tunnels}),
                   "serial": entry.get("serial"), "expires": (entry.get("not_after") or "")[:10] or None, "days_left": entry.get("days_left"), "issued": entry.get("issued")}
+
+
+def auth_plan(name, method):
+    """Switching a deployed spoke between a pre-shared key and a certificate (also the validation): returns (problems, details) — the
+    spoke, its current and wanted method, its tunnels and headends, what the change does on each router."""
+    I = intent_mod.load(); errs = []
+    dev = next((d for d in I["devices"] if d["name"] == name), None)
+    if dev is None: errs.append(f"{name} is not in the intent")
+    elif dev["role"] != "spoke": errs.append("only a spoke chooses its authentication (headends follow their spokes)")
+    if method not in intent_mod.AUTHS: errs.append("ike_authentication: psk or certificate")
+    if errs: return errs, None
+    current = intent_mod.spoke_auth(I, name)
+    if current == method: errs.append(f"{name} already authenticates with {'a certificate' if method == 'certificate' else 'its pre-shared key'}")
+    tunnels = [{"hub": t["hub"], "tunnel_id": int(t["id"])} for t in I["tunnels"] if t["spoke"] == name]
+    if not tunnels: errs.append(f"{name} has no tunnels")
+    hubs = sorted({t["hub"] for t in tunnels})
+    # what each headend does: gain or lose the profile of the wanted method (created when its first spoke needs it, kept while any does)
+    others = {h: {intent_mod.spoke_auth(I, t["spoke"]) for t in I["tunnels"] if t["hub"] == h and t["spoke"] != name} for h in hubs}
+    hub_changes = [{"hub": h, "adds_profile": method not in others[h], "drops_profile": current not in others[h], "needs_certificate": method == "certificate" and "certificate" not in others[h]} for h in hubs]
+    return errs, {"name": name, "mgmt_ip": dev["mgmt_ip"], "current": current, "wanted": method, "default": intent_mod.default_auth(I), "tunnels": tunnels, "headends": hubs, "hub_changes": hub_changes,
+                  "spoke_enrols": method == "certificate", "spoke_retires": current == "certificate", "profile": intent_mod.profile_names(I, method)["ikev2_profile"]}
+
+
+def set_auth(name, method):
+    """Record the spoke's choice in the intent (ike_authentication; dropped when it equals the lab default)."""
+    I = intent_mod.load(); dev = next(d for d in I["devices"] if d["name"] == name)
+    if method == intent_mod.default_auth(I): dev.pop("ike_authentication", None)
+    else: dev["ike_authentication"] = method
+    problems = intent_mod.validate(I)
+    if problems: raise RuntimeError("; ".join(problems))
+    intent_mod.save(I); return I
 
 
 def rotate_psk(name, new_key=None):

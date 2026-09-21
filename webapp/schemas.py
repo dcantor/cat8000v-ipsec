@@ -71,6 +71,7 @@ class Device(BaseModel):
     city: Optional[str] = Field(None, description="where the site is (shown on the map)", examples=["Boston, MA"])
     lat: Optional[float] = None; lon: Optional[float] = None
     psk_rotated: Optional[str] = Field(None, description="when the spoke's key was last rotated")
+    ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="spokes only: how this spoke authenticates IKEv2 (chosen at provisioning, changeable later); unset = the lab default profile.ike.authentication")
 
 
 class Link(BaseModel):
@@ -126,7 +127,8 @@ class SpokeSpec(BaseModel):
     region: str = Field(..., examples=["West"]); site: str = Field(..., examples=["branch-6"]); site_code: str = ""; contact: str = ""
     city: str = Field("", description="where the branch is (a catalogue city, GET /api/cities, or any name with lat / lon); shown on the portal's map", examples=["Denver, CO"])
     lat: Optional[float] = Field(None, description="site latitude (filled from the catalogue for a known city)"); lon: Optional[float] = None
-    psk: str = Field(..., description="the spoke's own pre-shared key (8-64 chars)")
+    psk: str = Field(..., description="the spoke's own pre-shared key (8-64 chars; kept even when the spoke authenticates with a certificate, so it can switch back)")
+    ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="how the spoke authenticates IKEv2: psk, or certificate (enrolled with the lab CA); unset = the lab default")
     comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
     role: Literal["spoke"] = "spoke"
     links: list[SpokeLink] = Field(..., description="at least two headends", min_length=2)
@@ -150,11 +152,11 @@ class RemoveSpec(BaseModel):
 
 class RunRequest(BaseModel):
     """Start a pipeline run. Which body fields matter depends on `mode`."""
-    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew"] = Field(..., description=(
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth"] = Field(..., description=(
         "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
-        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`)"))
+        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`) · auth: switch a deployed spoke between pre-shared key and certificate (needs `spoke.name` and `spoke.ike_authentication`)"))
     intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
-    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router}")
+    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router} · auth: {\"name\": spoke, \"ike_authentication\": psk | certificate}")
     hub: Optional[HubSpec] = None
     options: RunOptions = RunOptions()
 

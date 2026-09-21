@@ -25,9 +25,10 @@ YES = r"\[yes/no\]:?\s*$|\[no\]:?\s*$|\[yes\]:?\s*$"
 
 
 def pki_settings(I):
-    """The intent's PKI block with defaults (profile.pki), or None when the IKE authentication is not certificate-based."""
+    """The intent's PKI block with defaults (profile.pki), or None when no tunnel authenticates with certificates (the method is chosen
+    per spoke: device ike_authentication, else the lab default profile.ike.authentication)."""
     pr = I.get("profile") or {}
-    if (pr.get("ike") or {}).get("authentication", "psk") != "certificate": return None
+    if "certificate" not in intent_mod.auths_in_use(I): return None
     p = pr.get("pki") or {}
     return {"trustpoint": p.get("trustpoint", "LAB-CA"), "keypair": p.get("keypair", "LAB-VPN"), "key_bits": int(p.get("key_bits", 2048)), "validity_days": int(p.get("validity_days", 365)),
             "renew_before_days": int(p.get("renew_before_days", 30)), "certificate_map": p.get("certificate_map", "LAB-CERT-MAP"), "org": ca.ORG, "ca_cn": ca.CA_CN}
@@ -161,16 +162,48 @@ def record_in_nautobot(name, info, renewed):
     dev = nb.dcim.devices.get(name=name)
     if not dev: return
     cf = {"cert_serial": info.get("serial") if info else None, "cert_subject": info.get("cn") or info.get("subject") if info else None,
-          "cert_expires": (info.get("end") or info.get("not_after") or "")[:10] or None if info else None, "cert_renewed": renewed}
+          "cert_expires": (info.get("end") or info.get("not_after") or "")[:10] or None if info else None, **({"cert_renewed": renewed} if renewed or not info else {})}
     if any((dev.custom_fields or {}).get(k) != v for k, v in cf.items()): dev.update({"custom_fields": {**(dev.custom_fields or {}), **cf}})
 
 
+def retire(r, pk, idx, check, log):
+    """A router none of whose tunnels authenticates with certificates any more (a spoke switched to a key, a headend whose spokes all
+    did): the trustpoint (with its certificates) and the certificate map leave the box, the CA index keeps the serial under `retired`,
+    Nautobot's cert_* fields are cleared. Returns what was (or would be) done."""
+    tp = pk["trustpoint"]; have = r.show("show running-config | include ^crypto pki (trustpoint|certificate map)")
+    present = [x for x in (f"crypto pki trustpoint {tp}", f"crypto pki certificate map {pk['certificate_map']} 10") if x in have]
+    if not present: return None
+    if check: return f"holds {', '.join(present)} but authenticates with keys only"
+    log(f"{r.name}: no tunnel uses certificates any more — removing {', '.join(present)}")
+    if f"crypto pki trustpoint {tp}" in present:
+        r.c.config_mode(); out = r.c.send_command_timing(f"no crypto pki trustpoint {tp}", read_timeout=30)
+        if "[yes/no]" in out: out += r.c.send_command_timing("yes", read_timeout=30)   # "Removing an enrolled trustpoint will destroy all certificates ..."
+        r.c.exit_config_mode()
+        if re.search(r"Invalid input|% (Cannot|Error|Failed)", out): raise RuntimeError(f"{r.name}: could not remove the trustpoint: {out[-300:]}")
+    if f"crypto pki certificate map {pk['certificate_map']} 10" in present: r.config([f"no crypto pki certificate map {pk['certificate_map']} 10"])
+    r.show("write memory", timeout=60)
+    e = idx.pop(r.name, None)
+    if e: idx.setdefault("_retired", {})[r.name] = {"serial": e["serial"], "not_after": e["not_after"], "retired": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}; ca.save_index(idx)
+    return "retired"
+
+
 def run(names=None, force=False, check=False, log=print):
-    I = intent_mod.load(); pk = pki_settings(I)
-    if not pk: log("IKE authentication is psk in the intent (profile.ike.authentication): nothing to enrol"); return {"mode": "psk", "devices": {}}
+    I = intent_mod.load(); pk = pki_settings(I) or {**pki_settings({**I, "profile": {**I["profile"], "ike": {**I["profile"]["ike"], "authentication": "certificate"}}}), "unused": True}
     if not check: ca.init()
     idx = ca.load_index(); now = datetime.datetime.now(datetime.timezone.utc); report = {"mode": "certificate", "trustpoint": pk["trustpoint"], "devices": {}}
-    routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke") and (not names or d["name"] in names)]
+    need = intent_mod.cert_routers(I)   # only routers with a certificate-authenticated tunnel (a PSK-only spoke, or a headend of PSK spokes only, holds none)
+    if not need: log("no tunnel authenticates with certificates (per-spoke ike_authentication / the lab default)")
+    # routers that authenticate with keys only give their trustpoint back
+    for d in [d for d in I["devices"] if d["role"] in ("hub", "spoke") and d["name"] not in need and (not names or d["name"] in names)]:
+        r = Router(d["name"], d["mgmt_ip"])
+        try:
+            what = retire(r, pk, idx, check, log)
+            if what:
+                report["devices"][d["name"]] = {"due": what if check else None, "changed": [] if check else ["retired"], "serial": None, "subject": None, "expires": None, "ca_installed": False}
+                if not check and os.environ.get("NAUTOBOT_TOKEN"): record_in_nautobot(d["name"], None, None)
+                log(f"{d['name']}: {'certificate retired (keys only)' if not check else what}")
+        finally: r.close()
+    routers = [d for d in I["devices"] if d["name"] in need and (not names or d["name"] in names)]
     for d in sorted(routers, key=lambda x: (x["role"] != "hub", x["name"])):
         r = Router(d["name"], d["mgmt_ip"]); changed = []
         try:
@@ -205,37 +238,47 @@ def parse_sas(text):
 
 
 def post_apply(names=None, log=print, wait=240, rekey=False):
-    """After Terraform switched the IKEv2 profiles to rsa-sig: the pre-shared keys leave the routers (the provider's keyring delete is
-    refused by IOS while the profile still references it, so the keyring is removed here), every IKE SA that still runs on the old
-    authentication is cleared, and each router's tunnels must come back READY with RSA both ways within `wait` seconds."""
-    I = intent_mod.load(); pk = pki_settings(I); ios = I["profile"]["ios"]
-    if not pk: log("IKE authentication is psk: nothing to do"); return {"mode": "psk", "devices": {}}
+    """After Terraform: every router's IKE state matches the intent's per-spoke authentication. Per router — tunnels Terraform left
+    administratively down are re-enabled (IOS shuts a VTI whose protection profile is swapped); the keyring leaves a router none of
+    whose tunnels use a key (IOS refuses the provider's delete while a profile still references it); every IKE SA authenticated the
+    wrong way for its peer is cleared (or all of them with `rekey`, after a renewal); then each expected peer must be READY with the
+    expected method (Auth sign / verify RSA or PSK) within `wait` seconds."""
+    I = intent_mod.load(); ios = I["profile"]["ios"]
     routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke") and (not names or d["name"] in names)]
-    expected = {d["name"]: sum(1 for t in I["tunnels"] if d["name"] in (t["hub"], t["spoke"])) for d in routers}
-    report = {"mode": "certificate", "devices": {}}; conns = {}
+    wans = intent_mod.tunnel_wans(I)
+    expected = {d["name"]: {(t["spoke_wan"] if d["role"] == "hub" else t["hub_wan"]): ("RSA" if t["auth"] == "certificate" else "PSK") for t in wans if d["name"] in (t["hub"], t["spoke"])} for d in routers}
+    tunnels = {d["name"]: [f"Tunnel{t['id']}" for t in wans if d["name"] in (t["hub"], t["spoke"])] for d in routers}
+    report = {"devices": {}}; conns = {}
     try:
         for d in routers:
             r = conns[d["name"]] = Router(d["name"], d["mgmt_ip"]); changed = []
-            prof = r.show(f"show running-config | section crypto ikev2 profile {ios['ikev2_profile']}")
-            if "rsa-sig" not in prof: raise RuntimeError(f"{d['name']}: the IKEv2 profile is not on rsa-sig yet (run the NaC apply first)")
-            if f"crypto ikev2 keyring {ios['ikev2_keyring']}" in r.show("show running-config | include crypto ikev2 keyring"):
-                r.config([f"no crypto ikev2 keyring {ios['ikev2_keyring']}"]); changed.append("keyring removed"); log(f"{d['name']}: pre-shared keys removed (keyring {ios['ikev2_keyring']})")
-            sas = parse_sas(r.show("show crypto ikev2 sa detail")); stale = [x for x in sas if x.get("auth_sign") != "RSA" or x.get("auth_verify") != "RSA"]
+            down = [l.split()[0] for l in r.show("show ip interface brief | include Tunnel").splitlines() if "administratively down" in l and l.split()[0] in tunnels[d["name"]]]
+            if down:
+                r.config([x for t in down for x in (f"interface {t}", " no shutdown")]); changed.append(f"{len(down)} tunnel(s) re-enabled"); log(f"{d['name']}: {', '.join(down)} administratively down after the apply — re-enabled")
+            auths = intent_mod.router_auths(I, d["name"])
+            if "psk" not in auths and f"crypto ikev2 keyring {ios['ikev2_keyring']}" in r.show("show running-config | include crypto ikev2 keyring"):
+                r.config([f"no crypto ikev2 keyring {ios['ikev2_keyring']}"]); changed.append("keyring removed"); log(f"{d['name']}: pre-shared keys removed (keyring {ios['ikev2_keyring']}; no tunnel of this router uses one)")
+            sas = parse_sas(r.show("show crypto ikev2 sa detail"))
+            wrong = [x for x in sas if x["remote"] in expected[d["name"]] and (x.get("auth_sign"), x.get("auth_verify")) != (expected[d["name"]][x["remote"]],) * 2]
             if rekey and sas:   # a renewal: the peers must see the new certificate now, not at the next re-authentication
                 r.show("clear crypto ikev2 sa", timeout=60); changed.append(f"{len(sas)} SA(s) cleared"); log(f"{d['name']}: {len(sas)} IKEv2 SA(s) cleared — re-authenticating with the renewed certificate")
-            elif stale:
-                r.show("clear crypto ikev2 sa", timeout=60); changed.append(f"{len(stale)} SA(s) cleared"); log(f"{d['name']}: {len(stale)} IKEv2 SA(s) still on pre-shared keys cleared — re-authenticating with certificates")
+            elif wrong:
+                r.show("clear crypto ikev2 sa", timeout=60); changed.append(f"{len(wrong)} SA(s) cleared"); log(f"{d['name']}: {len(wrong)} IKEv2 SA(s) authenticated the old way cleared — re-authenticating as modelled")
             report["devices"][d["name"]] = {"changed": changed}
         deadline = time.time() + wait
         for d in routers:
-            r = conns[d["name"]]
+            r = conns[d["name"]]; want = expected[d["name"]]
             while True:
-                sas = parse_sas(r.show("show crypto ikev2 sa detail")); good = [x for x in sas if x["status"] == "READY" and x.get("auth_sign") == "RSA" and x.get("auth_verify") == "RSA"]
-                if len(good) >= expected[d["name"]]: break
-                if time.time() > deadline: raise RuntimeError(f"{d['name']}: {len(good)}/{expected[d['name']]} tunnels READY with RSA authentication after {wait}s: {sas}")
+                sas = parse_sas(r.show("show crypto ikev2 sa detail"))
+                good = {x["remote"] for x in sas if x["status"] == "READY" and x["remote"] in want and (x.get("auth_sign"), x.get("auth_verify")) == (want[x["remote"]],) * 2}
+                if good == set(want): break
+                if time.time() > deadline: raise RuntimeError(f"{d['name']}: {len(good)}/{len(want)} tunnels READY with the modelled authentication after {wait}s (missing {sorted(set(want) - good)}): {sas}")
                 time.sleep(5)
             if report["devices"][d["name"]]["changed"]: r.show("write memory", timeout=60)
-            report["devices"][d["name"]].update(sas_rsa=len(good), expected=expected[d["name"]]); log(f"{d['name']}: {len(good)}/{expected[d['name']]} IKEv2 SAs READY, authenticated with certificates")
+            by = {}
+            for ip, m in want.items(): by[m] = by.get(m, 0) + 1
+            report["devices"][d["name"]].update(sas_ok=len(good), expected=len(want), by_method=by)
+            log(f"{d['name']}: {len(good)}/{len(want)} IKEv2 SAs READY, authenticated as modelled ({', '.join(f'{v} {k}' for k, v in sorted(by.items()))})")
     finally:
         for r in conns.values(): r.close()
     return report

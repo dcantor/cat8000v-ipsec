@@ -64,7 +64,7 @@ The VPN is modelled in Nautobot's core VPN app: one VPN, one tunnel per hub/spok
         Should Be Equal    ${t}[tunnel_id]    ${x}[id]
         Should Be Equal    ${t}[encapsulation]    IPSEC_TUNNEL
         Should Be Equal    ${t}[status][name]    Active
-        Should Be Equal    ${t}[vpn_profile][name]    ${VPN_PROFILE}
+        Should Be Equal    ${t}[vpn_profile][name]    ${PROFILE_NAMES}[${SPOKE_AUTH}[${x}[spoke]]][profile]    msg=tunnel ${t}[name]: the profile must follow the spoke's authentication
         # endpoint A = hub: source GiN with the WAN address, tunnel interface TunnelN, protects its LAN + loopback
         ${a}=    Set Variable    ${t}[endpoint_a]
         Should Be Equal    ${a}[role][name]    hub
@@ -117,11 +117,16 @@ Locations form the hierarchy lab site -> region -> branch, with site metadata on
     ${rg}=    Nautobot Graphql    { locations(location_type:"Region") { name } }
     Should Be Equal    ${{ sorted([l["name"] for l in $rg["locations"]]) }}    ${{ sorted($REGIONS) }}
 
-Every spoke uses its own pre-shared key on all of its tunnels and each headend keys per spoke
-    [Documentation]    PSK mode only: with certificates (suite 08) no keyring exists on any router.
-    Skip If    '${IKE_AUTH}' == 'certificate'    IKE authenticates with certificates: no pre-shared keys on the routers (suite 08 proves the keyrings are gone)
+Every PSK spoke uses its own pre-shared key on all of its tunnels, each headend keys per PSK spoke and holds no key for a certificate spoke
+    [Documentation]    Each spoke chooses PSK or certificate (device ike_authentication, else the lab default): a keyring exists only on
+    ...    routers with a key-authenticated tunnel and lists exactly those peers (suite 08 proves the certificate side).
+    Skip If    not $PSK_ROUTERS    no spoke authenticates with a pre-shared key: no keyring anywhere (suite 08 proves it)
     FOR    ${s}    IN    @{SPOKES}
         ${kr}=    Show    ${s}    show run | section crypto ikev2 keyring
+        IF    '${SPOKE_AUTH}[${s}]' == 'certificate'
+            Should Be Empty    ${kr.strip()}    msg=${s} authenticates with a certificate but still holds a keyring
+            CONTINUE
+        END
         FOR    ${t}    IN    @{SPOKE_TUNNELS}[${s}]
             Should Match Regexp    ${kr}    (?s)peer ${t}[hub]\\s+address ${t}[hub_wan]\\s+pre-shared-key ${ROUTERS}[${s}][psk]
         END
@@ -133,12 +138,19 @@ Every spoke uses its own pre-shared key on all of its tunnels and each headend k
     FOR    ${h}    IN    @{HUBS}
         ${kr}=    Show    ${h}    show run | section crypto ikev2 keyring
         FOR    ${t}    IN    @{HUB_TUNNELS}[${h}]
-            Should Match Regexp    ${kr}    (?s)peer ${t}[spoke]\\s+address ${t}[spoke_wan]\\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]
+            IF    '${t}[auth]' == 'psk'
+                Should Match Regexp    ${kr}    (?s)peer ${t}[spoke]\\s+address ${t}[spoke_wan]\\s+pre-shared-key ${ROUTERS}[${t}[spoke]][psk]
+            ELSE
+                Should Not Contain    ${kr}    peer ${t}[spoke]    msg=${h} keys for ${t}[spoke], which authenticates with a certificate
+                Should Not Contain    ${kr}    ${ROUTERS}[${t}[spoke]][psk]
+            END
         END
         Should Not Contain    ${kr}    address 0.0.0.0    msg=${h} still has the wildcard peer
     END
 
 The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies and matches the routers
+    [Documentation]    One VPN profile per authentication method in use (the lab default keeps the intent's names, the other one is suffixed);
+    ...    every tunnel references its spoke's profile; each router runs the profiles its tunnels use.
     ${d}=    Nautobot Graphql    { vpn_profiles(name:"${VPN_PROFILE}") { name keepalive_enabled keepalive_interval keepalive_retries extra_options vpn_phase1_policies { name ike_version encryption_algorithm integrity_algorithm dh_group lifetime_seconds authentication_method } vpn_phase2_policies { name encryption_algorithm integrity_algorithm lifetime } } }
     Length Should Be    ${d}[vpn_profiles]    1
     ${prof}=    Set Variable    ${d}[vpn_profiles][0]
@@ -149,6 +161,17 @@ The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies an
     ${p2}=    Set Variable    ${prof}[vpn_phase2_policies][0]
     Should Be Equal    ${p1}[ike_version]    IKEV2
     Should Be Equal    ${p1}[authentication_method]    ${{ 'RSA' if $IKE_AUTH == 'certificate' else 'PSK' }}
+    ${other}=    Set Variable    ${{ 'psk' if $IKE_AUTH == 'certificate' else 'certificate' }}
+    ${d2}=    Nautobot Graphql    { vpn_profiles(name:"${PROFILE_NAMES}[${other}][profile]") { name extra_options vpn_phase1_policies { authentication_method } } }
+    IF    $other in {a for a in $SPOKE_AUTH.values()}
+        Length Should Be    ${d2}[vpn_profiles]    1    msg=a spoke chose ${other} but its VPN profile ${PROFILE_NAMES}[${other}][profile] is not in Nautobot
+        Should Be Equal    ${d2}[vpn_profiles][0][vpn_phase1_policies][0][authentication_method]    ${{ 'RSA' if $other == 'certificate' else 'PSK' }}
+        Should Be Equal    ${d2}[vpn_profiles][0][extra_options][ios][ikev2_profile]    ${PROFILE_NAMES}[${other}][ikev2_profile]
+    END
+    ${tuns}=    Nautobot Graphql    { vpn_tunnels { name vpn_profile { name } endpoint_z { device { name } } } }
+    FOR    ${t}    IN    @{tuns}[vpn_tunnels]
+        Should Be Equal    ${t}[vpn_profile][name]    ${PROFILE_NAMES}[${SPOKE_AUTH}[${t}[endpoint_z][device][name]]][profile]    msg=tunnel ${t}[name] references the wrong VPN profile for its spoke's authentication
+    END
     Should Be Equal    ${p1}[encryption_algorithm]    ${{ [$IKE['encryption']] }}
     Should Be Equal    ${p1}[integrity_algorithm]    ${{ [$IKE['integrity']] }}
     Should Be Equal    ${p1}[dh_group]    ${{ [str($IKE['dh_group'])] }}
@@ -162,10 +185,12 @@ The IKEv2/IPsec suite comes from the VPN profile's Phase 1 / Phase 2 policies an
         Should Match Regexp    ${sa}    DH Group   : \\S+/Group ${IKE}[dh_group]\\b
         ${ts}=    Show    ${r}    show crypto ipsec transform-set ${ios}[transform_set]
         Should Match Regexp    ${ts}    \\{ ${ESP_TRANSFORM}\\s*\\}
-        ${prof_out}=    Show    ${r}    show crypto ikev2 profile ${ios}[ikev2_profile]
-        Should Contain    ${prof_out}    ${{ 'Keyring: none' if $IKE_AUTH == 'certificate' else 'Keyring: ' + $ios['ikev2_keyring'] }}
-        IF    ${prof}[keepalive_enabled]
-            Should Contain    ${prof_out}    DPD: interval ${prof}[keepalive_interval], retry-interval ${prof}[keepalive_retries], on-demand
+        FOR    ${a}    IN    @{ROUTER_AUTHS}[${r}]
+            ${prof_out}=    Show    ${r}    show crypto ikev2 profile ${PROFILE_NAMES}[${a}][ikev2_profile]
+            Should Contain    ${prof_out}    ${{ 'Keyring: none' if $a == 'certificate' else 'Keyring: ' + $ios['ikev2_keyring'] }}
+            IF    ${prof}[keepalive_enabled]
+                Should Contain    ${prof_out}    DPD: interval ${prof}[keepalive_interval], retry-interval ${prof}[keepalive_retries], on-demand
+            END
         END
         ${sa}=    Show    ${r}    show crypto ikev2 sa | include READY
         Should Match Regexp    ${sa}    READY

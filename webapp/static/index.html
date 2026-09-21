@@ -105,7 +105,7 @@
 
     <div class="card">
       <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
-      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th id="th-psk">PSK</th><th id="th-cert" hidden>Certificate</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
+      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th id="th-auth">IKE auth</th><th id="th-psk">PSK</th><th id="th-cert">Certificate</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
       <div class="hint">Each spoke has its own pre-shared key (used on all of its tunnels); headends hold one keyring entry per spoke. Keys live in the intent and the NAC device group, never in Nautobot.</div>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
     </div>
@@ -152,7 +152,7 @@
         <div><label>IKEv2 integrity / PRF</label><select id="profile.ike.integrity"><option>SHA256</option><option>SHA384</option><option>SHA512</option><option>SHA1</option></select></div>
         <div><label>DH group</label><select id="profile.ike.dh_group"><option>14</option><option>19</option><option>20</option><option>21</option><option>24</option></select></div>
         <div><label>IKE SA lifetime (s)</label><input id="profile.ike.lifetime" type="number" min="120" max="86400"></div>
-        <div><label>IKE authentication</label><select id="profile.ike.authentication" title="certificate: every router enrols with the lab CA (pki/ca.py) and the IKEv2 profile authenticates with rsa-sig; the pre-shared keys stay in the intent, unused"><option value="psk">pre-shared keys (one per spoke)</option><option value="certificate">certificates (lab CA, rsa-sig)</option></select></div>
+        <div><label>IKE authentication (lab default)</label><select id="profile.ike.authentication" title="the default for spokes that do not choose: each branch picks pre-shared key or certificate when it is provisioned (and can change later); headends serve both"><option value="psk">pre-shared keys (one per spoke)</option><option value="certificate">certificates (lab CA, rsa-sig)</option></select></div>
         <div><label>Certificate validity (days)</label><input id="profile.pki.validity_days" type="number" min="30" max="3650" title="lifetime of a router certificate; renewed by the pki step within renew_before_days of expiry"></div>
         <div><label>ESP encryption</label><select id="profile.ipsec.encryption"><option>AES-256-CBC</option><option>AES-192-CBC</option><option>AES-128-CBC</option><option>AES-256-GCM</option><option>AES-128-GCM</option></select></div>
         <div><label>ESP integrity</label><select id="profile.ipsec.integrity"><option>SHA256</option><option>SHA384</option><option>SHA512</option><option>SHA1</option><option>MD5</option></select></div>
@@ -273,7 +273,8 @@
         <div><label>Coordinates <span class="hint">(lat / lon — filled in for a catalogue city)</span></label><div style="display:flex;gap:6px"><input id="sp.lat" type="number" step="0.0001" placeholder="lat" style="width:50%"><input id="sp.lon" type="number" step="0.0001" placeholder="lon" style="width:50%"></div></div>
         <div><label>Site code</label><input id="sp.site_code"></div>
         <div><label>Contact</label><input id="sp.contact"></div>
-        <div><label>Pre-shared key <span class="suggest">generated</span></label><input id="sp.psk" autocomplete="off"></div>
+        <div><label>IKE authentication</label><select id="sp.ike_authentication" title="how this branch authenticates IKEv2 — its own pre-shared key, or a certificate from the lab CA (enrolled during provisioning); can be changed later from the Routers table"><option value="psk">pre-shared key</option><option value="certificate">certificate (lab CA)</option></select></div>
+        <div><label>Pre-shared key <span class="suggest">generated</span></label><input id="sp.psk" autocomplete="off" title="kept in the intent even when the branch authenticates with a certificate, so it can switch back"></div>
         <div><label>Change ticket</label><input id="sp.change_ticket"></div>
         <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
         <div style="grid-column:1/-1"><label>Connect to headends <span class="hint">(select at least 2 — every spoke gets redundant headends)</span></label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
@@ -333,6 +334,17 @@
     <div class="actions" style="margin-top:16px"><button type="button" id="renew-cancel">Cancel</button><button type="button" class="primary" id="renew-go" style="margin-left:auto">Renew certificate</button></div>
   </div>
 </div>
+<div class="modal-bg" id="auth" hidden>
+  <div class="modal" style="width:min(720px,100%)">
+    <h2 style="margin:0 0 12px;font-size:16px">Change IKE authentication <span id="auth-name"></span></h2>
+    <div style="margin-bottom:10px"><label>Authenticate with</label><select id="auth-method"><option value="psk">pre-shared key (the spoke's own)</option><option value="certificate">certificate from the lab CA</option></select></div>
+    <div id="auth-body"></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="auth-golden" checked style="width:auto"> Golden Config backup + compliance afterwards</label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px"><input type="checkbox" id="auth-test" style="width:auto"> run the Robot Framework suites afterwards (≈20 min)</label>
+    <div id="auth-problems" class="problems" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:16px"><button type="button" id="auth-cancel">Cancel</button><button type="button" class="primary" id="auth-go" style="margin-left:auto">Change authentication</button></div>
+  </div>
+</div>
 <div class="modal-bg" id="rm" hidden>
   <div class="modal" style="width:min(720px,100%)">
     <h2 style="margin:0 0 12px;font-size:16px">Remove spoke <span id="rm-name"></span></h2>
@@ -370,8 +382,13 @@ function fill(I) {
     el.value = typeof v === 'boolean' ? String(v) : v;
   });
   const tb = $('devices').querySelector('tbody'); tb.innerHTML = '';
-  const certMode = ((I.profile || {}).ike || {}).authentication === 'certificate'; $('th-cert').hidden = !certMode; $('th-psk').hidden = certMode;
-  const certCell = d => { const c = (PKI.devices || {})[d.name]; if (!c) return '<span class="hint">not enrolled</span>';
+  // per-spoke IKE authentication: the spoke's own choice, else the lab default; a headend holds a certificate while any of its spokes uses one
+  const defAuth = ((I.profile || {}).ike || {}).authentication || 'psk';
+  const spokeAuth = d => d.ike_authentication || defAuth;
+  const usesCert = d => d.role === 'spoke' ? spokeAuth(d) === 'certificate' : d.role === 'hub' && I.tunnels.some(t => t.hub === d.name && spokeAuth(I.devices.find(x => x.name === t.spoke) || {}) === 'certificate');
+  const authCell = d => d.role === 'spoke' ? `<span class="pill ${spokeAuth(d) === 'certificate' ? 'hub' : ''}" title="${d.ike_authentication ? 'chosen for this branch' : 'lab default'}">${spokeAuth(d) === 'certificate' ? 'certificate' : 'PSK'}</span>${d.ike_authentication ? '' : ' <span class="hint">(default)</span>'}`
+                     : d.role === 'hub' ? `<span class="hint">${[...new Set(I.tunnels.filter(t => t.hub === d.name).map(t => spokeAuth(I.devices.find(x => x.name === t.spoke) || {})))].map(a => a === 'certificate' ? 'certificate' : 'PSK').sort().join(' + ') || '-'}</span>` : '';
+  const certCell = d => { const c = (PKI.devices || {})[d.name]; if (!usesCert(d)) return '<span class="hint">n/a</span>'; if (!c) return '<span class="hint">not enrolled</span>';
     const days = Math.floor(c.days_left); const cls = c.expired ? 'fail' : days < 30 ? 'warn' : '';
     return `<span class="pill ${cls}" title="serial ${esc(c.serial)} · issued ${esc((c.issued || '').slice(0, 10))} · SHA-1 ${esc(c.fingerprint)}">${c.expired ? 'expired' : days + ' d'}</span> <span class="hint">until ${esc((c.not_after || '').slice(0, 10))}</span>`; };
   I.devices.forEach((d, i) => {
@@ -382,10 +399,11 @@ function fill(I) {
       <td><input data-dev="${i}" data-k="site" value="${esc(d.site || '')}" style="min-width:90px"></td>
       <td>${d.role === 'firewall' ? '<span class="hint">n/a</span>' : `<input data-dev="${i}" data-k="asn" type="number" value="${d.asn ?? ''}">`}</td>
       <td>${d.role === 'firewall' ? '<span class="hint">n/a</span>' : `<input data-dev="${i}" data-k="router_id" value="${esc(d.router_id ?? '')}">`}</td><td>${d.role === 'firewall' ? `<span class="hint">${esc(d.bandwidth_mbps ? d.bandwidth_mbps + ' Mbps' : '')}</span>` : `<input data-dev="${i}" data-k="lan" value="${esc(d.lan ?? '')}">`}</td>
-      <td ${certMode ? 'hidden' : ''}>${d.role === 'spoke' ? `<input data-dev="${i}" data-k="psk" type="password" value="${esc(d.psk || '')}" style="min-width:90px" title="pre-shared key (click to reveal)" onfocus="this.type='text'" onblur="this.type='password'">` : ''}</td>
-      <td ${certMode ? '' : 'hidden'} style="white-space:nowrap">${d.role === 'firewall' ? '' : certCell(d)}</td>
+      <td style="white-space:nowrap">${authCell(d)}</td>
+      <td>${d.role === 'spoke' ? `<input data-dev="${i}" data-k="psk" type="password" value="${esc(d.psk || '')}" style="min-width:90px" title="pre-shared key (click to reveal)${spokeAuth(d) === 'certificate' ? ' — kept while the branch authenticates with a certificate, unused' : ''}" onfocus="this.type='text'" onblur="this.type='password'">` : ''}</td>
+      <td style="white-space:nowrap">${d.role === 'firewall' ? '' : certCell(d)}</td>
       <td><input data-dev="${i}" data-k="comments" value="${d.comments || ''}"></td>
-      <td style="white-space:nowrap">${d.role !== 'firewall' && certMode ? `<button type="button" class="renew" data-name="${esc(d.name)}" title="New certificate from the lab CA; every tunnel of this router re-authenticates">Renew cert…</button> ` : ''}${d.role === 'spoke' ? `${certMode ? '' : `<button type="button" class="rot" data-name="${esc(d.name)}" title="Generate a new pre-shared key and re-key every tunnel of this spoke">Rotate PSK…</button> `}<button type="button" class="rh" data-name="${esc(d.name)}" title="Change which headends this spoke connects to">Re-home…</button> <button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
+      <td style="white-space:nowrap">${d.role === 'spoke' ? `<button type="button" class="auth" data-name="${esc(d.name)}" data-current="${spokeAuth(d)}" title="Switch this branch between its pre-shared key and a certificate">Change auth…</button> ` : ''}${usesCert(d) ? `<button type="button" class="renew" data-name="${esc(d.name)}" title="New certificate from the lab CA; every tunnel of this router re-authenticates">Renew cert…</button> ` : ''}${d.role === 'spoke' ? `${spokeAuth(d) === 'psk' ? `<button type="button" class="rot" data-name="${esc(d.name)}" title="Generate a new pre-shared key and re-key every tunnel of this spoke">Rotate PSK…</button> ` : ''}<button type="button" class="rh" data-name="${esc(d.name)}" title="Change which headends this spoke connects to">Re-home…</button> <button type="button" class="rm" data-name="${esc(d.name)}" title="Decommission this spoke">Remove…</button>` : ''}</td>`;
     tb.appendChild(tr);
   });
   const tt = $('tunnels').querySelector('tbody'); tt.innerHTML = '';
@@ -405,6 +423,7 @@ function fill(I) {
   tb.querySelectorAll('button.rot').forEach(b => b.onclick = () => openRotate(b.dataset.name));
   tb.querySelectorAll('button.rh').forEach(b => b.onclick = () => openRehome(b.dataset.name));
   tb.querySelectorAll('button.renew').forEach(b => b.onclick = () => openRenew(b.dataset.name));
+  tb.querySelectorAll('button.auth').forEach(b => b.onclick = () => openAuth(b.dataset.name, b.dataset.current));
   applyRoles();
   // keep spoke labels in sync with hostname edits
   tb.querySelectorAll('input[data-k="name"]').forEach(inp => inp.addEventListener('input', () => {
@@ -503,7 +522,7 @@ $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
 // ---- add-spoke wizard -------------------------------------------------------
 let wizStep = 1, wizSpec = null;
-const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'city', 'lat', 'lon', 'site_code', 'contact', 'psk', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'city', 'lat', 'lon', 'site_code', 'contact', 'psk', 'ike_authentication', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
 // the city catalogue (GET /api/cities): a known city fills the coordinates, anything else needs them typed; the hint shows where it lands
 let CITIES = [];
 async function loadCities() { if (!CITIES.length) { try { CITIES = await (await fetch('/api/cities')).json(); } catch { CITIES = []; } } fillCityList(); }
@@ -577,7 +596,7 @@ async function wizNext() {
     $('wiz-review').innerHTML = `<div class="box"><h4>Spoke ${esc(spec.name)} (new VM, ${esc(spec.mgmt_ip)})</h4><dl>
         ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}${l.spoke.route ? ' · ' + esc(l.spoke.route) : ''}</dd>`).join('')}
         <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
-        <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)}), ${base.profile.ike.authentication === 'certificate' ? `certificates from the lab CA (rsa-sig, trustpoint ${esc((base.profile.pki || {}).trustpoint || 'LAB-CA')})` : 'pre-shared keys'}</dd>
+        <dt>Crypto</dt><dd>profile ${esc(base.profile.name)} (${esc(base.profile.ike.encryption)}/${esc(base.profile.ike.integrity)}/DH${esc(base.profile.ike.dh_group)}); IKE authentication default ${base.profile.ike.authentication === 'certificate' ? `certificates from the lab CA (rsa-sig, trustpoint ${esc((base.profile.pki || {}).trustpoint || 'LAB-CA')})` : 'pre-shared keys'}${(() => { const o = base.devices.filter(d => d.role === 'spoke' && d.ike_authentication && d.ike_authentication !== (base.profile.ike.authentication || 'psk')); return o.length ? `; ${o.map(d => `${esc(d.name)}: ${d.ike_authentication === 'certificate' ? 'certificate' : 'PSK'}`).join(', ')}` : ''; })()}</dd>
         <dt>Location</dt><dd>${esc(spec.region)} / ${esc(spec.site)} (${esc(spec.site_code || '-')}, ${esc(spec.contact || '-')}) · <b>${esc(spec.city || '?')}</b> ${spec.lat != null ? `(${spec.lat}, ${spec.lon}) — Nautobot location coordinates, shown on the map` : ''}</dd>
         <dt>PSK</dt><dd>unique to this spoke (${spec.psk.length} chars) — added to every headend's keyring</dd>
         <dt>Metadata</dt><dd>${esc(spec.change_ticket || '-')} · ${esc(spec.comments || '-')}</dd></dl></div>
@@ -671,6 +690,33 @@ $('renew-go').onclick = async () => {
   const run = await r.json(); $('renew').hidden = true; watch(run.id);
 };
 
+// ---- change-authentication dialog --------------------------------------------
+let authName = null;
+async function openAuth(name, current) {
+  authName = name; $('auth-name').textContent = name; $('auth-method').value = current === 'psk' ? 'certificate' : 'psk'; $('auth').hidden = false; await planAuth();
+}
+async function planAuth() {
+  $('auth-problems').textContent = ''; $('auth-body').innerHTML = 'loading…';
+  const d = await (await fetch(`/api/spokes/${encodeURIComponent(authName)}/auth?method=${$('auth-method').value}`)).json();
+  if (!d.problems) { $('auth-body').innerHTML = ''; $('auth-problems').textContent = d.detail || 'sign in first'; $('auth-go').disabled = true; return; }
+  if (d.problems.length) { $('auth-body').innerHTML = ''; $('auth-problems').textContent = '• ' + d.problems.join('\n• '); $('auth-go').disabled = true; return; }
+  $('auth-go').disabled = false; const nm = a => a === 'certificate' ? 'certificate' : 'pre-shared key';
+  $('auth-body').innerHTML = `<div class="review"><div class="box"><h4>Spoke ${esc(d.name)} (${esc(d.mgmt_ip)})</h4><dl>
+      <dt>Now</dt><dd>${nm(d.current)}${d.current === d.default ? ' (lab default)' : ''}</dd><dt>Wanted</dt><dd>${nm(d.wanted)} — IKEv2 profile ${esc(d.profile)}${d.wanted === d.default ? ' (lab default)' : ''}</dd>
+      <dt>On the spoke</dt><dd>${d.spoke_enrols ? 'RSA key pair, trustpoint with the pinned CA fingerprint, CA certificate, router certificate enrolled; keyring and pre-share profile removed' : 'keyring with its key and a pre-share profile matching its headends; trustpoint and certificate retired'}</dd>
+      <dt>Tunnels</dt><dd>${d.tunnels.map(t => `Tunnel${t.tunnel_id} → ${esc(t.hub)}`).join('<br>')}</dd></dl></div>
+    ${d.hub_changes.map(h => `<div class="box"><h4>Headend ${esc(h.hub)}</h4><dl><dt>Profile</dt><dd>${h.adds_profile ? `gains the ${nm(d.wanted)} profile` : `already serves ${nm(d.wanted)} spokes`}${h.drops_profile ? `; drops the ${nm(d.current)} profile (no other spoke uses it)` : ''}</dd>
+      ${h.needs_certificate ? '<dt>Certificate</dt><dd>enrols with the lab CA (first certificate spoke on this headend)</dd>' : ''}<dt>Tunnel</dt><dd>re-pointed at the ${nm(d.wanted)} IPsec profile; re-authenticates</dd></dl></div>`).join('')}</div>
+    <div class="hint" style="margin-top:10px">Order: intent → Nautobot (the tunnels move to the ${nm(d.wanted)} VPN profile) → NaC render → certificates enrolled / retired → staged terraform (new profiles first, tunnels re-pointed, old profiles last) → IKEv2 SAs re-authenticated and verified as modelled → Golden Config. Each tunnel of the spoke is down for a few seconds.</div>`;
+}
+$('auth-method').onchange = planAuth;
+$('auth-cancel').onclick = () => { $('auth').hidden = true; };
+$('auth-go').onclick = async () => {
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'auth', spoke: { name: authName, ike_authentication: $('auth-method').value }, options: { golden: $('auth-golden').checked, test: $('auth-test').checked } }) });
+  if (!r.ok) { const e = await r.json(); $('auth-problems').textContent = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); return; }
+  const run = await r.json(); $('auth').hidden = true; watch(run.id);
+};
+
 // ---- remove-spoke dialog ------------------------------------------------------
 let rmName = null;
 async function openRemove(name) {
@@ -717,7 +763,7 @@ function applyRoles() {
   const op = can('operator'), ap = can('approver');
   ['deploy', 'plan', 'testonly', 'add-spoke'].forEach(id => { const b = $(id); if (b) { b.disabled = !op; b.title = op ? '' : 'operator role required'; } });
   const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
-  document.querySelectorAll('button.rot, button.rh, button.renew').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
+  document.querySelectorAll('button.rot, button.rh, button.renew, button.auth').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
   document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
   $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span> <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
 }

@@ -106,6 +106,37 @@ def load(path=None):
     return upgrade(json.loads(p.read_text()) if p.exists() else from_lab_conf())
 
 
+AUTHS = ("psk", "certificate")
+def default_auth(I): return ((I.get("profile") or {}).get("ike") or {}).get("authentication", "psk")
+def spoke_auth(I, name):
+    """How a spoke authenticates IKEv2: its own choice (device ike_authentication — picked in the wizard, changeable later) or the
+    lab default (profile.ike.authentication). Headends follow their spokes: one IKEv2 profile per method in use."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("ike_authentication") or default_auth(I)
+def auths_in_use(I):
+    """The authentication methods any tunnel uses (plus the default, so the primary profile always exists)."""
+    return {default_auth(I)} | {spoke_auth(I, t["spoke"]) for t in I.get("tunnels") or []}
+def router_auths(I, name):
+    """The methods a router's tunnels use: a spoke has one, a headend as many as its spokes chose."""
+    return {spoke_auth(I, t["spoke"]) for t in I.get("tunnels") or [] if name in (t["hub"], t["spoke"])}
+def tunnel_wans(I):
+    """Per tunnel: the WAN addresses IKE runs between — {"id", "hub", "spoke", "hub_wan", "spoke_wan", "auth"}."""
+    out = []
+    for t in I.get("tunnels") or []:
+        sl, fw = wan_path(I, t["hub"], t["spoke"])
+        if not sl: continue
+        hl = next((l for l in I["links"] if {l["a"], l["b"]} == {fw, t["hub"]}), None) if fw else sl
+        sw = list(ipaddress.IPv4Network(sl["prefix"]).hosts()); hw = list(ipaddress.IPv4Network(hl["prefix"]).hosts())
+        out.append({"id": int(t["id"]), "hub": t["hub"], "spoke": t["spoke"], "spoke_wan": str(sw[1] if sl["b"] == t["spoke"] else sw[0]),
+                    "hub_wan": str(hw[1] if hl["b"] == t["hub"] else hw[0]), "auth": spoke_auth(I, t["spoke"])})
+    return out
+def cert_routers(I): return sorted(d["name"] for d in I["devices"] if d["role"] in ("hub", "spoke") and "certificate" in router_auths(I, d["name"]))
+def profile_names(I, auth):
+    """Cisco object names of the IKEv2 / IPsec profile for an authentication method: the intent's names for the default method,
+    suffixed -PSK / -CERT for the other one (so a lab can run both at once, and switching the default renames nothing on most routers)."""
+    ios = dict((I.get("profile") or {}).get("ios") or {}); suffix = "" if auth == default_auth(I) else ("-CERT" if auth == "certificate" else "-PSK")
+    return {**ios, "ikev2_profile": ios["ikev2_profile"] + suffix, "ipsec_profile": ios["ipsec_profile"] + suffix, "profile": (I.get("profile") or {}).get("name", "VPN-IPSEC") + suffix, "auth": auth}
+
 def firewall_of(I, hub):
     """The firewall fronting a headend (None when the headend is wired directly)."""
     return next((d["name"] for d in I["devices"] if d.get("role") == "firewall" and d.get("hub") == hub), None)
@@ -251,6 +282,7 @@ def validate(intent):
     sites = {}
     for d in devs:
         if d.get("role") == "spoke" and not re.fullmatch(r"[A-Za-z0-9_.-]{8,64}", d.get("psk") or ""): errs.append(f"{d.get('name')}: pre-shared key must be 8-64 characters, letters/digits/_.-")
+        if d.get("ike_authentication") is not None and (d.get("role") != "spoke" or d["ike_authentication"] not in AUTHS): errs.append(f"{d.get('name')}: ike_authentication is psk or certificate, on spokes only")
         if d.get("region") not in regions: errs.append(f"{d.get('name')}: region {d.get('region')!r} is not one of {regions}")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,60}", d.get("site") or ""): errs.append(f"{d.get('name')}: site name missing or invalid")
         if d.get("site") in sites and sites[d["site"]] != d.get("region"): errs.append(f"site {d['site']} is placed in two regions")

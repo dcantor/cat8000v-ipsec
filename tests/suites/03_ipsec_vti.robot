@@ -34,23 +34,29 @@ Tunnels are up/up at both ends and the tunnel subnet is reachable
         Should Match Regexp    ${p}    Success rate is (100|80) percent
     END
 
-IKEv2 SAs are READY with the modelled proposal and the modelled authentication (PSK or certificates)
-    [Documentation]    Auth sign / verify follow the intent's IKE authentication: PSK, or RSA when every router holds a certificate from the
-    ...    lab CA (suite 08 checks the certificates themselves).
+IKEv2 SAs are READY with the modelled proposal and each spoke's chosen authentication (PSK or certificate)
+    [Documentation]    Auth sign / verify follow the spoke's choice (device ike_authentication, else the lab default): PSK, or RSA when it
+    ...    holds a certificate from the lab CA (suite 08 checks the certificates themselves). A headend runs one IKEv2 profile per method.
     FOR    ${t}    IN    @{TUNNEL_LIST}
-        ${sa}=    Show    ${t}[hub]    show crypto ikev2 sa
-        Should Match Regexp    ${sa}    (?m)^\\d+\\s+${t}[hub_wan]/500\\s+${t}[spoke_wan]/500\\s+none/none\\s+READY
-        Should Contain    ${sa}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: ${IKE_AUTH_SHOW}, Auth verify: ${IKE_AUTH_SHOW}
+        ${sa}=    Show    ${t}[hub]    show crypto ikev2 sa detail
+        ${block}=    Sa Block    ${sa}    ${t}[spoke_wan]
+        Should Match Regexp    ${block}    (?m)^\\d+\\s+${t}[hub_wan]/500\\s+${t}[spoke_wan]/500\\s+none/none\\s+READY
+        Should Contain    ${block}    Encr: ${IKE_SA_ENCR}, PRF: ${IKE}[integrity], Hash: ${IKE}[integrity], DH Grp:${IKE}[dh_group], Auth sign: ${t}[auth_show], Auth verify: ${t}[auth_show]
         ${ssa}=    Show    ${t}[spoke]    show crypto ikev2 sa
         Should Match Regexp    ${ssa}    (?m)^\\d+\\s+${t}[spoke_wan]/500\\s+${t}[hub_wan]/500\\s+none/none\\s+READY
     END
     FOR    ${r}    IN    @{ROUTER_NAMES}
-        ${prof}=    Show    ${r}    show crypto ikev2 profile
-        Should Contain    ${prof}    IKEv2 profile: ${IKEV2_PROFILE}
-        Should Contain    ${prof}    Local authentication method: ${IKE_AUTH_METHOD}
-        IF    ${DPD}[enabled]
-            Should Contain    ${prof}    DPD: interval ${DPD}[interval], retry-interval ${DPD}[retries], on-demand
+        FOR    ${a}    IN    @{ROUTER_AUTHS}[${r}]
+            ${prof}=    Show    ${r}    show crypto ikev2 profile ${PROFILE_NAMES}[${a}][ikev2_profile]
+            Should Contain    ${prof}    IKEv2 profile: ${PROFILE_NAMES}[${a}][ikev2_profile]
+            Should Contain    ${prof}    Local authentication method: ${{ 'rsa-sig' if $a == 'certificate' else 'pre-share' }}
+            IF    ${DPD}[enabled]
+                Should Contain    ${prof}    DPD: interval ${DPD}[interval], retry-interval ${DPD}[retries], on-demand
+            END
         END
+        ${all}=    Show    ${r}    show crypto ikev2 profile | include IKEv2 profile:
+        ${n}=    Get Line Count    ${all.strip()}
+        Should Be Equal As Integers    ${n}    ${{ len($ROUTER_AUTHS[$r]) }}    msg=${r}: one IKEv2 profile per authentication method in use, got ${all}
     END
 
 Traffic through the tunnels is encrypted with the modelled transform set
@@ -73,6 +79,14 @@ Each hub holds exactly one IKEv2 session per spoke tunnel
     END
 
 *** Keywords ***
+Sa Block
+    [Documentation]    The IKEv2 SA detail block whose remote address is the given one.
+    [Arguments]    ${text}    ${remote}
+    ${blocks}=    Evaluate    re.split(r'(?m)^(?=\\d+\\s+\\S+/500\\s+)', $text)    modules=re
+    ${block}=    Evaluate    ([b for b in $blocks if re.match(r'\\d+\\s+\\S+/500\\s+' + re.escape("${remote}") + '/500', b)] or [''])[0]    modules=re
+    Should Not Be Empty    ${block}    msg=no IKEv2 SA towards ${remote}
+    RETURN    ${block}
+
 Encaps Advanced
     [Arguments]    ${r}    ${iface}    ${before}
     ${after}=    Ipsec Encaps    ${r}    ${iface}

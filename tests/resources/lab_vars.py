@@ -50,11 +50,18 @@ SPOKE_TUNNELS = {s: [t for t in TUNNEL_LIST if t["spoke"] == s] for s in SPOKES}
 
 OOB_GATEWAY = _I["oob"]["gateway"]
 DOMAIN_NAME = _I["domain_name"]
-# IKE authentication: "psk" (one key per spoke) or "certificate" (every router enrolled with the lab CA — pki/, nautobot/pki.py)
-IKE_AUTH = (_I["profile"].get("ike") or {}).get("authentication", "psk")
+# IKE authentication is chosen per spoke (device ike_authentication, else the lab default profile.ike.authentication): "psk" (its own key) or
+# "certificate" (enrolled with the lab CA — pki/, nautobot/pki.py). A headend serves one IKEv2 / IPsec profile per method its spokes use.
+IKE_AUTH = intent_mod.default_auth(_I)                                        # the lab default
+SPOKE_AUTH = {s: intent_mod.spoke_auth(_I, s) for s in SPOKES}
+for _t in TUNNEL_LIST: _t["auth"] = SPOKE_AUTH[_t["spoke"]]; _t["auth_show"] = "RSA" if _t["auth"] == "certificate" else "PSK"
+ROUTER_AUTHS = {r: sorted(intent_mod.router_auths(_I, r)) for r in ROUTER_NAMES}   # the methods each router's tunnels use
+CERT_ROUTERS = intent_mod.cert_routers(_I)                                    # routers holding a certificate (any certificate-authenticated tunnel)
+PSK_ROUTERS = sorted(r for r in ROUTER_NAMES if "psk" in ROUTER_AUTHS[r])       # routers holding a keyring
+PROFILE_NAMES = {a: intent_mod.profile_names(_I, a) for a in ("psk", "certificate")}   # Cisco / Nautobot names per method
 PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP", "validity_days": 365, "renew_before_days": 30}, **(_I["profile"].get("pki") or {})}
-IKE_AUTH_SHOW = "RSA" if IKE_AUTH == "certificate" else "PSK"                 # as `show crypto ikev2 sa detail` prints Auth sign / verify
-IKE_AUTH_METHOD = "rsa-sig" if IKE_AUTH == "certificate" else "pre-share"     # as `show crypto ikev2 profile` prints the authentication method
+IKE_AUTH_SHOW = "RSA" if IKE_AUTH == "certificate" else "PSK"                 # as `show crypto ikev2 sa detail` prints Auth sign / verify (lab default)
+IKE_AUTH_METHOD = "rsa-sig" if IKE_AUTH == "certificate" else "pre-share"     # as `show crypto ikev2 profile` prints the authentication method (lab default)
 MGMT_ACL = _I["oob"]["acl"]
 IKEV2_PROFILE = _I["profile"]["ios"]["ikev2_profile"]
 PROFILE_NAME = _I["profile"]["name"]

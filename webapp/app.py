@@ -45,6 +45,7 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "rot_validate": "Validate the rotation (spoke, tunnels, headends)", "rot_intent": "New pre-shared key into the intent",
                "rot_rekey": "Re-key: clear the spoke's IKEv2 SAs", "rot_verify": "Verify: IKEv2 READY and eBGP Established on every tunnel",
                "pki": "Certificates: enrol the routers with the lab CA (trustpoint, CA cert, router cert)", "pki_verify": "Certificates: pre-shared keys off the routers, every tunnel re-authenticated with RSA",
+               "auth_validate": "Validate the authentication change (spoke, headends, profiles)", "auth_intent": "Record the spoke's authentication in the intent",
                "renew_validate": "Validate the renewal (router, current certificate)", "renew_pki": "Renew: new CSR signed by the lab CA and imported", "renew_verify": "Verify: every tunnel of the router re-authenticated with the new certificate",
                "hub_validate": "Validate hub allocation", "hub_labconf": "Register the hub in lab.conf + day-0 config (links to every spoke)",
                "hub_vm": "Create and boot the hub VM", "hub_bootstrap": "Bootstrap (day-0, license reload, RESTCONF)", "hub_onboard": "Onboard the hub into Nautobot",
@@ -208,6 +209,14 @@ class Run(RunBase):
             # new key -> intent -> Nautobot (fingerprint + date on the tunnels) -> NaC render (group variable) -> terraform on the spoke
             # and every headend's keyring -> clear the spoke's SAs so the new key is used now -> every tunnel back up
             steps = ["rot_validate", "rot_intent", "nautobot", "render", "plan", "apply", "rot_rekey", "rot_verify"]
+            if self.options.get("golden", True): steps.append("golden")
+            if self.options.get("test", False): steps.append("test")
+            return steps
+        if self.mode == "auth":
+            # a deployed spoke switches between pre-shared key and certificate: intent -> Nautobot (its tunnels move to the other profile;
+            # a headend gains / loses a profile) -> render -> pki (enrol or retire) -> staged terraform on the spoke and its headends ->
+            # SAs re-authenticated and verified as modelled -> Golden Config
+            steps = ["auth_validate", "auth_intent", "nautobot", "render", "pki", "plan", "apply", "pki_verify"]
             if self.options.get("golden", True): steps.append("golden")
             if self.options.get("test", False): steps.append("test")
             return steps
@@ -418,17 +427,30 @@ class Run(RunBase):
         rc = self.sh(["./lab.sh", "nautobot", "pki"])
         if rc: raise RuntimeError(f"certificate enrolment failed (rc={rc})")
         lines = [l["line"] for l in self.log if re.match(r"^\S+: (ok|renewed) — ", l["line"])]
-        renewed = [l.split(":")[0] for l in lines if ": renewed" in l]
-        s["summary"] = ("IKE authenticates with pre-shared keys: nothing to enrol" if any("nothing to enrol" in l["line"] for l in self.log[-5:]) else
-                        f"{len(lines)} router(s) hold a certificate from the lab CA" + (f"; enrolled now: {', '.join(renewed)}" if renewed else ""))
+        renewed = [l.split(":")[0] for l in lines if ": renewed" in l]; retired = [l["line"].split(":")[0] for l in self.log if l["line"].endswith("certificate retired (keys only)")]
+        s["summary"] = (f"{len(lines)} router(s) hold a certificate from the lab CA" if lines else "no router authenticates with a certificate") + \
+                       (f"; enrolled now: {', '.join(renewed)}" if renewed else "") + (f"; retired (keys only now): {', '.join(retired)}" if retired else "")
 
     def do_pki_verify(self, s):
         """After Terraform put the IKEv2 profiles on rsa-sig: the keyrings (pre-shared keys) leave the routers, SAs still authenticated
         with a key are cleared, and every tunnel must come back READY with RSA both ways. A no-op in PSK mode."""
         rc = self.sh(["./lab.sh", "nautobot", "pki", "--post-apply"])
         if rc: raise RuntimeError(f"certificate verification failed (rc={rc})")
-        done = [l["line"] for l in self.log if "IKEv2 SAs READY, authenticated with certificates" in l["line"]]
-        s["summary"] = "; ".join(x.split(" IKEv2")[0] for x in done) or "IKE authenticates with pre-shared keys: nothing to verify"
+        done = [l["line"] for l in self.log if "IKEv2 SAs READY, authenticated as modelled" in l["line"]]
+        s["summary"] = "; ".join(x.split(" IKEv2")[0] + " " + x.split("(")[-1].rstrip(")") for x in done) or "verified"
+
+    def do_auth_validate(self, s):
+        problems, det = spokes.auth_plan(self.spoke["name"], self.spoke.get("ike_authentication"))
+        if problems: raise RuntimeError("cannot change the authentication: " + "; ".join(problems))
+        self.auth_change = det
+        s["summary"] = f"{det['name']}: {det['current']} -> {det['wanted']} on {len(det['tunnels'])} tunnel(s) to {', '.join(det['headends'])}; " + \
+                       "; ".join(f"{h['hub']} {'gains' if h['adds_profile'] else 'keeps'} the {det['wanted']} profile{', enrols' if h['needs_certificate'] else ''}{', drops the ' + det['current'] + ' profile' if h['drops_profile'] else ''}" for h in det["hub_changes"])
+        self.say(s["summary"])
+
+    def do_auth_intent(self, s):
+        spokes.set_auth(self.spoke["name"], self.spoke["ike_authentication"])
+        s["summary"] = f"{self.spoke['name']}: ike_authentication = {self.spoke['ike_authentication']} in lab-intent.json" + (" (the lab default; the override is dropped)" if self.spoke["ike_authentication"] == self.auth_change["default"] else "")
+        self.say(s["summary"])
 
     def do_renew_validate(self, s):
         problems, det = spokes.renewal_plan(self.spoke["name"])
@@ -446,7 +468,7 @@ class Run(RunBase):
     def do_renew_verify(self, s):
         rc = self.sh(["./lab.sh", "nautobot", "pki", "--post-apply", "--rekey", self.spoke["name"]])
         if rc: raise RuntimeError(f"verification after the renewal failed (rc={rc})")
-        m = [l["line"] for l in self.log if "IKEv2 SAs READY, authenticated with certificates" in l["line"]]
+        m = [l["line"] for l in self.log if "IKEv2 SAs READY, authenticated as modelled" in l["line"]]
         s["summary"] = m[-1] if m else "verified"
 
     # ---- PSK rotation steps -----------------------------------------------------
@@ -529,16 +551,13 @@ class Run(RunBase):
     def do_apply(self, s):
         if getattr(self, "plan_rc", 2) == 0:
             s["summary"] = "nothing to apply"; self.say("no changes — skipping apply"); return
-        # the NAC module has no dependency from tunnel interfaces to the IPsec profile they reference, so on a new
-        # router the VTI could be pushed before its profile exists ("Device refused one or more commands"):
-        # create the crypto profiles (and everything they depend on) first
-        rc = self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1",
-                      "-target=module.iosxe.iosxe_crypto_ipsec_profile.crypto_ipsec_profile"])
-        if rc: raise RuntimeError(f"terraform apply (crypto profiles first) failed (rc={rc})")
-        rc = self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1"])
-        if rc: raise RuntimeError(f"terraform apply failed (rc={rc})")
+        # the NAC module has no dependency from tunnel interfaces to the IPsec / IKEv2 profile they reference: a VTI could be pushed
+        # before its new profile exists, or an old profile deleted while a tunnel still uses it — tools/nac_apply.py applies the plan in
+        # stages (creates, then in-place updates, then the rest), each a saved plan
+        rc = self.sh([sys.executable, "tools/nac_apply.py"])
+        if rc: raise RuntimeError(f"staged terraform apply failed (rc={rc})")
         summary = [l["line"] for l in self.log if l["line"].startswith("Apply complete")]
-        s["summary"] = summary[-1] if summary else "applied"
+        s["summary"] = "; ".join(x.replace("Apply complete! Resources: ", "") for x in summary) or "applied"
         # IOS-XE re-syncs its YANG datastore after interface deletions/reloads and then elides some values (e.g. the
         # transform-set key size), which reads back as drift: converge with one more apply instead of failing later
         rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", "-parallelism=1"])
@@ -639,8 +658,11 @@ def tunnel_metrics(data, L):
         if lv.get("ike_sessions") is not None: out.append(metric_line("lab_headend_ike_sessions", lab, lv["ike_sessions"]))
     # certificates (pki/index.json — what the lab CA issued; the pki step keeps the routers on it): expiry per router, the IKE authentication mode
     try:
-        I = intent_mod.load(); cert_mode = (I.get("profile", {}).get("ike") or {}).get("authentication", "psk") == "certificate"; st = lab_ca.status()
-        out += ["# HELP lab_ike_certificate_auth 1 when IKE authenticates with certificates from the lab CA, 0 with pre-shared keys", "# TYPE lab_ike_certificate_auth gauge", metric_line("lab_ike_certificate_auth", {"lab": L}, int(cert_mode)),
+        I = intent_mod.load(); cert_mode = intent_mod.default_auth(I) == "certificate"; st = lab_ca.status()
+        out += ["# HELP lab_ike_certificate_auth 1 when the lab default IKE authentication is certificates from the lab CA, 0 when pre-shared keys (spokes may choose per site)", "# TYPE lab_ike_certificate_auth gauge", metric_line("lab_ike_certificate_auth", {"lab": L}, int(cert_mode)),
+                "# HELP lab_spoke_certificate_auth 1 when the spoke authenticates IKEv2 with a certificate, 0 with its pre-shared key", "# TYPE lab_spoke_certificate_auth gauge"]
+        out += [metric_line("lab_spoke_certificate_auth", {"lab": L, "spoke": d["name"]}, int(intent_mod.spoke_auth(I, d["name"]) == "certificate")) for d in I.get("devices", []) if d["role"] == "spoke"]
+        out += [
                 "# HELP lab_cert_not_after_seconds Expiry of the router certificate the lab CA issued (unix time)", "# TYPE lab_cert_not_after_seconds gauge"]
         roles = {d["name"]: d["role"] for d in I.get("devices", [])}
         for dev, e in (st.get("devices") or {}).items():
@@ -805,10 +827,17 @@ def renewal_plan(name: str):
     return {"ok": not problems, "problems": problems, **(details or {})}
 
 
+@app.get("/api/spokes/{name}/auth", tags=["provisioning"], summary="Plan an authentication change for a spoke (?method=psk|certificate): what it does on the spoke and its headends")
+def auth_plan(name: str, method: str = Query(..., pattern="^(psk|certificate)$")):
+    problems, details = spokes.auth_plan(name, method)
+    return {"ok": not problems, "problems": problems, **(details or {})}
+
+
 @app.get("/api/pki", tags=["monitoring"], summary="The lab CA and every router certificate it issued (pki/index.json), with days left; the IKE authentication mode")
 def pki_status():
     I = intent_mod.load(); st = lab_ca.status()
-    return {"authentication": (I.get("profile", {}).get("ike") or {}).get("authentication", "psk"), "pki": I.get("profile", {}).get("pki") or {}, **st}
+    return {"authentication": intent_mod.default_auth(I), "pki": I.get("profile", {}).get("pki") or {}, "in_use": sorted(intent_mod.auths_in_use(I)),
+            "spokes": {d["name"]: intent_mod.spoke_auth(I, d["name"]) for d in I["devices"] if d["role"] == "spoke"}, "cert_routers": intent_mod.cert_routers(I), **st}
 
 
 @app.get("/api/spokes/{name}/rotation", tags=["provisioning"], summary="Plan a PSK rotation for a spoke (what it touches; the current key's fingerprint)")
@@ -841,14 +870,21 @@ def start_run(body: S.RunRequest, request: Request):
     * **rotate** – `spoke.name` (optional `spoke.psk` to set a chosen key): new pre-shared key → intent → Nautobot (fingerprint + date on the
       tunnels) → NaC render → terraform on the spoke and every headend → clear the spoke's IKEv2 SAs → verify every tunnel is back
       (IKEv2 READY + eBGP Established) → Golden Config; tests optional (`options.test`, default off)
-    * **renew** – `spoke.name` (any router, headend or spoke; IKE authentication `certificate`): a new CSR from the router, signed by the
+    * **auth** – `spoke.name` + `spoke.ike_authentication` (psk | certificate): a deployed spoke switches its IKEv2 authentication —
+      intent → Nautobot (its tunnels move to the other VPN profile; headends gain / drop a profile) → NaC render → certificates enrolled
+      (or retired) → staged terraform on the spoke and its headends → SAs re-authenticated and verified as modelled → Golden Config
+    * **renew** – `spoke.name` (any router with a certificate-authenticated tunnel): a new CSR from the router, signed by the
       lab CA, imported → Nautobot's cert_* fields → the router's IKEv2 SAs cleared → every tunnel back READY with RSA; tests optional
     """
     body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome or renew")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome, renew or auth")
     spoke = None
-    if mode == "renew":
+    if mode == "auth":
+        spoke = body.get("spoke") or {}; problems, _ = spokes.auth_plan(spoke.get("name", ""), spoke.get("ike_authentication"))
+        if problems: raise HTTPException(422, {"problems": problems})
+        intent = intent_mod.load()
+    elif mode == "renew":
         spoke = body.get("spoke") or body.get("router") or {}; problems, _ = spokes.renewal_plan(spoke.get("name", ""))
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()

@@ -82,19 +82,25 @@ def mss_cli(i):   # the module has no ip_tcp_adjust_mss attribute for tunnels: o
 
 def psk_var(name): return "psk_" + re.sub(r"[^A-Za-z0-9]", "_", name)
 
-def keyring_peers(dev):
-    """One keyring entry per far end: a headend lists each spoke (matched on the spoke's WAN address, that spoke's
-    key); a spoke lists each headend with its own key. Keys are NAC variables rendered into device_groups.nac.yaml."""
-    peers = []
+def tunnel_far_ends(dev, prof_name=None):
+    """(far endpoint, this endpoint) per tunnel of the device — optionally only the tunnels on one VPN profile."""
+    out = []
     for i in dev["interfaces"]:
         ep = i["vpn_tunnel_endpoints_tunnel"]
-        if not ep: continue
+        if not ep or (prof_name and ep["vpn_profile"]["name"] != prof_name): continue
         tun, far = far_end(ep)
-        if not far: continue
+        if far: out.append((far, ep))
+    return sorted(out, key=lambda x: x[0]["source_ipaddress"]["address"])
+
+def keyring_peers(dev, prof):
+    """One keyring entry per far end of the tunnels on the PSK profile: a headend lists each PSK spoke (matched on the spoke's WAN
+    address, that spoke's key); a spoke lists each headend with its own key. Keys are NAC variables rendered into device_groups.nac.yaml."""
+    peers = []
+    for far, ep in tunnel_far_ends(dev, prof["name"]):
         far_dev = far["device"]["name"]; is_hub = norm((ep.get("role") or {}).get("name", "")) == "HUB"
         peers.append({"name": far_dev, "ipv4_address": far["source_ipaddress"]["address"].split("/")[0], "ipv4_mask": "255.255.255.255",
                       "pre_shared_key": "${%s}" % psk_var(far_dev if is_hub else dev["name"])})
-    return sorted(peers, key=lambda x: x["ipv4_address"])
+    return peers
 
 def cert_auth(prof):
     """True when the profile's Phase 1 policy authenticates with certificates (RSA = rsa-sig against the lab CA) rather than PSK."""
@@ -108,21 +114,32 @@ def cert_auth_cli(prof):
     return (f"crypto ikev2 profile {ios['ikev2_profile']}\n match certificate {ios['certificate_map']}\n identity local dn\n"
             f" authentication remote rsa-sig\n authentication local rsa-sig\n pki trustpoint {ios['trustpoint']}\n")
 
-def crypto_model(prof, dev):
-    """NAC crypto: block from a VPN profile (one Phase 1 and one Phase 2 policy). PSK: a keyring with one entry per far end and a
-    pre-share profile; certificates: no keyring, the profile without pre-share (rsa-sig comes from cert_auth_cli)."""
-    ios, p1, p2 = prof["extra_options"]["ios"], prof["vpn_phase1_policies"][0], prof["vpn_phase2_policies"][0]
-    assert norm(p1["ike_version"]) == "IKEV2" and norm(p1["authentication_method"]) in ("PSK", "RSA"), "renderer supports IKEv2 with PSK or RSA (certificates) only"
-    cert = cert_auth(prof)
-    return {"ikev2": {"proposals": [{"name": ios["ikev2_proposal"], "encryption": [IKE_ENC[norm(e)] for e in p1["encryption_algorithm"]],
-                                     "integrity": [x.lower() for x in p1["integrity_algorithm"]], "group": list(p1["dh_group"])}],
-                      "policies": [{"name": ios["ikev2_policy"], "proposals": [ios["ikev2_proposal"]]}],
-                      **({} if cert else {"keyrings": [{"name": ios["ikev2_keyring"], "peers": keyring_peers(dev)}]}),
-                      "profiles": [{"name": ios["ikev2_profile"], "match_identity_remote_ipv4_addresses": [{"address": "0.0.0.0"}],   # no mask: IOS drops "0.0.0.0" on reload, which would read back as drift
-                                    **({} if cert else {"authentication_local_pre_share": True, "authentication_remote_pre_share": True, "keyring_local": ios["ikev2_keyring"]}),
-                                    **({"dpd_interval": prof["keepalive_interval"], "dpd_retry": prof["keepalive_retries"], "dpd_query": "on-demand"} if prof["keepalive_enabled"] else {})}]},
-            "ipsec_transform_sets": [{"name": ios["transform_set"], "esp": ESP_ENC[norm(p2["encryption_algorithm"][0])], "esp_hmac": ESP_HMAC[norm(p2["integrity_algorithm"][0])]}],
-            "ipsec_profiles": [{"name": ios["ipsec_profile"], "set_transform_set": [ios["transform_set"]], "set_ikev2_profile": ios["ikev2_profile"]}]}
+def crypto_model(profiles, dev):
+    """NAC crypto: block from the VPN profiles this router's tunnels use (one per IKE authentication method; each has one Phase 1 and one
+    Phase 2 policy, the proposal / policy / transform-set names are shared). PSK profile: a keyring with one entry per far end on it and a
+    pre-share IKEv2 profile matching exactly those peers' WAN addresses; certificate profile: no keyring, an IKEv2 profile whose match
+    (the certificate map) and rsa-sig lines come from cert_auth_cli — so a headend can serve PSK spokes and certificate spokes at once."""
+    out = {"ikev2": {"proposals": [], "policies": [], "keyrings": [], "profiles": []}, "ipsec_transform_sets": [], "ipsec_profiles": []}
+    seen = set()
+    for prof in sorted(profiles.values(), key=lambda p: p["name"]):
+        ios, p1, p2 = prof["extra_options"]["ios"], prof["vpn_phase1_policies"][0], prof["vpn_phase2_policies"][0]
+        assert norm(p1["ike_version"]) == "IKEV2" and norm(p1["authentication_method"]) in ("PSK", "RSA"), "renderer supports IKEv2 with PSK or RSA (certificates) only"
+        cert = cert_auth(prof)
+        if ios["ikev2_proposal"] not in seen:
+            out["ikev2"]["proposals"].append({"name": ios["ikev2_proposal"], "encryption": [IKE_ENC[norm(e)] for e in p1["encryption_algorithm"]], "integrity": [x.lower() for x in p1["integrity_algorithm"]], "group": list(p1["dh_group"])})
+            out["ikev2"]["policies"].append({"name": ios["ikev2_policy"], "proposals": [ios["ikev2_proposal"]]}); seen.add(ios["ikev2_proposal"])
+        if ios["transform_set"] not in seen:
+            out["ipsec_transform_sets"].append({"name": ios["transform_set"], "esp": ESP_ENC[norm(p2["encryption_algorithm"][0])], "esp_hmac": ESP_HMAC[norm(p2["integrity_algorithm"][0])]}); seen.add(ios["transform_set"])
+        dpd = {"dpd_interval": prof["keepalive_interval"], "dpd_retry": prof["keepalive_retries"], "dpd_query": "on-demand"} if prof["keepalive_enabled"] else {}
+        if cert:   # no address match: the peers are matched on their certificate (cert_auth_cli), which a PSK peer never presents
+            out["ikev2"]["profiles"].append({"name": ios["ikev2_profile"], **dpd})
+        else:
+            out["ikev2"]["keyrings"].append({"name": ios["ikev2_keyring"], "peers": keyring_peers(dev, prof)})
+            out["ikev2"]["profiles"].append({"name": ios["ikev2_profile"], "match_identity_remote_ipv4_addresses": [{"address": p["ipv4_address"], "mask": "255.255.255.255"} for p in keyring_peers(dev, prof)],
+                                             "authentication_local_pre_share": True, "authentication_remote_pre_share": True, "keyring_local": ios["ikev2_keyring"], **dpd})
+        out["ipsec_profiles"].append({"name": ios["ipsec_profile"], "set_transform_set": [ios["transform_set"]], "set_ikev2_profile": ios["ikev2_profile"]})
+    if not out["ikev2"]["keyrings"]: del out["ikev2"]["keyrings"]
+    return out
 
 def render(dev):
     name, ctx = dev["name"], dev["config_context"] or {}
@@ -150,8 +167,8 @@ def render(dev):
             templates.append({"name": f"mss_{name}_{n.lower()}", "type": "cli", "content": mss_cli(i)})
             profiles[i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]["name"]] = i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"]
             templates_vpn.append(far_end(i["vpn_tunnel_endpoints_tunnel"])[0] or {})
-    assert len(profiles) <= 1, f"{name}: one VPN profile per router is supported, got {list(profiles)}"
-    if profiles and cert_auth(next(iter(profiles.values()))): templates.append({"name": f"ikev2_cert_auth_{name}", "type": "cli", "content": cert_auth_cli(next(iter(profiles.values())))})
+    for p in sorted(profiles.values(), key=lambda p: p["name"]):
+        if cert_auth(p): templates.append({"name": f"ikev2_cert_auth_{name}", "type": "cli", "content": cert_auth_cli(p)})
     ri = bgp_ri[name]
     neighbors, afn = [], []
     for ep in sorted(ri["endpoints"], key=lambda e: e["peer"]["source_ip"]["address"] if e["peer"] else ""):
@@ -167,7 +184,7 @@ def render(dev):
             "templates": [t["name"] for t in templates], "_templates": templates,
             "variables": {"router_id": router_id, "bgp_asn": ri["autonomous_system"]["asn"]},
             "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
-                              **({"crypto": crypto_model(next(iter(profiles.values())), dev)} if profiles else {}),
+                              **({"crypto": crypto_model(profiles, dev)} if profiles else {}),
                               "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks, "tunnels": sorted(tunnels, key=lambda t: int(t["name"]))},
                               "routing": {"bgp": bgp, **({"static_routes": static_routes(dev)} if static_routes(dev) else {})}}}
 
@@ -178,11 +195,11 @@ out = ("---\n# GENERATED from Nautobot by nautobot/render_nac.py — do not edit
        + yaml.safe_dump({"iosxe": {"templates": templates, "devices": rendered}}, sort_keys=False, width=120))
 # the pre-shared keys are the one secret: one per spoke, from lab-intent.json (never in Nautobot), as NAC variables
 I = intent_mod.load()
-cert_mode = all(cert_auth(p) for d in devices for p in [next((i["vpn_tunnel_endpoints_tunnel"]["vpn_profile"] for i in d["interfaces"] if i["vpn_tunnel_endpoints_tunnel"]), None)] if p)
-groups_out = ("---\n# GENERATED by nautobot/render_nac.py — per-spoke pre-shared keys come from lab-intent.json (never stored in Nautobot)."
-              + (" IKE authentication is certificate-based: no key is rendered.\n" if cert_mode else "\n")
+psk_spokes = [d for d in I["devices"] if d["role"] == "spoke" and intent_mod.spoke_auth(I, d["name"]) == "psk"]
+groups_out = ("---\n# GENERATED by nautobot/render_nac.py — per-spoke pre-shared keys come from lab-intent.json (never stored in Nautobot);"
+              " only spokes that authenticate with a key get one (the others use certificates from the lab CA).\n"
               + yaml.safe_dump({"iosxe": {"device_groups": [{"name": rendered[0]["device_groups"][0], "devices": [d["name"] for d in rendered],
-                                                             **({} if cert_mode else {"variables": {psk_var(d["name"]): d["psk"] for d in I["devices"] if d["role"] == "spoke"}})}]}}, sort_keys=False))
+                                                             **({"variables": {psk_var(d["name"]): d["psk"] for d in psk_spokes}} if psk_spokes else {})}]}}, sort_keys=False))
 groups_path = Path(a.out).with_name("device_groups.nac.yaml")
 if a.check:
     rc = 0

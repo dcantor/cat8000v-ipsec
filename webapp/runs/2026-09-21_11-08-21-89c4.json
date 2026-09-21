@@ -1,0 +1,97 @@
+{
+ "id": "2026-09-21_11-08-21-89c4",
+ "mode": "renew",
+ "status": "success",
+ "started": 1790003301.0963671,
+ "finished": 1790003364.1570125,
+ "steps": [
+  {
+   "name": "renew_validate",
+   "title": "Validate the renewal (router, current certificate)",
+   "status": "success",
+   "started": 1790003301.1279283,
+   "finished": 1790003301.144639,
+   "summary": "spoke1: certificate 406FBA7D8A91\u2026 expires 2027-09-21, 2 tunnel(s) to re-authenticate"
+  },
+  {
+   "name": "renew_pki",
+   "title": "Renew: new CSR signed by the lab CA and imported",
+   "status": "success",
+   "started": 1790003301.1448538,
+   "finished": 1790003313.1939204,
+   "summary": "spoke1: renewed \u2014 serial 406FBA7D8A91 expires 2027-09-21"
+  },
+  {
+   "name": "renew_verify",
+   "title": "Verify: every tunnel of the router re-authenticated with the new certificate",
+   "status": "success",
+   "started": 1790003313.1943219,
+   "finished": 1790003364.1567054,
+   "summary": "verified"
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": null,
+ "options": {
+  "golden": true,
+  "test": false,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4"
+ ],
+ "spoke": {
+  "name": "spoke1"
+ },
+ "removal": null,
+ "rehome": null,
+ "user": "operator",
+ "log": [
+  {
+   "t": 1790003301.1446376,
+   "line": "spoke1: certificate 406FBA7D8A91\u2026 expires 2027-09-21, 2 tunnel(s) to re-authenticate"
+  },
+  {
+   "t": 1790003301.1451514,
+   "line": "$ ./lab.sh nautobot pki --force spoke1"
+  },
+  {
+   "t": 1790003313.1276383,
+   "line": "spoke1: enrolling \u2014 renewal requested"
+  },
+  {
+   "t": 1790003313.1276412,
+   "line": "spoke1: certificate 406FBA7D8A91\u2026 signed (until 2027-09-21), importing"
+  },
+  {
+   "t": 1790003313.1276429,
+   "line": "spoke1: renewed \u2014 serial 406FBA7D8A91 expires 2027-09-21"
+  },
+  {
+   "t": 1790003313.1944728,
+   "line": "$ ./lab.sh nautobot pki --post-apply --rekey spoke1"
+  },
+  {
+   "t": 1790003364.0960164,
+   "line": "spoke1: 2 IKEv2 SA(s) cleared \u2014 re-authenticating with the renewed certificate"
+  },
+  {
+   "t": 1790003364.0960205,
+   "line": "spoke1: 2/2 IKEv2 SAs READY, authenticated as modelled (2 RSA)"
+  }
+ ]
+}

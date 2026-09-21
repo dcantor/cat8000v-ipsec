@@ -133,37 +133,46 @@ for d in sorted(I["devices"], key=lambda x: x["role"] == "firewall"):   # router
 need = [ct for ct in ("vpn.vpn", "vpn.vpntunnel") if ct not in active.content_types]
 if need: active.update({"content_types": list(active.content_types) + need})
 vrole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["vpn.vpntunnelendpoint"]) for n, c in (("hub", "e91e63"), ("spoke", "f48fb1"))}
-ike, ipsec, dpd, ios = PROF["ike"], PROF["ipsec"], PROF["dpd"], PROF["ios"]
-# IKE authentication: the phase-1 policy carries it (PSK, or RSA = rsa-sig with certificates from the lab CA); the trustpoint / key pair /
-# certificate-map names the routers use travel with the other Cisco names in the profile's extra_options.ios
-CERT = ike.get("authentication", "psk") == "certificate"; AUTH_NB = "RSA" if CERT else "PSK"
+ike, ipsec, dpd = PROF["ike"], PROF["ipsec"], PROF["dpd"]
+# IKE authentication is chosen per spoke (device ike_authentication, else the lab default profile.ike.authentication): one VPN profile per
+# method in use — its Phase 1 policy carries the method (PSK, or RSA = rsa-sig with certificates from the lab CA), its extra_options.ios the
+# Cisco names (the default method keeps the intent's names, the other one gets -PSK / -CERT). Every tunnel references its spoke's profile;
+# a headend therefore renders one IKEv2 / IPsec profile per method its spokes use. Trustpoint / key pair / certificate-map names and the CA
+# fingerprint travel in the certificate profile's ios names.
+AUTH_DEFAULT = intent_mod.default_auth(I); AUTHS_USED = intent_mod.auths_in_use(I); CERT_ANY = "certificate" in AUTHS_USED
 PKI = {**{"trustpoint": "LAB-CA", "keypair": "LAB-VPN", "certificate_map": "LAB-CERT-MAP"}, **{k: v for k, v in (PROF.get("pki") or {}).items() if k in ("trustpoint", "keypair", "certificate_map")}}
-if CERT:
+if CERT_ANY:
     sys.path.insert(0, str(LAB / "pki")); import ca as lab_ca   # noqa: E402
     lab_ca.init(); ca_info = lab_ca.cert_info(lab_ca.CA_CRT.read_text())   # the CA certificate is public; its fingerprint is pinned on every trustpoint
-    ios = {**ios, "trustpoint": PKI["trustpoint"], "rsakeypair": PKI["keypair"], "certificate_map": PKI["certificate_map"], "ca_fingerprint": ca_info["fingerprint"], "ca_subject": ca_info["subject"]}
-else:
-    ios = {k: v for k, v in ios.items() if k not in ("trustpoint", "rsakeypair", "certificate_map", "ca_fingerprint", "ca_subject")}
-p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": ios["ikev2_profile"]}, description="IKEv2 SA (from lab-intent.json)")
-ensure(p1, ike_version="IKEv2", encryption_algorithm=[ike["encryption"]], integrity_algorithm=[ike["integrity"]], dh_group=[str(ike["dh_group"])],
-       lifetime_seconds=int(ike["lifetime"]), authentication_method=AUTH_NB, description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, {AUTH_NB}")
-p2 = get_or_create(nb.vpn.vpn_phase_2_policies, {"name": ios["transform_set"]}, description="IPsec SA (from lab-intent.json)")
+p2 = get_or_create(nb.vpn.vpn_phase_2_policies, {"name": PROF["ios"]["transform_set"]}, description="IPsec SA (from lab-intent.json)")
 ensure(p2, encryption_algorithm=[ipsec["encryption"]], integrity_algorithm=[ipsec["integrity"]], lifetime=int(ipsec["lifetime"]),
        description=f"IPsec SA: ESP {ipsec['encryption']} / {ipsec['integrity']}-HMAC, tunnel mode")
-prof = get_or_create(nb.vpn.vpn_profiles, {"name": PROF["name"]}, description=f"Static IPsec VTI, IKEv2 {AUTH_NB}")
-ensure(prof, keepalive_enabled=bool(dpd["enabled"]), keepalive_interval=int(dpd["interval"]), keepalive_retries=int(dpd["retries"]), nat_traversal=False,
-       extra_options={"ios": ios}, description=f"Static IPsec VTI, IKEv2 {'certificates (rsa-sig, lab CA)' if CERT else 'PSK'}" + (", DPD on-demand" if dpd["enabled"] else ""))
-# Nautobot 3.2.4 bug: POST to the profile<->policy assignment endpoints 500s ("unexpected keyword _custom_field_data")
-# and the profile serializer silently ignores vpn_phase1/2_policies on write, so these two rows go through the ORM
-# (nautobot-server nbshell inside the container on the NMS).
-have = gql('{ vpn_profiles(name: "%s") { vpn_phase1_policies { name } vpn_phase2_policies { name } } }' % prof.name)["vpn_profiles"][0]
-for key, pol in (("vpn_phase1_policies", p1), ("vpn_phase2_policies", p2)):
-    if [x["name"] for x in have[key]] != [pol.name]:
-        model = "VPNPhase1Policy" if key.endswith("1_policies") else "VPNPhase2Policy"
-        subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "lab@10.0.0.10",
-                        "cd /opt/nautobot && sg docker -c 'docker compose exec -T nautobot nautobot-server nbshell --quiet'"],
-                       input=f"from nautobot.vpn.models import VPNProfile, {model}\np = VPNProfile.objects.get(name={prof.name!r})\np.{key}.set([{model}.objects.get(name={pol.name!r})])\n",
-                       text=True, check=True, capture_output=True); created.append(f"{prof.name} <- {pol.name} (via nbshell)")
+PROFILES = {}   # auth -> VPN profile record
+for auth in sorted(AUTHS_USED, key=lambda x: x != AUTH_DEFAULT):
+    names = intent_mod.profile_names(I, auth); cert = auth == "certificate"; auth_nb = "RSA" if cert else "PSK"
+    ios = {k: v for k, v in names.items() if k not in ("profile", "auth")}
+    ios = {**ios, "trustpoint": PKI["trustpoint"], "rsakeypair": PKI["keypair"], "certificate_map": PKI["certificate_map"], "ca_fingerprint": ca_info["fingerprint"], "ca_subject": ca_info["subject"]} if cert else \
+          {k: v for k, v in ios.items() if k not in ("trustpoint", "rsakeypair", "certificate_map", "ca_fingerprint", "ca_subject")}
+    p1 = get_or_create(nb.vpn.vpn_phase_1_policies, {"name": ios["ikev2_profile"]}, description="IKEv2 SA (from lab-intent.json)")
+    ensure(p1, ike_version="IKEv2", encryption_algorithm=[ike["encryption"]], integrity_algorithm=[ike["integrity"]], dh_group=[str(ike["dh_group"])],
+           lifetime_seconds=int(ike["lifetime"]), authentication_method=auth_nb, description=f"IKEv2 SA: {ike['encryption']} / {ike['integrity']} / DH group {ike['dh_group']}, {auth_nb}")
+    prof = get_or_create(nb.vpn.vpn_profiles, {"name": names["profile"]}, description=f"Static IPsec VTI, IKEv2 {auth_nb}")
+    ensure(prof, keepalive_enabled=bool(dpd["enabled"]), keepalive_interval=int(dpd["interval"]), keepalive_retries=int(dpd["retries"]), nat_traversal=False,
+           extra_options={"ios": ios}, description=f"Static IPsec VTI, IKEv2 {'certificates (rsa-sig, lab CA)' if cert else 'PSK'}" + (", DPD on-demand" if dpd["enabled"] else "") + ("" if auth == AUTH_DEFAULT else f" — for spokes that chose {auth} over the lab default"))
+    # Nautobot 3.2.4 bug: POST to the profile<->policy assignment endpoints 500s ("unexpected keyword _custom_field_data")
+    # and the profile serializer silently ignores vpn_phase1/2_policies on write, so these two rows go through the ORM
+    # (nautobot-server nbshell inside the container on the NMS).
+    have = gql('{ vpn_profiles(name: "%s") { vpn_phase1_policies { name } vpn_phase2_policies { name } } }' % prof.name)["vpn_profiles"][0]
+    for key, pol in (("vpn_phase1_policies", p1), ("vpn_phase2_policies", p2)):
+        if [x["name"] for x in have[key]] != [pol.name]:
+            model = "VPNPhase1Policy" if key.endswith("1_policies") else "VPNPhase2Policy"
+            subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "lab@10.0.0.10",
+                            "cd /opt/nautobot && sg docker -c 'docker compose exec -T nautobot nautobot-server nbshell --quiet'"],
+                           input=f"from nautobot.vpn.models import VPNProfile, {model}\np = VPNProfile.objects.get(name={prof.name!r})\np.{key}.set([{model}.objects.get(name={pol.name!r})])\n",
+                           text=True, check=True, capture_output=True); created.append(f"{prof.name} <- {pol.name} (via nbshell)")
+    PROFILES[auth] = prof
+prof = PROFILES[AUTH_DEFAULT]
+def profile_of(spoke): return PROFILES[intent_mod.spoke_auth(I, spoke)]
 vpn = nb.vpn.vpns.get(vpn_profile=prof.id) or get_or_create(nb.vpn.vpns, {"name": I["vpn"]["name"]}, service_type="ipsec", status=active.id, vpn_profile=prof.id)
 ensure(vpn, name=I["vpn"]["name"], description=I["vpn"]["description"], service_type="ipsec", status=active.id, vpn_profile=prof.id,
        extra_attributes={"routing": "eBGP over the tunnel /30s", "nac_device_group": "IPSEC_VPN", "change_ticket": I["vpn"].get("change_ticket", ""), "owner": I["vpn"].get("owner", ""),
@@ -297,7 +306,7 @@ def wan_iface(r, other):
         for l in LINKS:
             if {l["a"], l["b"]} == {r, fw}: return gi[(r, l["a_port"] if l["a"] == r else l["b_port"])]
     sys.exit(f"no WAN link between {r} and {other} (or {other}'s firewall)")
-def ensure_endpoint(r, t, other):
+def ensure_endpoint(r, t, other, prof):
     src = wan_iface(r, other); src_ip = nb.ipam.ip_addresses.get(interfaces=src.id)
     # an interface can be the source of only ONE endpoint (OneToOne): a headend behind a firewall sources every
     # tunnel from the same WAN interface, so its endpoints carry the source address only
@@ -334,10 +343,11 @@ for t in TUNNELS:
         for old in nb.dcim.interfaces.filter(device=devs[r].id, type="tunnel"):
             if old.name != f"Tunnel{tid}" and old.description == f"IPsec VTI to {other}": old.delete(); created.append(f"removed {r}/{old.name}")
         ti = ensure_iface(devs[r], f"Tunnel{tid}", "tunnel", f"IPsec VTI to {other}")   # type "tunnel": required by the VPN endpoint model
-        tun_ip[(r, tid)] = ensure_ip(ti, f"{ip}/30"); drop_legacy_tunnel_model(ti); ends[r] = ensure_endpoint(r, ti, other)
+        tun_ip[(r, tid)] = ensure_ip(ti, f"{ip}/30"); drop_legacy_tunnel_model(ti); ends[r] = ensure_endpoint(r, ti, other, profile_of(spoke))
+    tp = profile_of(spoke)   # the tunnel and both its endpoints carry the profile of the spoke's chosen authentication
     tun = nb.vpn.vpn_tunnels.get(vpn=vpn.id, tunnel_id=str(tid)) or get_or_create(nb.vpn.vpn_tunnels, {"name": f"{hub}-{spoke}"}, tunnel_id=str(tid), vpn=vpn.id,
-                                                                                    vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id)
-    ensure(tun, name=f"{hub}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=prof.id, status=active.id, encapsulation="IPsec-Tunnel",
+                                                                                    vpn_profile=tp.id, status=active.id, encapsulation="IPsec-Tunnel", endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id)
+    ensure(tun, name=f"{hub}-{spoke}", tunnel_id=str(tid), vpn=vpn.id, vpn_profile=tp.id, status=active.id, encapsulation="IPsec-Tunnel",
            endpoint_a=ends[hub].id, endpoint_z=ends[spoke].id, description=f"Tunnel{tid}: {hub} <-> {spoke} ({pfx})")
     ensure_cf(tun, psk_fingerprint=hashlib.sha256(DEV[spoke]["psk"].encode()).hexdigest()[:12], psk_rotated=DEV[spoke].get("psk_rotated", ""))
     wanted_tunnels.add(tun.id)

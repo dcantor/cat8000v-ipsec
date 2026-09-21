@@ -98,46 +98,60 @@ crypto ikev2 proposal {{ ios.ikev2_proposal }}
 crypto ikev2 policy {{ ios.ikev2_policy }}
  proposal {{ ios.ikev2_proposal }}
 !
-{% if p1.authentication_method == 'RSA' %}
-{#- certificates from the lab CA: the trustpoint (nautobot/pki.py enrols it; the CA fingerprint is pinned), the map the peers are matched on -#}
-crypto pki trustpoint {{ ios.trustpoint }}
+{# one IKEv2 / IPsec profile per authentication method this router's tunnels use (each spoke chooses; a headend serves both):
+    the profiles of this router's endpoints, in name order, with the far ends that ride on each -#}
+{% set pm = namespace(profiles={}) -%}
+{% for i in interfaces if i.vpn_tunnel_endpoints_tunnel %}{% set ep = i.vpn_tunnel_endpoints_tunnel %}{% set tun = (ep.endpoint_a_vpn_tunnels + ep.endpoint_z_vpn_tunnels) | first -%}
+{% set far = tun.endpoint_z if ep.endpoint_a_vpn_tunnels else tun.endpoint_a -%}
+{% set _ = pm.profiles.update({ep.vpn_profile.name: {'prof': ep.vpn_profile, 'peers': (pm.profiles.get(ep.vpn_profile.name, {}).get('peers', []) + [far.source_ipaddress.address.split('/')[0]])}}) %}{% endfor -%}
+{% set certs = pm.profiles.values() | map(attribute='prof') | selectattr('vpn_phase1_policies.0.authentication_method', 'equalto', 'RSA') | list -%}
+{% if certs %}
+{#- certificates from the lab CA: the trustpoint (nautobot/pki.py enrols it; the CA fingerprint is pinned), the map the peers are matched on #}
+{% set cios = certs[0].extra_options.ios -%}
+crypto pki trustpoint {{ cios.trustpoint }}
  enrollment terminal pem
  fqdn {{ hostname }}.{{ config_context.domain_name }}
- fingerprint {{ ios.ca_fingerprint }}
+ fingerprint {{ cios.ca_fingerprint }}
  subject-name CN={{ hostname }}.{{ config_context.domain_name }},O=cat8000v-ipsec
  subject-alt-name {{ hostname }}.{{ config_context.domain_name }}
  revocation-check none
- rsakeypair {{ ios.rsakeypair }}
+ rsakeypair {{ cios.rsakeypair }}
  hash sha256
 !
-crypto pki certificate map {{ ios.certificate_map }} 10
- issuer-name co {{ ios.ca_subject.split(',')[0].split('=')[1] | lower }}
+crypto pki certificate map {{ cios.certificate_map }} 10
+ issuer-name co {{ cios.ca_subject.split(',')[0].split('=')[1] | lower }}
 !
-crypto ikev2 profile {{ ios.ikev2_profile }}
- match identity remote address 0.0.0.0
- match certificate {{ ios.certificate_map }}
+{% endif %}
+{% for pname in pm.profiles | sort %}{% set pp = pm.profiles[pname].prof %}{% set pios = pp.extra_options.ios %}
+crypto ikev2 profile {{ pios.ikev2_profile }}
+{% if pp.vpn_phase1_policies[0].authentication_method == 'RSA' %}
+ match certificate {{ pios.certificate_map }}
  identity local dn
  authentication remote rsa-sig
  authentication local rsa-sig
- pki trustpoint {{ ios.trustpoint }}
+ pki trustpoint {{ pios.trustpoint }}
 {% else %}
-crypto ikev2 profile {{ ios.ikev2_profile }}
- match identity remote address 0.0.0.0
+{% for peer in pm.profiles[pname].peers | sort %}
+ match identity remote address {{ peer }} 255.255.255.255
+{% endfor %}
  authentication remote pre-share
  authentication local pre-share
- keyring local {{ ios.ikev2_keyring }}
+ keyring local {{ pios.ikev2_keyring }}
 {% endif %}
-{% if prof.keepalive_enabled %}
- dpd {{ prof.keepalive_interval }} {{ prof.keepalive_retries }} on-demand
+{% if pp.keepalive_enabled %}
+ dpd {{ pp.keepalive_interval }} {{ pp.keepalive_retries }} on-demand
 {% endif %}
 !
+{% endfor %}
 crypto ipsec transform-set {{ ios.transform_set }} {{ esp_enc[p2.encryption_algorithm[0] | upper | replace('-', '_')] }} {{ esp_hmac[p2.integrity_algorithm[0] | upper] }}
  mode tunnel
 !
-crypto ipsec profile {{ ios.ipsec_profile }}
- set transform-set {{ ios.transform_set }}
- set ikev2-profile {{ ios.ikev2_profile }}
+{% for pname in pm.profiles | sort %}{% set pios = pm.profiles[pname].prof.extra_options.ios %}
+crypto ipsec profile {{ pios.ipsec_profile }}
+ set transform-set {{ pios.transform_set }}
+ set ikev2-profile {{ pios.ikev2_profile }}
 !
+{% endfor %}
 {% set own = [] %}
 {% for i in interfaces %}{% for ip in i.ip_addresses if ip.parent %}{% for t in ip.parent.tags if t.name == 'bgp:advertise' and ip.parent.prefix not in own %}{% set _ = own.append(ip.parent.prefix) %}{% endfor %}{% endfor %}{% endfor %}
 {% for ri in bgp_routing_instances %}

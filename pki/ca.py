@@ -76,6 +76,7 @@ def status():
     if CA_CRT.exists():
         out["ca"] = {**cert_info(CA_CRT.read_text()), "file": "pki/ca/ca.crt", "key_present": CA_KEY.exists()}
     for dev, e in sorted(load_index().items()):
+        if dev.startswith("_"): out[dev.lstrip("_")] = e; continue   # "_retired": certificates given back by routers that moved to pre-shared keys
         na = datetime.datetime.fromisoformat(e["not_after"])
         out["devices"][dev] = {**e, "days_left": (na - now).total_seconds() / 86400, "expired": na < now}
     return out
