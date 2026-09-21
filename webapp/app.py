@@ -890,7 +890,11 @@ def branch_config(name: str, request: Request, refresh: bool = Query(False, desc
             gc = requests.get(f"{NAUTOBOT_URL}/api/plugins/golden-config/golden-config/", params={"device": did}, headers=H, timeout=30).json()["results"]
             if gc: golden = {"intended": gc[0].get("intended_config") or "", "backup": gc[0].get("backup_config") or "", "backup_at": gc[0].get("backup_last_success_date"), "intended_at": gc[0].get("intended_last_success_date"), "compliance_at": gc[0].get("compliance_last_success_date")}
             rows = requests.get(f"{NAUTOBOT_URL}/api/plugins/golden-config/config-compliance/", params={"device": did, "depth": 2, "limit": 100}, headers=H, timeout=30).json()["results"]
-            golden["compliance"] = sorted([{"feature": r["rule"]["feature"]["name"], "compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or ""} for r in rows], key=lambda x: (x["compliant"], x["feature"]))
+            import difflib
+            def fdiff(r):   # what the router runs vs what Nautobot intends, for this feature's lines only (the compliance rule's match)
+                a, b = (r.get("actual") or "").splitlines(), (r.get("intended") or "").splitlines()
+                return "\n".join(difflib.unified_diff(a, b, fromfile="running", tofile="intended", lineterm="", n=2)) if a != b else ""
+            golden["compliance"] = sorted([{"feature": r["rule"]["feature"]["name"], "compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or "", "diff": fdiff(r)} for r in rows], key=lambda x: (x["compliant"], x["feature"]))
             golden["url"] = f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/?device={did}"
         except Exception as e:  # noqa: BLE001
             golden = {"error": f"{e.__class__.__name__}: {e}"}
@@ -900,6 +904,50 @@ def branch_config(name: str, request: Request, refresh: bool = Query(False, desc
     redact = lambda t: t if show else re.sub(r"(pre-shared-key(?: local| remote)?(?: [0-6])?) \S+", r"\1 <redacted>", t)   # keys are for operators (the Routers table shows them the same way)
     g = dict(c["golden"]); g["intended"] = redact(g.get("intended", "")); g["backup"] = redact(g.get("backup", ""))
     return {"name": name, "generated": c["generated"], "running": redact(c["running"]), "error": c["error"], "lines": len(c["running"].splitlines()), "golden": g, "keys_shown": show}
+
+
+GITEA_URL = os.environ.get("GITEA_URL", "http://10.0.0.10:3000"); GITEA_PUBLIC_URL = os.environ.get("GITEA_PUBLIC_URL", "http://192.168.50.231:3000"); BACKUPS_REPO = os.environ.get("CONFIG_BACKUPS_REPO", "lab/config-backups")
+@app.get("/api/branch/{name}/history", tags=["inventory"], summary="A router's configuration history: the Golden Config backups committed to Gitea (who / when / what changed), with the diff of one commit")
+def branch_history(name: str, sha: str = Query(None, description="return this commit's diff for the router's file"), limit: int = Query(20, le=100)):
+    """Nautobot's backup job commits `<name>.cfg` to the config-backups repository on the NMS after every run (the portal's golden
+    step, `./lab.sh nautobot golden`): the commits that touched this router's file, newest first, and — with `sha` — the unified
+    diff of that commit restricted to the file. Pre-shared keys are masked by IOS (`service password-encryption`) in the backups."""
+    I = intent_mod.load()
+    if not any(d["name"] == name and d["role"] in ("hub", "spoke") for d in I["devices"]): raise HTTPException(404, "no such router")
+    try:
+        r = requests.get(f"{GITEA_URL}/api/v1/repos/{BACKUPS_REPO}/commits", params={"path": f"{name}.cfg", "limit": limit, "stat": "false", "verification": "false"}, timeout=20); r.raise_for_status()
+        commits = [{"sha": c["sha"], "date": (c["commit"]["committer"]["date"] or "")[:19].replace("T", " "), "author": c["commit"]["author"]["name"], "message": c["commit"]["message"].strip()[:120],
+                    "url": f"{GITEA_PUBLIC_URL}/{BACKUPS_REPO}/commit/{c['sha']}"} for c in r.json()]
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Gitea: {e}")
+    out = {"name": name, "file": f"{name}.cfg", "repo": f"{GITEA_PUBLIC_URL}/{BACKUPS_REPO}", "commits": commits}
+    if sha:
+        d = requests.get(f"{GITEA_URL}/api/v1/repos/{BACKUPS_REPO}/git/commits/{sha}.diff", timeout=30)
+        if d.status_code != 200: raise HTTPException(502, f"Gitea: diff {d.status_code}")
+        parts = re.split(r"(?m)^(?=diff --git )", d.text); mine = next((p for p in parts if p.startswith(f"diff --git a/{name}.cfg ")), "")
+        out["diff"] = mine or "(this commit did not change the file)"; out["sha"] = sha
+    return out
+
+
+SHOW = {"ike": "show crypto ikev2 sa detail", "ipsec": "show crypto ipsec sa | include interface|current_peer|#pkts encaps|#pkts decaps|#send errors|#recv errors", "bgp": "show ip bgp summary",
+        "routes": "show ip route bgp", "default": "show ip route 0.0.0.0", "interfaces": "show ip interface brief", "pki": "show crypto pki certificates", "platform": "show platform resources", "log": "show logging | last 40"}
+_show_cache = {}
+@app.get("/api/branch/{name}/show/{what}", tags=["inventory"], summary="A live show command on the router (an allow-list: ike, ipsec, bgp, routes, default, interfaces, pki, platform, log)")
+def branch_show(name: str, what: str, refresh: bool = Query(False, description="run it again now (otherwise cached for 20 s)")):
+    I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name and d["role"] in ("hub", "spoke")), None)
+    if dev is None: raise HTTPException(404, "no such router")
+    if what not in SHOW: raise HTTPException(404, f"unknown snippet; one of {', '.join(SHOW)}")
+    key = (name, what); c = _show_cache.get(key)
+    if refresh or not c or time.time() - c["generated"] > 20:
+        from netmiko import ConnectHandler
+        try:
+            conn = ConnectHandler(device_type="cisco_xe", host=dev["mgmt_ip"], username=os.environ.get("IOSXE_USERNAME", "admin"), password=os.environ.get("IOSXE_PASSWORD", "admin"), conn_timeout=20, fast_cli=False)
+            try: out, err = conn.send_command(SHOW[what], read_timeout=60), None
+            finally: conn.disconnect()
+        except Exception as e:  # noqa: BLE001
+            out, err = "", f"{e.__class__.__name__}: {e}"
+        c = _show_cache[key] = {"generated": time.time(), "output": out, "error": err}
+    return {"name": name, "command": SHOW[what], **c}
 
 
 @app.get("/api/branches", tags=["inventory"], summary="Every branch and headend in one list: health of its tunnels, IKE method, certificate days left, LAN host state, last run")

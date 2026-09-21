@@ -226,10 +226,15 @@
     <div class="card"><h2>LAN host <small>the Alpine VM behind the router</small></h2><div id="br-host"></div></div>
     <div class="card"><h2>Runs that touched it <small>newest first</small></h2><table id="br-runs"><thead><tr><th>When</th><th>Run</th><th>Status</th><th>By</th><th>Tests</th></tr></thead><tbody></tbody></table></div>
   </div>
+  <div class="card"><h2>Live state <small>show commands on the router (cached 20 s)</small><span style="float:right" id="br-show-btns"></span></h2>
+    <pre id="br-show" style="max-height:360px;overflow:auto;font-size:12px;line-height:1.35;background:var(--bg);padding:10px;border-radius:6px;white-space:pre" class="hint">pick a command</pre></div>
   <div class="card"><h2>Configuration <small id="br-cfg-note">running config read over SSH · intended config and compliance from Nautobot's Golden Config</small>
       <span style="float:right;display:inline-flex;gap:6px;align-items:center"><select id="br-cfg-which"><option value="running">running (live)</option><option value="intended">intended (Nautobot)</option><option value="backup">last backup (Nautobot)</option></select><button type="button" class="small" onclick="loadConfig(true)">Re-read</button><button type="button" class="small" id="br-cfg-dl">Download</button></span></h2>
     <div id="br-compliance" class="hint" style="margin-bottom:8px"></div>
+    <div id="br-diff"></div>
     <pre id="br-config" style="max-height:520px;overflow:auto;font-size:12px;line-height:1.35;background:var(--bg);padding:10px;border-radius:6px;white-space:pre">loading…</pre>
+    <h3 style="font-size:13px;margin:14px 0 6px">History <span class="hint">Golden Config backups committed to Gitea (<a id="br-hist-repo" href="#" target="_blank">config-backups</a>) — click a commit for its diff</span></h3>
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;align-items:start"><table id="br-history"><thead><tr><th>When</th><th>By</th><th>Commit</th></tr></thead><tbody></tbody></table><pre id="br-hist-diff" class="hint" style="max-height:360px;overflow:auto;font-size:12px;line-height:1.35;background:var(--bg);padding:10px;border-radius:6px;white-space:pre;margin:0">select a commit</pre></div>
   </div>
 </main>
 <main id="view-audit" hidden style="grid-template-columns:1fr">
@@ -820,6 +825,23 @@ async function loadConfig(refresh) {
   CFG = await r.json(); showConfig();
   const g = CFG.golden || {};
   $('br-compliance').innerHTML = g.error ? `Nautobot Golden Config: ${esc(g.error)}` : (g.compliance || []).length ? `Compliance (Nautobot, ${esc((g.compliance_at || '').slice(0, 19).replace('T', ' '))}): ${g.compliance.map(c => `<span class="pill ${c.compliant ? '' : 'fail'}" title="${esc(c.compliant ? 'compliant' : 'missing: ' + c.missing + '\nextra: ' + c.extra)}">${esc(c.feature)}</span>`).join(' ')} · <a href="${esc(g.url || '#')}" target="_blank">details</a>` : 'no compliance data in Nautobot yet';
+  const diffs = (g.compliance || []).filter(c => c.diff);
+  $('br-diff').innerHTML = diffs.length ? `<details ${diffs.some(c => !c.compliant) ? 'open' : ''} style="margin-bottom:8px"><summary style="cursor:pointer;font-size:13px">Running vs intended, per compliance feature (${diffs.length} with differences${diffs.every(c => c.compliant) ? ', all still compliant — ordering only' : ''})</summary>${diffs.map(c => `<div style="margin-top:6px"><b style="font-size:12px">${esc(c.feature)}</b> <span class="pill ${c.compliant ? '' : 'fail'}">${c.compliant ? 'compliant' : 'non-compliant'}</span><pre style="font-size:12px;line-height:1.3;background:var(--bg);padding:8px;border-radius:6px;white-space:pre;overflow:auto;margin:4px 0">${c.diff.split('\n').map(l => `<span style="color:${l.startsWith('+') ? 'var(--ok)' : l.startsWith('-') ? 'var(--bad)' : l.startsWith('@@') ? 'var(--muted)' : 'inherit'}">${esc(l)}</span>`).join('\n')}</pre></div>`).join('')}</details>` : '<div class="hint" style="margin-bottom:8px">running and intended agree on every compliance feature</div>';
+  loadHistory();
+}
+async function loadHistory(sha) {
+  const name = decodeURIComponent(location.hash.slice(8));
+  const r = await fetch(`/api/branch/${encodeURIComponent(name)}/history${sha ? '?sha=' + sha : ''}`); if (!r.ok) { $('br-history').querySelector('tbody').innerHTML = `<tr><td colspan="3" class="hint">Gitea: HTTP ${r.status}</td></tr>`; return; }
+  const h = await r.json(); $('br-hist-repo').href = h.repo;
+  $('br-history').querySelector('tbody').innerHTML = h.commits.map(c => `<tr style="cursor:pointer;${c.sha === h.sha ? 'background:var(--bg)' : ''}" onclick="loadHistory('${c.sha}')"><td class="cred" style="white-space:nowrap">${esc(c.date)}</td><td>${esc(c.author)}</td><td><a href="${esc(c.url)}" target="_blank" onclick="event.stopPropagation()">${esc(c.sha.slice(0, 8))}</a> <span class="hint">${esc(c.message.replace(/BACKUP CONFIGURATIONS JOB /, 'backup '))}</span></td></tr>`).join('') || '<tr><td colspan="3" class="hint">no backups yet</td></tr>';
+  if (h.diff != null) { $('br-hist-diff').className = ''; $('br-hist-diff').innerHTML = h.diff.split('\n').map(l => `<span style="color:${l.startsWith('+') && !l.startsWith('+++') ? 'var(--ok)' : l.startsWith('-') && !l.startsWith('---') ? 'var(--bad)' : l.startsWith('@@') ? 'var(--muted)' : 'inherit'}">${esc(l)}</span>`).join('\n'); }
+}
+const SHOWS = [['ike', 'IKEv2 SAs'], ['ipsec', 'IPsec SAs'], ['bgp', 'BGP summary'], ['routes', 'BGP routes'], ['default', 'default route'], ['interfaces', 'interfaces'], ['pki', 'certificates'], ['platform', 'platform'], ['log', 'log']];
+async function loadShow(what, refresh) {
+  const name = decodeURIComponent(location.hash.slice(8)); $('br-show').className = 'hint'; $('br-show').textContent = 'running…';
+  document.querySelectorAll('#br-show-btns button').forEach(b => b.classList.toggle('primary', b.dataset.what === what));
+  const r = await fetch(`/api/branch/${encodeURIComponent(name)}/show/${what}${refresh ? '?refresh=true' : ''}`); if (!r.ok) { $('br-show').textContent = `HTTP ${r.status}`; return; }
+  const d = await r.json(); $('br-show').className = ''; $('br-show').textContent = `${name}# ${d.command}\n${d.error || d.output}\n\n(read ${new Date(d.generated * 1000).toLocaleTimeString()})`;
 }
 $('br-cfg-which').onchange = showConfig;
 $('br-cfg-dl').onclick = () => { if (!CFG) return; const w = $('br-cfg-which').value; const blob = new Blob([w === 'running' ? CFG.running : (CFG.golden[w] || '')], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${CFG.name}.${w}-config.txt`; a.click(); };
@@ -857,6 +879,8 @@ async function loadBranch(name, refresh) {
   const h = d.host;
   $('br-host').innerHTML = h ? `<dl class="review"><div class="box"><dl><dt>Host</dt><dd class="cred">${esc(h.name)} <span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></dd><dt>LAN</dt><dd class="cred">${esc(h.lan_ip)}/24 via ${esc(h.gateway)} (${esc(h.lan_if)})</dd><dt>OOB</dt><dd class="cred">${esc(h.mgmt_ip)} <span class="hint">ssh lab@ (lab)</span></dd></dl></div></dl><div class="hint" style="margin-top:6px">The full host-to-host ping mesh is on the <a href="#inventory">Inventory</a> page (LAN hosts → Ping mesh).</div>` : '<div class="hint">no LAN host behind this router</div>';
   CFG = null; loadConfig(refresh);
+  $('br-show-btns').innerHTML = SHOWS.map(([k, l]) => `<button type="button" class="small" data-what="${k}" onclick="loadShow('${k}', false)">${l}</button>`).join(' ') + ` <button type="button" class="small" onclick="const b = document.querySelector('#br-show-btns button.primary'); if (b) loadShow(b.dataset.what, true)" title="run the selected command again">↻</button>`;
+  $('br-show').className = 'hint'; $('br-show').textContent = 'pick a command'; loadShow('ike', false);
   $('br-runs').querySelector('tbody').innerHTML = d.runs.map(r => `<tr><td>${new Date(r.started * 1000).toLocaleString()}</td><td><a onclick="location.hash='provision';watch('${r.id}')">${esc(r.mode)}</a></td><td class="status ${r.status}">${r.status}</td><td>${esc(r.user || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">none</td></tr>';
 }
 window.addEventListener('hashchange', showView);

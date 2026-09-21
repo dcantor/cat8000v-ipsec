@@ -94,6 +94,22 @@ Every router's page shows its configuration: the live running config (keys redac
         END
     END
 
+A router's page shows its configuration history from Gitea, the diff of a backup commit, and live show snippets
+    ${r}=    Set Variable    ${SPOKES}[0]
+    ${h}=    Portal Get    /api/branch/${r}/history
+    Should Be Equal    ${h}[file]    ${r}.cfg
+    Should Be True    len($h['commits']) >= 1    msg=no Golden Config backup commits for ${r}
+    Should Be Equal    ${h}[commits][0][author]    nautobot
+    ${d}=    Portal Get    /api/branch/${r}/history    sha=${h}[commits][-1][sha]
+    Should Contain    ${d}[diff]    ${r}.cfg
+    ${s}=    Portal Get    /api/branch/${r}/show/bgp
+    Should Be Equal    ${s}[error]    ${None}
+    Should Contain    ${s}[output]    BGP router identifier ${ROUTERS}[${r}][router_id]
+    ${s}=    Portal Get    /api/branch/${r}/show/ike
+    Should Contain    ${s}[output]    READY
+    ${bad}=    Portal Request    GET    /api/branch/${r}/show/reload    user=viewer    password=viewer
+    Should Be Equal As Integers    ${bad}[status]    404    msg=only allow-listed show commands may run
+
 Single sign-on is offered and starts an authorization-code flow with PKCE at the provider
     ${o}=    Portal Get    /api/oidc
     Skip If    not $o['enabled']    OIDC is not configured on this portal (webapp/oidc.json)

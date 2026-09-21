@@ -283,8 +283,13 @@ firewall rules whose address groups admit its WAN addresses plus its flows and l
 path), its LAN host, the runs that named it, and — at the bottom — its **configuration** (`GET /api/branch/{name}/config`): the
 running config read over SSH (cached 60 s, **Re-read** for a fresh one; pre-shared keys are redacted unless the user is an
 operator), Nautobot's intended config and last backup (the Golden Config app), and the compliance per feature as pills
-(hover for the missing / extra lines; *details* opens Nautobot), with a Download of whichever is shown. Everything else comes
-from the caches the other pages use; **Refresh live** re-collects the tunnel state.
+(hover for the missing / extra lines; *details* opens Nautobot), a **running vs intended diff per compliance feature**
+(from the compliance rows' actual / intended text; shown when they differ, open when a feature is non-compliant), the
+**history** — the backup commits Nautobot pushed to Gitea's `config-backups` for `<name>.cfg` (`GET
+/api/branch/{name}/history`, `?sha=` for one commit's diff of the file) — and a Download of whichever config is shown. Above
+it, **Live state** runs allow-listed show commands on the router (`GET /api/branch/{name}/show/{ike|ipsec|bgp|routes|default|
+interfaces|pki|platform|log}`, cached 20 s). Everything else comes from the caches the other pages use; **Refresh live**
+re-collects the tunnel state.
 
 ### Run queue
 
