@@ -1,0 +1,551 @@
+{
+  "site": {
+    "name": "c8000v-ipsec-lab",
+    "description": "C8000v IPsec VTI lab (libvirt)",
+    "site_code": "LAB-IPSEC",
+    "contact": "noc@lab.local"
+  },
+  "vpn": {
+    "name": "IPSEC_VPN",
+    "description": "Hub-and-spoke IPsec VTIs with eBGP (one AS per site)",
+    "change_ticket": "CHG0042002",
+    "owner": "network team"
+  },
+  "profile": {
+    "name": "VPN-IPSEC",
+    "ike": {
+      "encryption": "AES-256-CBC",
+      "integrity": "SHA256",
+      "dh_group": "14",
+      "lifetime": 86400,
+      "authentication": "certificate"
+    },
+    "ipsec": {
+      "encryption": "AES-256-CBC",
+      "integrity": "SHA256",
+      "lifetime": 3600
+    },
+    "dpd": {
+      "enabled": true,
+      "interval": 20,
+      "retries": 3
+    },
+    "pki": {
+      "trustpoint": "LAB-CA",
+      "keypair": "LAB-VPN",
+      "certificate_map": "LAB-CERT-MAP",
+      "key_bits": 2048,
+      "validity_days": 365,
+      "renew_before_days": 30
+    },
+    "ios": {
+      "ikev2_proposal": "VPN-PROP",
+      "ikev2_policy": "VPN-POL",
+      "ikev2_keyring": "VPN-KEYRING",
+      "keyring_peer": "ANY",
+      "ikev2_profile": "VPN-IKEV2",
+      "transform_set": "VPN-TS",
+      "ipsec_profile": "VPN-IPSEC"
+    }
+  },
+  "regions": [
+    "East",
+    "Central",
+    "West"
+  ],
+  "devices": [
+    {
+      "name": "central-headend",
+      "mgmt_ip": "10.2.0.15",
+      "role": "hub",
+      "asn": 65204,
+      "router_id": "10.255.1.5",
+      "lan": "192.168.14.0/24",
+      "comments": "",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "CE-HQ",
+      "contact": "noc-central@lab.local",
+      "city": "Chicago, IL",
+      "lat": 41.8781,
+      "lon": -87.6298,
+      "address": "8273 Commerce Blvd, Suite 289, Chicago, IL 59411"
+    },
+    {
+      "name": "east-headend",
+      "mgmt_ip": "10.2.0.11",
+      "role": "hub",
+      "asn": 65200,
+      "router_id": "10.255.1.1",
+      "lan": "192.168.11.0/24",
+      "comments": "",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "EA-HQ",
+      "contact": "noc-east@lab.local",
+      "city": "New York, NY",
+      "lat": 40.7128,
+      "lon": -74.006,
+      "address": "5289 Enterprise Way, Suite 249, New York, NY 13621"
+    },
+    {
+      "name": "west-headend",
+      "mgmt_ip": "10.2.0.17",
+      "role": "hub",
+      "asn": 65206,
+      "router_id": "10.255.1.7",
+      "lan": "192.168.16.0/24",
+      "comments": "",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "WE-HQ",
+      "contact": "noc-west@lab.local",
+      "city": "Los Angeles, CA",
+      "lat": 34.0522,
+      "lon": -118.2437,
+      "address": "6115 Harbor Dr, Suite 514, Los Angeles, CA 80823"
+    },
+    {
+      "name": "spoke1",
+      "mgmt_ip": "10.2.0.12",
+      "role": "spoke",
+      "asn": 65201,
+      "router_id": "10.255.1.2",
+      "lan": "192.168.12.0/24",
+      "comments": "",
+      "region": "East",
+      "site": "branch-1",
+      "site_code": "EA-1",
+      "contact": "noc-east@lab.local",
+      "psk": "rGHZylYxSYQUZGzXdG6LzyoI",
+      "city": "Boston, MA",
+      "lat": 42.3601,
+      "lon": -71.0589,
+      "psk_rotated": "2026-09-20T20:59:16-04:00",
+      "customer": {
+        "company": "Pinecrest Publishing Inc.",
+        "address": "808 Maple St, Suite 781, Boston, MA 62712",
+        "industry": "Media",
+        "account_id": "ACME-923374",
+        "service_tier": "Gold",
+        "contract_start": "2023-11-20"
+      }
+    },
+    {
+      "name": "spoke2",
+      "mgmt_ip": "10.2.0.13",
+      "role": "spoke",
+      "asn": 65202,
+      "router_id": "10.255.1.3",
+      "lan": "192.168.23.0/24",
+      "comments": "branch 2 - LAN renumbered via portal",
+      "region": "Central",
+      "site": "branch-2",
+      "site_code": "CE-2",
+      "contact": "noc-central@lab.local",
+      "psk": "7Dqu11eNUIWIx5OAWpA5nPzv",
+      "city": "Dallas, TX",
+      "lat": 32.7767,
+      "lon": -96.797,
+      "ike_authentication": "psk",
+      "customer": {
+        "company": "Beacon Legal Inc.",
+        "address": "3983 Commerce Blvd, Suite 211, Dallas, TX 72553",
+        "industry": "Legal",
+        "account_id": "ACME-166737",
+        "service_tier": "Bronze",
+        "contract_start": "2023-11-06"
+      }
+    },
+    {
+      "name": "spoke3",
+      "mgmt_ip": "10.2.0.14",
+      "role": "spoke",
+      "asn": 65203,
+      "router_id": "10.255.1.4",
+      "lan": "192.168.13.0/24",
+      "comments": "This is B2B customer #3.  Connection to their California data center.",
+      "region": "West",
+      "site": "branch-3",
+      "site_code": "WE-3",
+      "contact": "noc-west@lab.local",
+      "psk": "J3YoGtnwvIxxdkZiOyxdy6Oo",
+      "city": "Seattle, WA",
+      "lat": 47.6062,
+      "lon": -122.3321,
+      "psk_rotated": "2026-09-22T07:41:21-04:00",
+      "ike_authentication": "psk",
+      "customer": {
+        "company": "Northwind Retail Group Co.",
+        "address": "320 Main St, Suite 550, Seattle, WA 26955",
+        "industry": "Retail",
+        "account_id": "ACME-543511",
+        "service_tier": "Gold",
+        "contract_start": "2025-08-02"
+      }
+    },
+    {
+      "name": "spoke4",
+      "mgmt_ip": "10.2.0.16",
+      "role": "spoke",
+      "asn": 65205,
+      "router_id": "10.255.1.6",
+      "lan": "192.168.15.0/24",
+      "comments": "",
+      "region": "Central",
+      "site": "branch-4",
+      "site_code": "CE-4",
+      "contact": "noc-central@lab.local",
+      "psk": "TEACJ8LoJ4W47wgG02e0GHHu",
+      "city": "Denver, CO",
+      "lat": 39.7392,
+      "lon": -104.9903,
+      "customer": {
+        "company": "Evergreen Hotels Ltd.",
+        "address": "5351 Oak Ave, Suite 668, Denver, CO 86860",
+        "industry": "Hospitality",
+        "account_id": "ACME-670728",
+        "service_tier": "Silver",
+        "contract_start": "2024-07-07"
+      }
+    },
+    {
+      "name": "fw-central",
+      "mgmt_ip": "10.2.0.22",
+      "role": "firewall",
+      "hub": "central-headend",
+      "comments": "VyOS firewall in front of central-headend",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 50
+    },
+    {
+      "name": "fw-east",
+      "mgmt_ip": "10.2.0.21",
+      "role": "firewall",
+      "hub": "east-headend",
+      "comments": "VyOS firewall in front of east-headend",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 40
+    },
+    {
+      "name": "fw-west",
+      "mgmt_ip": "10.2.0.23",
+      "role": "firewall",
+      "hub": "west-headend",
+      "comments": "VyOS firewall in front of west-headend",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "",
+      "contact": "",
+      "bandwidth_mbps": 90
+    },
+    {
+      "name": "host-central",
+      "mgmt_ip": "10.2.0.32",
+      "role": "host",
+      "router": "central-headend",
+      "comments": "Alpine LAN host behind central-headend",
+      "region": "Central",
+      "site": "central-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-east",
+      "mgmt_ip": "10.2.0.31",
+      "role": "host",
+      "router": "east-headend",
+      "comments": "Alpine LAN host behind east-headend",
+      "region": "East",
+      "site": "east-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke1",
+      "mgmt_ip": "10.2.0.34",
+      "role": "host",
+      "router": "spoke1",
+      "comments": "Alpine LAN host behind spoke1",
+      "region": "East",
+      "site": "branch-1",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke2",
+      "mgmt_ip": "10.2.0.35",
+      "role": "host",
+      "router": "spoke2",
+      "comments": "Alpine LAN host behind spoke2",
+      "region": "Central",
+      "site": "branch-2",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke3",
+      "mgmt_ip": "10.2.0.36",
+      "role": "host",
+      "router": "spoke3",
+      "comments": "Alpine LAN host behind spoke3",
+      "region": "West",
+      "site": "branch-3",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-spoke4",
+      "mgmt_ip": "10.2.0.37",
+      "role": "host",
+      "router": "spoke4",
+      "comments": "Alpine LAN host behind spoke4",
+      "region": "Central",
+      "site": "branch-4",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    },
+    {
+      "name": "host-west",
+      "mgmt_ip": "10.2.0.33",
+      "role": "host",
+      "router": "west-headend",
+      "comments": "Alpine LAN host behind west-headend",
+      "region": "West",
+      "site": "west-hq",
+      "site_code": "LAB-IPSEC",
+      "contact": "noc@lab.local"
+    }
+  ],
+  "links": [
+    {
+      "a": "fw-east",
+      "a_port": 1,
+      "b": "east-headend",
+      "b_port": 2,
+      "prefix": "100.64.1.0/30"
+    },
+    {
+      "a": "fw-central",
+      "a_port": 1,
+      "b": "central-headend",
+      "b_port": 2,
+      "prefix": "100.64.2.0/30"
+    },
+    {
+      "a": "fw-west",
+      "a_port": 1,
+      "b": "west-headend",
+      "b_port": 2,
+      "prefix": "100.64.3.0/30"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 2,
+      "b": "spoke1",
+      "b_port": 2,
+      "prefix": "100.65.1.0/30"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 4,
+      "b": "spoke3",
+      "b_port": 2,
+      "prefix": "100.65.3.0/30"
+    },
+    {
+      "a": "fw-central",
+      "a_port": 2,
+      "b": "spoke1",
+      "b_port": 3,
+      "prefix": "100.65.4.0/30"
+    },
+    {
+      "a": "fw-central",
+      "a_port": 4,
+      "b": "spoke3",
+      "b_port": 3,
+      "prefix": "100.65.6.0/30"
+    },
+    {
+      "a": "fw-central",
+      "a_port": 5,
+      "b": "spoke4",
+      "b_port": 2,
+      "prefix": "100.65.7.0/30"
+    },
+    {
+      "a": "fw-west",
+      "a_port": 3,
+      "b": "spoke2",
+      "b_port": 4,
+      "prefix": "100.65.9.0/30"
+    },
+    {
+      "a": "fw-west",
+      "a_port": 4,
+      "b": "spoke3",
+      "b_port": 4,
+      "prefix": "100.65.10.0/30"
+    },
+    {
+      "a": "fw-west",
+      "a_port": 5,
+      "b": "spoke4",
+      "b_port": 3,
+      "prefix": "100.65.11.0/30"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 3,
+      "b": "spoke4",
+      "b_port": 4,
+      "prefix": "100.65.2.0/30"
+    },
+    {
+      "a": "east-headend",
+      "a_port": 9,
+      "b": "host-east",
+      "b_port": 1,
+      "prefix": "192.168.11.0/24"
+    },
+    {
+      "a": "central-headend",
+      "a_port": 9,
+      "b": "host-central",
+      "b_port": 1,
+      "prefix": "192.168.14.0/24"
+    },
+    {
+      "a": "west-headend",
+      "a_port": 9,
+      "b": "host-west",
+      "b_port": 1,
+      "prefix": "192.168.16.0/24"
+    },
+    {
+      "a": "spoke1",
+      "a_port": 5,
+      "b": "host-spoke1",
+      "b_port": 1,
+      "prefix": "192.168.12.0/24"
+    },
+    {
+      "a": "spoke2",
+      "a_port": 5,
+      "b": "host-spoke2",
+      "b_port": 1,
+      "prefix": "192.168.23.0/24"
+    },
+    {
+      "a": "spoke3",
+      "a_port": 5,
+      "b": "host-spoke3",
+      "b_port": 1,
+      "prefix": "192.168.13.0/24"
+    },
+    {
+      "a": "spoke4",
+      "a_port": 5,
+      "b": "host-spoke4",
+      "b_port": 1,
+      "prefix": "192.168.15.0/24"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 5,
+      "b": "spoke2",
+      "b_port": 2,
+      "prefix": "100.65.8.0/30"
+    }
+  ],
+  "tunnels": [
+    {
+      "id": 1,
+      "hub": "east-headend",
+      "spoke": "spoke1",
+      "prefix": "172.17.1.0/30"
+    },
+    {
+      "id": 2,
+      "hub": "east-headend",
+      "spoke": "spoke4",
+      "prefix": "172.17.2.0/30"
+    },
+    {
+      "id": 3,
+      "hub": "east-headend",
+      "spoke": "spoke3",
+      "prefix": "172.17.3.0/30"
+    },
+    {
+      "id": 4,
+      "hub": "central-headend",
+      "spoke": "spoke1",
+      "prefix": "172.17.4.0/30"
+    },
+    {
+      "id": 6,
+      "hub": "central-headend",
+      "spoke": "spoke3",
+      "prefix": "172.17.6.0/30"
+    },
+    {
+      "id": 7,
+      "hub": "central-headend",
+      "spoke": "spoke4",
+      "prefix": "172.17.7.0/30"
+    },
+    {
+      "id": 8,
+      "hub": "east-headend",
+      "spoke": "spoke2",
+      "prefix": "172.17.8.0/30"
+    },
+    {
+      "id": 9,
+      "hub": "west-headend",
+      "spoke": "spoke2",
+      "prefix": "172.17.9.0/30"
+    },
+    {
+      "id": 10,
+      "hub": "west-headend",
+      "spoke": "spoke3",
+      "prefix": "172.17.10.0/30"
+    },
+    {
+      "id": 11,
+      "hub": "west-headend",
+      "spoke": "spoke4",
+      "prefix": "172.17.11.0/30"
+    }
+  ],
+  "oob": {
+    "vrf": "Mgmt-vrf",
+    "gateway": "10.2.0.1",
+    "acl": "MGMT-ACCESS",
+    "prefix": "10.2.0.0/24"
+  },
+  "domain_name": "lab.local",
+  "capacity": {
+    "tunnels_per_headend": 50,
+    "bandwidth_per_tunnel_mbps": 8
+  },
+  "internet": {
+    "enabled": true,
+    "uplink_port": 9
+  },
+  "provider": {
+    "name": "ACME Networks",
+    "group": "Service provider",
+    "address": "1 ACME Plaza, Chicago, IL 60601",
+    "description": "sells the managed IPsec VPN service: owns the headends, their firewalls and the LAN hosts behind the headends"
+  }
+}

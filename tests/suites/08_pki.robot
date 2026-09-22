@@ -126,6 +126,7 @@ The portal renews a spoke's certificate: new serial on the router, in the CA ind
     [Documentation]    A real renewal of the first spoke through the portal's renew run (operator): the router's tunnels re-authenticate with
     ...    the new certificate, the old serial is retired into the index's history.
     [Tags]    slow
+    Skip If Started From A Portal Run    this test drives a portal run
     ${spoke}=    Evaluate    [s for s in $SPOKES if $SPOKE_AUTH[s] == 'certificate'][0]
     ${before}=    Evaluate    json.load(open($INDEX))[$spoke]['serial']    modules=json
     ${run}=    Portal Post    /api/runs    {"mode": "renew", "spoke": {"name": "${spoke}"}, "options": {"test": false}}
@@ -153,6 +154,7 @@ The portal switches a spoke between certificate and pre-shared key and back: pro
     ...    keying for it on their PSK profile, SAs on PSK) and back again (enrolled anew, keyring gone, SAs on RSA) — two runs, about
     ...    ten minutes.
     [Tags]    slow
+    Skip If Started From A Portal Run    this test drives a portal run
     ${spoke}=    Evaluate    [s for s in $SPOKES if $SPOKE_AUTH[s] == 'certificate'][0]
     ${hubs}=    Evaluate    sorted({t['hub'] for t in $TUNNEL_LIST if t['spoke'] == $spoke})
     Switch And Verify    ${spoke}    psk    ${hubs}

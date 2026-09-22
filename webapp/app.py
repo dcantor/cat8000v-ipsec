@@ -663,7 +663,10 @@ class Run(RunBase):
         if bad: raise RuntimeError(s["summary"] + ": " + bad[0].strip())
 
     def do_test(self, s):
-        rc = self.sh(["./lab.sh", "test"])
+        # PORTAL_RUN_ID tells the suites they are running *inside* a run: the registry executes one run at a time, so a test that
+        # starts a portal run (renew, auth, golden, remediate, reapply, the queue tests) would wait for a worker this very run holds.
+        # Those tests skip themselves; `./lab.sh test` from a shell exercises them.
+        rc = self.sh(["./lab.sh", "test"], env={"PORTAL_RUN_ID": self.id})
         latest = (RESULTS / "latest").resolve()
         self.results_dir = latest.name
         self.tests = parse_robot(latest / "output.xml") if (latest / "output.xml").exists() else None

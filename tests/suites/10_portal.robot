@@ -8,6 +8,7 @@ Suite Teardown    Suite Teardown Close Connections
 
 *** Test Cases ***
 Runs queue behind the one executing and a queued run can be cancelled; the executing one finishes
+    Skip If Started From A Portal Run    this test fills the run queue
     ${intent}=    Portal Get    /api/intent
     ${a}=    Portal Request    POST    /api/runs    ${{ {"mode": "plan", "intent": $intent["intent"]} }}
     Should Be Equal As Integers    ${a}[status]    200
@@ -112,6 +113,7 @@ A router's page shows its configuration history from Gitea, the diff of a backup
     Should Be Equal As Integers    ${bad}[status]    404    msg=only allow-listed show commands may run
 
 The Compliance page reports Nautobot's Golden Config verdict for every router and feature, and a golden run refreshes it
+    Skip If Started From A Portal Run    this test starts a golden run
     ${c}=    Portal Get    /api/compliance
     Length Should Be    ${c}[devices]    ${{ len($ROUTER_NAMES) }}
     Should Be True    len($c['features']) >= 10
@@ -135,11 +137,26 @@ The Compliance page reports Nautobot's Golden Config verdict for every router an
     Should Be Equal    ${after}[history][-1][at]    ${after}[summary][last_compliance]    msg=the run was not recorded in the drift history
     Should Be Equal As Integers    ${after}[history][-1][devices_ok]    ${after}[history][-1][devices]
 
+Provisioning a new router can register it in lab.conf: every array the pipeline rewrites is found and reads back
+    [Documentation]    The first step of a spoke / headend run writes the new router into lab.conf's arrays. They are wrapped over
+    ...    several lines (every router has a LAN host), so the rewriter has to span lines — this is a dry run of that rewrite on
+    ...    the real lab.conf, read back with bash; lab.conf itself is untouched.
+    ${v}=    Lab Conf Registration    robot-probe
+    Should Be Equal    ${v}[ROLE]    spoke
+    Should Be Equal    ${v}[MGMT_IP]    10.2.0.99
+    Should Be Equal    ${v}[BGP_AS]    65299
+    Should Be Equal    ${v}[LAN]    192.168.99.0/24
+    Should Be Equal    ${v}[CONSOLE_PORT]    5299
+    Should Be Equal    ${v}[NODE_IDX]    99
+    Should Be Equal    ${v}[ROUTERS]    robot-probe    msg=the new router must be the last entry of ROUTERS
+    Should Be Equal    ${v}[ALL_NODES]    robot-probe
+
 Drift on a router is detected by the Golden Config run, remediated from the portal with Nautobot's remediation lines, and recorded in the drift history
     [Documentation]    An extra static route is configured on a spoke by hand. The golden run marks its Static routes feature non-compliant
     ...    with the `no ...` remediation line; a `remediate` run pushes that line and saves, the next verdict is compliant again, the drift
     ...    history shows the drift and its repair, and Prometheus (via /metrics) saw the router non-compliant in between.
     [Tags]    remediation
+    Skip If Started From A Portal Run    this test starts golden and remediate runs
     ${spoke}=    Set Variable    ${{ [n for n, r in $ROUTERS.items() if r['role'] == 'spoke'][-1] }}
     ${host}=    Set Variable    ${ROUTERS}[${spoke}][host]
     Configure Router    ${host}    ip route 10.99.99.0 255.255.255.0 Null0 name robot-drift
@@ -187,6 +204,7 @@ Re-apply from the model restores a modelled attribute that was changed by hand, 
     [Documentation]    Loopback0's description on a spoke is changed by hand (Terraform manages it). A `reapply` run renders the NaC data,
     ...    plans and applies only that router's resources, and ends with Golden Config compliant; the description is back.
     [Tags]    remediation
+    Skip If Started From A Portal Run    this test starts a reapply run
     ${spoke}=    Set Variable    ${{ [n for n, r in $ROUTERS.items() if r['role'] == 'spoke'][0] }}
     ${host}=    Set Variable    ${ROUTERS}[${spoke}][host]
     ${before}=    Run Command    ${host}    show running-config interface Loopback0

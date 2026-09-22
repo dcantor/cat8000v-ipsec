@@ -169,11 +169,11 @@
       "site": "branch-3",
       "site_code": "WE-3",
       "contact": "noc-west@lab.local",
-      "psk": "6lC1QKo6gk0F769MJ1SdOQrh",
+      "psk": "J3YoGtnwvIxxdkZiOyxdy6Oo",
       "city": "Seattle, WA",
       "lat": 47.6062,
       "lon": -122.3321,
-      "psk_rotated": "2026-09-20T18:37:22-04:00",
+      "psk_rotated": "2026-09-22T07:41:21-04:00",
       "ike_authentication": "psk",
       "customer": {
         "company": "Northwind Retail Group Co.",
@@ -368,13 +368,6 @@
     },
     {
       "a": "fw-central",
-      "a_port": 3,
-      "b": "spoke2",
-      "b_port": 3,
-      "prefix": "100.65.5.0/30"
-    },
-    {
-      "a": "fw-central",
       "a_port": 4,
       "b": "spoke3",
       "b_port": 3,
@@ -463,6 +456,13 @@
       "b": "host-spoke4",
       "b_port": 1,
       "prefix": "192.168.15.0/24"
+    },
+    {
+      "a": "fw-east",
+      "a_port": 5,
+      "b": "spoke2",
+      "b_port": 2,
+      "prefix": "100.65.8.0/30"
     }
   ],
   "tunnels": [
@@ -491,12 +491,6 @@
       "prefix": "172.17.4.0/30"
     },
     {
-      "id": 5,
-      "hub": "central-headend",
-      "spoke": "spoke2",
-      "prefix": "172.17.5.0/30"
-    },
-    {
       "id": 6,
       "hub": "central-headend",
       "spoke": "spoke3",
@@ -507,6 +501,12 @@
       "hub": "central-headend",
       "spoke": "spoke4",
       "prefix": "172.17.7.0/30"
+    },
+    {
+      "id": 8,
+      "hub": "east-headend",
+      "spoke": "spoke2",
+      "prefix": "172.17.8.0/30"
     },
     {
       "id": 9,

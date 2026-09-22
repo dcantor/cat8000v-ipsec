@@ -179,13 +179,15 @@ def validate_links(links, I, f, name):
 
 # ---- materialise ------------------------------------------------------------
 def _replace_array(text, name, entries, multiline=False):
-    """Append entries to a bash array definition in lab.conf ('declare -A NAME=( ... )' or 'NAME=( ... )')."""
+    """Append entries to a bash array definition in lab.conf ('declare -A NAME=( ... )' or 'NAME=( ... )').
+    An associative array may be wrapped over several lines (they are, since every router grew a LAN host): the body runs
+    to the first ')' that ends a line, newlines included, and the new entries are appended to the last line of it."""
     if multiline:
         m = re.search(rf"^{name}=\(\n(.*?)^\)\n", text, re.M | re.S)
         if not m: raise RuntimeError(f"lab.conf: cannot find {name}=(")
         body = m.group(1) + "".join(f'  "{e}"\n' for e in entries)
         return text[:m.start()] + f"{name}=(\n{body})\n" + text[m.end():]
-    m = re.search(rf"^(declare -A {name}=\(|{name}=\()(.*?)\)(\s*(#.*)?)$", text, re.M)
+    m = re.search(rf"^(declare -A {name}=\(|{name}=\()(.*?)\)([ \t]*(#.*)?)$", text, re.M | re.S)
     if not m: raise RuntimeError(f"lab.conf: cannot find {name}")
     body = m.group(2).rstrip() + " " + " ".join(entries) + " "
     return text[:m.start()] + f"{m.group(1)}{body}){m.group(3) or ''}" + text[m.end():]

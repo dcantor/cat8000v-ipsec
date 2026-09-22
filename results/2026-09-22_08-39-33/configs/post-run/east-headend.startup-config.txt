@@ -1,0 +1,382 @@
+! east-headend (10.2.0.11) show startup-config captured 2026-09-22 09:31:46
+Using 7481 out of 33554432 bytes
+!
+! Last configuration change at 12:37:59 UTC Tue Sep 22 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname east-headend
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-725672910
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-725672910
+ revocation-check none
+ rsakeypair TP-self-signed-725672910
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+crypto pki trustpoint LAB-CA
+ enrollment terminal pem
+ fqdn east-headend.lab.local
+ fingerprint 0BCEF662C033CA9A928299464752014DED4A365C
+ subject-name CN=east-headend.lab.local,O=cat8000v-ipsec
+ subject-alt-name east-headend.lab.local
+ revocation-check none
+ rsakeypair LAB-VPN
+ hash sha256
+!
+!
+!
+crypto pki certificate map LAB-CERT-MAP 10
+ issuer-name co cat8000v-ipsec lab ca
+!
+crypto pki certificate chain TP-self-signed-725672910
+ certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01 nvram:CiscoLicensi#1CA.cer
+crypto pki certificate chain LAB-CA
+ certificate 406FBA7D8A91C53EEB82079DE917C41280317929 nvram:cat8000v-ips#7929.cer
+ certificate ca 4ED99872D79A02E90EB7C79AB8039FBABB691E61 nvram:cat8000v-ips#1E61CA.cer
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 9PAYH2PJ27Z
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$Qp9OnGg3nxsE/U$LqJT0O1o1GvtLovJ9GuchE9w57KuOmawcyY3dBD/3gk
+!
+username admin privilege 15 secret 9 $9$ONXPSl8RgAG.N.$8nidvuz3KqKNzFqv7ztz6X27bnKeuVAdWhW5B7LaIn2
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer spoke3
+  address 100.65.3.2
+  pre-shared-key J3YoGtnwvIxxdkZiOyxdy6Oo
+ !
+ peer spoke2
+  address 100.65.8.2
+  pre-shared-key 7Dqu11eNUIWIx5OAWpA5nPzv
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2
+ match certificate LAB-CERT-MAP
+ identity local dn 
+ authentication remote rsa-sig
+ authentication local rsa-sig
+ pki trustpoint LAB-CA
+ dpd 20 3 on-demand
+!
+crypto ikev2 profile VPN-IKEV2-PSK
+ match identity remote address 100.65.3.2 255.255.255.255 
+ match identity remote address 100.65.8.2 255.255.255.255 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2
+!
+crypto ipsec profile VPN-IPSEC-PSK
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2-PSK
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.1 255.255.255.255
+!
+interface Tunnel1
+ description IPsec VTI to spoke1
+ ip address 172.17.1.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.1.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface Tunnel2
+ description IPsec VTI to spoke4
+ ip address 172.17.2.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.2.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface Tunnel3
+ description IPsec VTI to spoke3
+ ip address 172.17.3.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.3.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel8
+ description IPsec VTI to spoke2
+ ip address 172.17.8.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.8.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.11 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to fw-east eth1
+ ip address 100.64.1.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet4
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet5
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet6
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet7
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet8
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet9
+ description site LAN 192.168.11.0/24 (host-east eth1)
+ ip address 192.168.11.1 255.255.255.0
+ negotiation auto
+ cdp enable
+!
+router bgp 65200
+ bgp router-id 10.255.1.1
+ bgp log-neighbor-changes
+ neighbor 172.17.1.2 remote-as 65201
+ neighbor 172.17.1.2 description eBGP spoke1 (Tunnel1)
+ neighbor 172.17.2.2 remote-as 65205
+ neighbor 172.17.2.2 description eBGP spoke4 (Tunnel2)
+ neighbor 172.17.3.2 remote-as 65203
+ neighbor 172.17.3.2 description eBGP spoke3 (Tunnel3)
+ neighbor 172.17.8.2 remote-as 65202
+ neighbor 172.17.8.2 description eBGP spoke2 (Tunnel8)
+ !
+ address-family ipv4
+  network 10.255.1.1 mask 255.255.255.255
+  network 192.168.11.0
+  neighbor 172.17.1.2 activate
+  neighbor 172.17.1.2 default-originate
+  neighbor 172.17.2.2 activate
+  neighbor 172.17.2.2 default-originate
+  neighbor 172.17.3.2 activate
+  neighbor 172.17.3.2 default-originate
+  neighbor 172.17.8.2 activate
+  neighbor 172.17.8.2 default-originate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route 0.0.0.0 0.0.0.0 100.64.1.1 name internet-via-fw-east
+ip route 100.65.1.0 255.255.255.252 100.64.1.1 name via-fw-east
+ip route 100.65.2.0 255.255.255.252 100.64.1.1 name via-fw-east
+ip route 100.65.3.0 255.255.255.252 100.64.1.1 name via-fw-east
+ip route 100.65.8.0 255.255.255.252 100.64.1.1 name via-fw-east
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

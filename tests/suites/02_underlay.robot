@@ -24,11 +24,11 @@ Each spoke reaches its headends' WAN addresses through the firewall, and nothing
         ${rt}=    Show    ${t}[spoke]    show ip route ${t}[hub_wan]
         Should Match Regexp    ${rt}    (?s)Known via "static".*${t}[spoke_gw]    msg=${t}[spoke]: no static route to ${t}[hub] via the firewall
     END
-    # the spokes' WAN addresses are not routed anywhere: a spoke must not reach another spoke's WAN directly
-    ${a}=    Set Variable    ${SPOKE_TUNNELS}[${SPOKES}[0]][0]
-    ${b}=    Set Variable    ${SPOKE_TUNNELS}[${SPOKES}[1]][0]
-    ${p}=    Show    ${SPOKES}[0]    ping ${b}[spoke_wan] source ${a}[spoke_if] repeat 2
-    Should Contain    ${p}    Success rate is 0 percent
+    # the WAN /30s stay out of the VPN: a headend routes only its own spokes' WAN links, so a branch cannot reach the WAN address of a
+    # branch it shares no headend with (two branches on the same headend do reach each other there — that headend routes both /30s)
+    Skip If    not $UNROUTED_WAN    every pair of branches shares a headend in this topology: no WAN address is unroutable from a branch
+    ${p}=    Show    ${UNROUTED_WAN}[spoke]    ping ${UNROUTED_WAN}[target] source ${UNROUTED_WAN}[spoke_if] repeat 2
+    Should Contain    ${p}    Success rate is 0 percent    msg=${UNROUTED_WAN}[spoke] reached ${UNROUTED_WAN}[target_spoke]'s WAN ${UNROUTED_WAN}[target] behind ${UNROUTED_WAN}[via_hub], which is not one of its headends
 
 LLDP shows the firewall on each spoke's WAN port and on the headend's WAN port
     FOR    ${t}    IN    @{TUNNEL_LIST}

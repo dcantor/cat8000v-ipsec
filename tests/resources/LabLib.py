@@ -147,6 +147,32 @@ class LabLib:
         return r.json()
 
     @keyword
+    def lab_conf_registration(self, name="robot-probe"):
+        """Dry run of the lab.conf registration every new router gets (webapp/spokes.py `_replace_array`): each array is
+        rewritten in memory for a fake router and the result read back with bash. lab.conf on disk is not touched — this
+        catches a lab.conf whose arrays the provisioning code can no longer find (e.g. wrapped over several lines)."""
+        import tempfile
+        sys.path[:0] = [str(LAB_DIR / "webapp"), str(LAB_DIR / "nautobot")]
+        import spokes   # noqa: PLC0415
+        text = (LAB_DIR / "lab.conf").read_text()
+        for arr, entry in (("ROLE", f"[{name}]=spoke"), ("MGMT_IP", f"[{name}]=10.2.0.99"), ("BGP_AS", f"[{name}]=65299"),
+                           ("LAN", f"[{name}]=192.168.99.0/24"), ("CONSOLE_PORT", f"[{name}]=5299"), ("NODE_IDX", f"[{name}]=99"),
+                           ("ROUTERS", name), ("ALL_NODES", name)):
+            text = spokes._replace_array(text, arr, [entry])
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f: f.write(text); tmp = f.name
+        try:
+            script = (f'source {tmp}; echo "${{ROLE[{name}]}} ${{MGMT_IP[{name}]}} ${{BGP_AS[{name}]}} ${{LAN[{name}]}} '
+                      f'${{CONSOLE_PORT[{name}]}} ${{NODE_IDX[{name}]}}"; echo "${{ROUTERS[@]: -1}} ${{ALL_NODES[@]: -1}}"')
+            r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+            logger.info(f"<pre>{r.stdout}{r.stderr}</pre>", html=True)
+            if r.returncode: raise AssertionError(f"the rewritten lab.conf does not parse: {r.stderr[:300]}")
+            vals = r.stdout.split("\n")[0].split(); last = r.stdout.split("\n")[1].split()
+            keys = ["ROLE", "MGMT_IP", "BGP_AS", "LAN", "CONSOLE_PORT", "NODE_IDX"]
+            out = dict(zip(keys, vals)); out["ROUTERS"], out["ALL_NODES"] = last[0], last[1]
+            return out
+        finally: os.unlink(tmp)
+
+    @keyword
     def portal_get_text(self, path):
         """A plain-text read from the portal (no login needed: /metrics)."""
         url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090"); r = requests.get(f"{url}{path}", timeout=120)

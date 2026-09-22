@@ -94,3 +94,18 @@ CUSTOMERS = {s: intent_mod.customer(_I, s) for s in SPOKES}
 PATTERNS = {r: intent_mod.design_pattern(_I, r) for r in ROUTER_NAMES}
 ADDRESSES = {r: (CUSTOMERS[r]["address"] if r in CUSTOMERS else next(d.get("address") for d in _I["devices"] if d["name"] == r)) for r in ROUTER_NAMES}
 PATTERN_CODES = sorted(p["code"] for p in intent_mod.PATTERNS.values())
+
+# A WAN address no branch may reach: the WAN /30s are never advertised, and a headend holds static routes only to the WAN links of
+# its own spokes — so a branch can reach the WAN addresses of its own headends' firewalls and nothing else. Two branches that share
+# a headend DO reach each other's WAN there (that headend routes both /30s and the firewalls pass ICMP), so the negative test has to
+# pick a branch pair with no headend in common; empty when every pair shares one (then suite 02 skips that check).
+UNROUTED_WAN = {}
+for _s in SPOKES:
+    _mine = {_t["hub"] for _t in SPOKE_TUNNELS[_s]}
+    for _o in SPOKES:
+        if _o == _s or UNROUTED_WAN: continue
+        for _t in SPOKE_TUNNELS[_o]:
+            if _t["hub"] not in _mine:
+                UNROUTED_WAN = {"spoke": _s, "spoke_if": SPOKE_TUNNELS[_s][0]["spoke_if"], "target": _t["spoke_wan"],
+                                "target_spoke": _o, "via_hub": _t["hub"]}
+                break

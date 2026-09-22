@@ -1,0 +1,367 @@
+{
+ "id": "2026-09-22_07-57-35-50e3",
+ "mode": "spoke",
+ "status": "failed",
+ "started": 1790078255.6768842,
+ "finished": 1790078255.7587814,
+ "steps": [
+  {
+   "name": "spoke_validate",
+   "title": "Validate spoke allocation",
+   "status": "success",
+   "started": 1790078255.720231,
+   "finished": 1790078255.7491698,
+   "summary": "spoke5 (10.2.0.18), AS 65207: central-headend fw-central eth6 / Tunnel8; east-headend fw-east eth5 / Tunnel12"
+  },
+  {
+   "name": "spoke_labconf",
+   "title": "Register the spoke in lab.conf + day-0 config",
+   "status": "failed",
+   "started": 1790078255.749663,
+   "finished": 1790078255.75877,
+   "summary": "lab.conf: cannot find ROLE"
+  },
+  {
+   "name": "spoke_vm",
+   "title": "Create and boot the spoke VM",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_bootstrap",
+   "title": "Bootstrap (day-0, license reload, RESTCONF)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_onboard",
+   "title": "Onboard the spoke into Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "spoke_intent",
+   "title": "Add the spoke to the intent (hub link, tunnel, BGP)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "pki",
+   "title": "Certificates: enrol the routers with the lab CA (trustpoint, CA cert, router cert)",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "firewalls",
+   "title": "VyOS firewalls rendered from Nautobot and pushed",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "apply",
+   "title": "Terraform apply + save config",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "pki_verify",
+   "title": "Certificates: pre-shared keys off the routers, every tunnel re-authenticated with RSA",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "test",
+   "title": "Robot Framework tests",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "lab.conf: cannot find ROLE",
+ "options": {
+  "golden": true,
+  "test": true,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "host-central",
+  "host-east",
+  "host-spoke1",
+  "host-spoke2",
+  "host-spoke3",
+  "host-spoke4",
+  "host-west"
+ ],
+ "spoke": {
+  "name": "spoke5",
+  "mgmt_ip": "10.2.0.18",
+  "node_idx": 19,
+  "console_port": 5219,
+  "router_id": "10.255.1.8",
+  "lan": "192.168.17.0/24",
+  "asn": 65207,
+  "role": "spoke",
+  "comments": "",
+  "region": "East",
+  "site": "branch-5",
+  "site_code": "EA-5",
+  "contact": "noc-east@lab.local",
+  "city": "Philadelphia, PA",
+  "lat": 39.9526,
+  "lon": -75.1652,
+  "psk": "lePO2hoPFdlmKvHvQ4RqFoaA",
+  "ike_authentication": "psk",
+  "change_ticket": "CHG0042002",
+  "ram_mib": 4096,
+  "customer": {
+   "company": "Ironwood Stores Co.",
+   "address": "7208 Maple St, Suite 630, Philadelphia, PA 43682",
+   "industry": "Retail",
+   "account_id": "ACME-405091",
+   "service_tier": "Silver",
+   "contract_start": "2023-09-29"
+  },
+  "links": [
+   {
+    "hub": "central-headend",
+    "edge": "fw-central",
+    "edge_if": "eth6",
+    "hub_port": 6,
+    "spoke_port": 2,
+    "tunnel_id": 8,
+    "wan_prefix": "100.65.8.0/30",
+    "tunnel_prefix": "172.17.8.0/30",
+    "hub_wan_ip": "100.65.8.1",
+    "spoke_wan_ip": "100.65.8.2",
+    "hub_tunnel_ip": "172.17.8.1",
+    "spoke_tunnel_ip": "172.17.8.2",
+    "hub_ports_free": [
+     6,
+     7,
+     8
+    ],
+    "hub_tunnels": 4,
+    "spoke": "spoke5"
+   },
+   {
+    "hub": "east-headend",
+    "edge": "fw-east",
+    "edge_if": "eth5",
+    "hub_port": 5,
+    "spoke_port": 3,
+    "tunnel_id": 12,
+    "wan_prefix": "100.65.12.0/30",
+    "tunnel_prefix": "172.17.12.0/30",
+    "hub_wan_ip": "100.65.12.1",
+    "spoke_wan_ip": "100.65.12.2",
+    "hub_tunnel_ip": "172.17.12.1",
+    "spoke_tunnel_ip": "172.17.12.2",
+    "hub_ports_free": [
+     5,
+     6,
+     7,
+     8
+    ],
+    "hub_tunnels": 3,
+    "spoke": "spoke5"
+   }
+  ],
+  "context": {
+   "hubs": [
+    {
+     "name": "central-headend",
+     "region": "Central",
+     "distance": 1,
+     "tunnels": 4,
+     "capacity": 50,
+     "edge": "fw-central",
+     "headroom": {
+      "tunnels": 4,
+      "tunnel_capacity": 50,
+      "tunnel_free": 46,
+      "tunnel_utilisation": 8,
+      "firewall": "fw-central",
+      "bandwidth_mbps": 50,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 32,
+      "bandwidth_free_mbps": 18,
+      "bandwidth_utilisation": 64,
+      "bandwidth_tunnel_capacity": 6,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 64,
+      "effective_capacity": 6,
+      "effective_free": 2
+     },
+     "ports_free": [
+      6,
+      7,
+      8
+     ]
+    },
+    {
+     "name": "east-headend",
+     "region": "East",
+     "distance": 0,
+     "tunnels": 3,
+     "capacity": 50,
+     "edge": "fw-east",
+     "headroom": {
+      "tunnels": 3,
+      "tunnel_capacity": 50,
+      "tunnel_free": 47,
+      "tunnel_utilisation": 6,
+      "firewall": "fw-east",
+      "bandwidth_mbps": 40,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 24,
+      "bandwidth_free_mbps": 16,
+      "bandwidth_utilisation": 60,
+      "bandwidth_tunnel_capacity": 5,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 60,
+      "effective_capacity": 5,
+      "effective_free": 2
+     },
+     "ports_free": [
+      5,
+      6,
+      7,
+      8
+     ]
+    },
+    {
+     "name": "west-headend",
+     "region": "West",
+     "distance": 2,
+     "tunnels": 3,
+     "capacity": 50,
+     "edge": "fw-west",
+     "headroom": {
+      "tunnels": 3,
+      "tunnel_capacity": 50,
+      "tunnel_free": 47,
+      "tunnel_utilisation": 6,
+      "firewall": "fw-west",
+      "bandwidth_mbps": 90,
+      "bandwidth_per_tunnel_mbps": 8,
+      "bandwidth_used_mbps": 24,
+      "bandwidth_free_mbps": 66,
+      "bandwidth_utilisation": 26.7,
+      "bandwidth_tunnel_capacity": 11,
+      "binding": "bandwidth",
+      "aggregate_utilisation": 26.7,
+      "effective_capacity": 11,
+      "effective_free": 8
+     },
+     "ports_free": [
+      2,
+      6,
+      7,
+      8
+     ]
+    }
+   ],
+   "regions": [
+    "East",
+    "Central",
+    "West"
+   ],
+   "nearest": [
+    "east-headend",
+    "central-headend"
+   ],
+   "capacity": 50,
+   "spoke_ports": [
+    2,
+    3,
+    4
+   ]
+  }
+ },
+ "removal": null,
+ "rehome": null,
+ "user": "admin",
+ "log": [
+  {
+   "t": 1790078255.749165,
+   "line": "spoke5 (10.2.0.18), AS 65207: central-headend fw-central eth6 / Tunnel8; east-headend fw-east eth5 / Tunnel12"
+  },
+  {
+   "t": 1790078255.749167,
+   "line": "central-headend will get: fw-central eth6 100.65.8.1/30, Tunnel8 172.17.8.1/30 -> 100.65.8.2, neighbor 172.17.8.2 remote-as 65207"
+  },
+  {
+   "t": 1790078255.7491677,
+   "line": "east-headend will get: fw-east eth5 100.65.12.1/30, Tunnel12 172.17.12.1/30 -> 100.65.12.2, neighbor 172.17.12.2 remote-as 65207"
+  },
+  {
+   "t": 1790078255.758778,
+   "line": "!! lab.conf: cannot find ROLE"
+  }
+ ]
+}
