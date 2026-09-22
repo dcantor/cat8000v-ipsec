@@ -190,6 +190,19 @@ banner, tunnels, IKEv2/IPsec incl. the trustpoint, loopbacks, management ACL / i
 WAN interfaces…), green ✓ / red ✕ per cell; a cell shows the missing and extra lines and a running-vs-intended diff of that
 feature. **Run Golden Config now** starts a `golden` run (backup → intended → compliance, nothing pushed) and refreshes the report.
 
+Drift does not wait for an operator: the portal **schedules a Golden Config run every `GOLDEN_INTERVAL_HOURS`** (6 by default;
+user `scheduler` in the run list and the audit trail, skipped while another run is going or the headends are off), records **one
+drift-history line per compliance run** (which routers drifted and when it was fixed — the dots per router, the Drift history
+table, `GET /api/compliance/history`, and the router's page), and exports the verdict to Prometheus
+(`lab_config_compliance_ok{device}`, `lab_config_noncompliant_features`, `lab_config_compliance_last_run_timestamp_seconds`),
+where the shared monitoring raises **`ConfigDrift`** (a router non-compliant for 10 min) and `ConfigComplianceStale` (no run for
+twice the interval while the lab is up) and the IPsec dashboard shows a compliant/drifted timeline. A non-compliant cell offers
+two fixes: **Remediate** pushes the remediation lines Nautobot computed for the feature (hier_config: `no …` for what is extra,
+the missing lines themselves) over SSH and saves — the `remediate` run: validate → push → Golden Config; **Re-apply from the
+model** re-asserts the model on that router alone — the `reapply` run: NaC render → Terraform plan and staged apply targeted at
+the router's resources (`tools/nac_apply.py --device`) → Golden Config. Suite 10 does both for real: an extra static route and a
+changed loopback description on a spoke, detected, remediated / re-applied, and the history and metrics checked.
+
 ![Compliance](docs/screenshots/portal-compliance.png)
 
 ### Sign-in and audit
@@ -352,7 +365,7 @@ keys on every router**, BGP model vs live sessions, rendered NAC data == committ
 compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
 renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
-router's page, the single sign-on flow); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
 Each run keeps pre/post config backups and a diff under `results/`.
 

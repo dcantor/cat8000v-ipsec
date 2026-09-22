@@ -154,11 +154,12 @@ class RemoveSpec(BaseModel):
 
 class RunRequest(BaseModel):
     """Start a pipeline run. Which body fields matter depends on `mode`."""
-    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden"] = Field(..., description=(
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden", "remediate", "reapply"] = Field(..., description=(
         "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
-        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`) · auth: switch a deployed spoke between pre-shared key and certificate (needs `spoke.name` and `spoke.ike_authentication`) · golden: Nautobot Golden Config backup / intended / compliance only"))
+        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`) · auth: switch a deployed spoke between pre-shared key and certificate (needs `spoke.name` and `spoke.ike_authentication`) · golden: Nautobot Golden Config backup / intended / compliance only · "
+        "remediate: push Nautobot's remediation lines for a router's non-compliant features (needs `spoke.name`, optional `spoke.features`), then Golden Config · reapply: re-assert the model on one router through a targeted Terraform apply (needs `spoke.name`), then Golden Config"))
     intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
-    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router} · auth: {\"name\": spoke, \"ike_authentication\": psk | certificate}")
+    spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router} · auth: {\"name\": spoke, \"ike_authentication\": psk | certificate} · remediate: {\"name\": router, \"features\": optional [compliance features]} · reapply: {\"name\": router}")
     hub: Optional[HubSpec] = None
     options: RunOptions = RunOptions()
 

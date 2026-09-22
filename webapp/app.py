@@ -52,6 +52,8 @@ STEP_TITLES = {"validate": "Validate intent", "save": "Save intent", "nautobot":
                "hub_intent": "Add the hub, its links and tunnels to the intent",
                "rm_validate": "Validate removal", "rm_down": "Power off the spoke VM", "rm_nautobot": "Remove the spoke from Nautobot (tunnel, endpoints, BGP, device, addresses)",
                "rm_intent": "Remove from lab.conf and the intent", "rm_state": "Forget the spoke in the Terraform state", "rm_vm": "Delete the VM",
+               "rem_validate": "Validate the remediation (the router's non-compliant features and Nautobot's remediation lines)", "rem_push": "Push the remediation lines to the router and save",
+               "reapply_plan": "Terraform plan for this router only", "reapply_apply": "Staged terraform apply for this router only + save config",
                "render": "Render NAC data from Nautobot", "plan": "Terraform plan", "apply": "Terraform apply + save config",
                "golden": "Golden Config backup / intended / compliance", "test": "Robot Framework tests"}
 
@@ -215,6 +217,8 @@ class Run(RunBase):
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
         if self.mode == "golden": return ["golden"]   # backup -> intended -> compliance in Nautobot, nothing pushed
+        if self.mode == "remediate": return ["rem_validate", "rem_push", "golden"]   # Nautobot's remediation lines for the drifted features, then the verdict again
+        if self.mode == "reapply": return ["render", "reapply_plan", "reapply_apply", "golden"]   # the model re-asserted on one router through Terraform
         if self.mode == "spoke":
             steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "pki", "firewalls", "plan", "apply", "pki_verify"]
             if self.options.get("golden", True): steps.append("golden")
@@ -599,11 +603,62 @@ class Run(RunBase):
             if self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1"]): raise RuntimeError("convergence apply failed")
             s["summary"] += " (+1 convergence apply)"
 
+    # ---- compliance remediation ---------------------------------------------------
+    def do_rem_validate(self, s):
+        """Nautobot's Golden Config computes, per non-compliant feature, the lines that bring the router back (hier_config: `no` for
+        what is extra, the missing lines themselves): those, for the features asked for (default: every drifted one)."""
+        name = self.spoke["name"]; want = set(self.spoke.get("features") or [])
+        rep = compliance_report(refresh=True); dev = next((d for d in rep["devices"] if d["name"] == name), None)
+        if not dev: raise RuntimeError(f"{name}: no compliance data in Nautobot")
+        feats = [(f, x) for f, x in dev["features"].items() if not x["compliant"] and (not want or f in want)]
+        unknown = want - set(dev["features"])
+        if unknown: raise RuntimeError(f"{name}: no such compliance feature: {', '.join(sorted(unknown))}")
+        if not feats: raise RuntimeError(f"{name}: nothing to remediate — " + ("every feature is compliant" if not want else "the feature(s) asked for are compliant"))
+        empty = [f for f, x in feats if not x["remediation"].strip()]
+        if empty: raise RuntimeError(f"{name}: Nautobot has no remediation lines for {', '.join(empty)} (is the platform's remediation setting configured?)")
+        mgmt = next(d["mgmt_ip"] for d in self.intent["devices"] if d["name"] == name)
+        self.remediation = {"name": name, "mgmt_ip": mgmt, "features": [{"feature": f, "lines": [l for l in x["remediation"].splitlines() if l.strip()], "missing": x["missing"], "extra": x["extra"]} for f, x in feats]}
+        n = sum(len(f["lines"]) for f in self.remediation["features"])
+        s["summary"] = f"{name}: {len(feats)} non-compliant feature(s) — {', '.join(f for f, _ in feats)}; {n} remediation line(s)"
+        self.say(s["summary"])
+        for f in self.remediation["features"]:
+            for l in f["lines"]: self.say(f"   [{f['feature']}] {re.sub(r'(pre-shared-key(?: local| remote)?(?: [0-6])?) \S+', r'\1 <redacted>', l)}")
+
+    def do_rem_push(self, s):
+        """The remediation lines, as one configuration session, then `write memory`; IOS rejecting a line fails the step."""
+        det = self.remediation; c = self._ios(det["mgmt_ip"])
+        try:
+            lines = [l for f in det["features"] for l in f["lines"]]
+            out = c.send_config_set(lines, exit_config_mode=True, cmd_verify=False, read_timeout=120)
+            bad = [l for l in out.splitlines() if any(m in l for m in ("% Invalid", "% Incomplete", "% Ambiguous", "% Error", "% Bad"))]
+            if bad: raise RuntimeError(f"{det['name']} refused: " + " | ".join(bad)[:400])
+            c.send_command("write memory", read_timeout=60)
+            self.say(f"{det['name']}: {len(lines)} line(s) pushed, configuration saved")
+        finally: c.disconnect()
+        s["summary"] = f"{det['name']}: {len(lines)} line(s) pushed ({', '.join(f['feature'] for f in det['features'])}), configuration saved"
+
+    def do_reapply_plan(self, s):
+        rc = self.sh([sys.executable, "tools/nac_apply.py", "--device", self.spoke["name"], "--dry-run"])
+        if rc: raise RuntimeError(f"terraform plan failed (rc={rc})")
+        lines = [l["line"] for l in self.log if l["line"].startswith("staged apply:") or l["line"].startswith("No changes for ")]
+        self.reapply_needed = not any(l.startswith("No changes") for l in lines[-1:]) and bool(lines)
+        s["summary"] = (lines[-1] if lines else "no changes").replace("staged apply: ", f"{self.spoke['name']}: ")
+
+    def do_reapply_apply(self, s):
+        if not getattr(self, "reapply_needed", True):
+            s["summary"] = "nothing to apply — the router already matches the model (Terraform's view)"; self.say(s["summary"]); return
+        rc = self.sh([sys.executable, "tools/nac_apply.py", "--device", self.spoke["name"]])
+        if rc: raise RuntimeError(f"staged terraform apply failed (rc={rc})")
+        summary = [l["line"] for l in self.log if l["line"].startswith("Apply complete")]
+        s["summary"] = "; ".join(x.replace("Apply complete! Resources: ", "") for x in summary) or "applied"
+
     def do_golden(self, s):
         rc = self.sh(["./lab.sh", "nautobot", "golden"])
         if rc: raise RuntimeError(f"Golden Config run failed (rc={rc})")
         rows = [l["line"] for l in self.log if "compliance " in l["line"] and ("COMPLIANT" in l["line"])]
         bad = [r for r in rows if "NON-COMPLIANT" in r]
+        try: compliance_report(refresh=True)   # the Compliance page's cache and the drift history follow the new verdict at once
+        except Exception as e: self.say(f"warning: compliance report not refreshed: {e}")   # noqa: BLE001
         s["summary"] = f"{len(rows) - len(bad)}/{len(rows)} compliance rows compliant"
         if bad: raise RuntimeError(s["summary"] + ": " + bad[0].strip())
 
@@ -642,7 +697,29 @@ def prometheus_metrics():
         try: out += tunnel_metrics(inv().get(with_live=True), L)
         except Exception as e:  # noqa: BLE001
             out += ["# HELP lab_inventory_error 1 if the tunnel inventory could not be collected", "# TYPE lab_inventory_error gauge", metric_line("lab_inventory_error", {"lab": L, "error": e.__class__.__name__}, 1)]
+    out += compliance_metrics(L)
     return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
+
+
+def compliance_metrics(L):
+    """Nautobot's Golden Config verdict per router (from the portal's 30-s cache of the compliance report) and when it was last
+    computed: the ConfigDrift / ConfigComplianceStale alerts and the compliance panels on the IPsec dashboard."""
+    try: rep = compliance_report(refresh=False)
+    except Exception as e:  # noqa: BLE001
+        return ["# HELP lab_config_compliance_error 1 if the compliance report could not be read from Nautobot", "# TYPE lab_config_compliance_error gauge", metric_line("lab_config_compliance_error", {"lab": L, "error": e.__class__.__name__}, 1)]
+    out = ["# HELP lab_config_compliance_ok 1 if every Golden Config compliance feature of the router matches the model (Nautobot's last compliance run)", "# TYPE lab_config_compliance_ok gauge",
+           "# HELP lab_config_noncompliant_features Golden Config compliance features that drifted on the router", "# TYPE lab_config_noncompliant_features gauge",
+           "# HELP lab_config_compliance_features Golden Config compliance features checked on the router", "# TYPE lab_config_compliance_features gauge",
+           "# HELP lab_config_compliance_last_run_timestamp_seconds When Nautobot last computed compliance for the lab (unix time)", "# TYPE lab_config_compliance_last_run_timestamp_seconds gauge",
+           "# HELP lab_config_compliance_interval_seconds How often the portal schedules a Golden Config run (0 = disabled)", "# TYPE lab_config_compliance_interval_seconds gauge"]
+    for d in rep["devices"]:
+        if not d["total"]: continue
+        lbl = {"lab": L, "device": d["name"], "role": d["role"]}
+        out += [metric_line("lab_config_compliance_ok", lbl, int(d["ok"])), metric_line("lab_config_noncompliant_features", lbl, d["total"] - d["compliant"]), metric_line("lab_config_compliance_features", lbl, d["total"])]
+    last = rep["summary"]["last_compliance"]
+    if last: out.append(metric_line("lab_config_compliance_last_run_timestamp_seconds", {"lab": L}, int(datetime.strptime(last + "+0000", "%Y-%m-%d %H:%M:%S%z").timestamp())))
+    out.append(metric_line("lab_config_compliance_interval_seconds", {"lab": L}, int(GOLDEN_INTERVAL_HOURS * 3600)))
+    return out
 
 
 def tunnel_metrics(data, L):
@@ -930,7 +1007,7 @@ def compliance_report(refresh: bool = Query(False, description="read Nautobot ag
             dev = r["device"]["name"] if isinstance(r["device"], dict) else ids.get(r["device"], "?")
             a, b = (r.get("actual") or "").splitlines(), (r.get("intended") or "").splitlines()
             diff = "\n".join(difflib.unified_diff(a, b, fromfile="running", tofile="intended", lineterm="", n=2)) if a != b else ""
-            per.setdefault(dev, {})[r["rule"]["feature"]["name"]] = {"compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or "", "diff": diff, "ordered": bool(r.get("ordered")), "updated": (r.get("last_updated") or "")[:19].replace("T", " ")}
+            per.setdefault(dev, {})[r["rule"]["feature"]["name"]] = {"compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or "", "remediation": r.get("remediation") or "", "diff": diff, "ordered": bool(r.get("ordered")), "updated": (r.get("last_updated") or "")[:19].replace("T", " ")}
         devices = []
         for did, name in sorted(ids.items(), key=lambda x: (routers.get(x[1], {}).get("role") != "hub", x[1])):
             g = gcs.get(did, {}); feats = per.get(name, {})
@@ -938,10 +1015,79 @@ def compliance_report(refresh: bool = Query(False, description="read Nautobot ag
                             "compliant": sum(1 for x in feats.values() if x["compliant"]), "total": len(feats), "ok": bool(feats) and all(x["compliant"] for x in feats.values()),
                             "backup_at": (g.get("backup_last_success_date") or "")[:19].replace("T", " "), "intended_at": (g.get("intended_last_success_date") or "")[:19].replace("T", " "), "compliance_at": (g.get("compliance_last_success_date") or "")[:19].replace("T", " "),
                             "url": f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/?device={did}"})
-        c = _compliance_cache["r"] = {"generated": time.time(), "features": features, "devices": devices, "nautobot": f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/",
-                                      "summary": {"devices": len(devices), "devices_ok": sum(1 for d in devices if d["ok"]), "rows": sum(d["total"] for d in devices), "rows_ok": sum(d["compliant"] for d in devices),
-                                                  "last_compliance": max((d["compliance_at"] for d in devices), default="")}}
-    return c
+        summary = {"devices": len(devices), "devices_ok": sum(1 for d in devices if d["ok"]), "rows": sum(d["total"] for d in devices), "rows_ok": sum(d["compliant"] for d in devices),
+                   "last_compliance": max((d["compliance_at"] for d in devices), default="")}
+        hist = _record_drift(summary["last_compliance"], devices)
+        for d in devices: d["history"] = [{"at": h["at"], **h["devices"][d["name"]]} for h in hist if d["name"] in h["devices"]][-HISTORY_SHOWN:]
+        c = _compliance_cache["r"] = {"generated": time.time(), "features": features, "devices": devices, "nautobot": f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/", "summary": summary,
+                                      "history": [{"at": h["at"], "devices_ok": sum(1 for x in h["devices"].values() if x["ok"]), "devices": len(h["devices"]), "drifted": sorted(n for n, x in h["devices"].items() if not x["ok"])} for h in hist[-HISTORY_SHOWN:]]}
+    return {**c, "schedule": golden_schedule()}
+
+
+DRIFT_HISTORY = RUNS_DIR / "compliance-history.jsonl"; HISTORY_SHOWN = 30
+def _drift_history():
+    out = []
+    if DRIFT_HISTORY.exists():
+        for line in DRIFT_HISTORY.read_text().splitlines():
+            try: out.append(json.loads(line))
+            except ValueError: pass
+    return out
+
+
+def _record_drift(at, devices):
+    """One line per compliance run (keyed by Nautobot's compliance date): every router's verdict and its drifted features, so the
+    report can show how each router fared over the last runs and when drift appeared / went away."""
+    hist = _drift_history()
+    if at and not any(h["at"] == at for h in hist):
+        snap = {"at": at, "recorded": time.time(), "devices": {d["name"]: {"ok": d["ok"], "compliant": d["compliant"], "total": d["total"], "drifted": sorted(f for f, x in d["features"].items() if not x["compliant"])} for d in devices if d["total"]}}
+        with DRIFT_HISTORY.open("a") as f: f.write(json.dumps(snap) + "\n")
+        hist.append(snap)
+    return hist
+
+
+@app.get("/api/compliance/history", tags=["inventory"], summary="Drift history: every router's Golden Config verdict per compliance run (newest last), or one router's")
+def compliance_history(device: str = Query(None, description="one router"), limit: int = Query(HISTORY_SHOWN, le=500)):
+    """The portal records a snapshot every time Nautobot reports a new compliance run (the scheduled run, a golden / deploy / remediate
+    run, `./lab.sh nautobot golden`): per router, compliant or not and which features drifted."""
+    hist = _drift_history()[-limit:]
+    if device: return {"device": device, "runs": [{"at": h["at"], **h["devices"][device]} for h in hist if device in h["devices"]]}
+    return {"runs": hist}
+
+
+# ---- scheduled Golden Config run --------------------------------------------------------------------------------------------
+GOLDEN_INTERVAL_HOURS = float(os.environ.get("GOLDEN_INTERVAL_HOURS", "6"))   # 0 disables the schedule
+_schedule = {"next": None, "last_run": None, "last_started": None}
+def golden_schedule():
+    return {"interval_hours": GOLDEN_INTERVAL_HOURS, "enabled": GOLDEN_INTERVAL_HOURS > 0, "next_run": _schedule["next"], "last_run": _schedule["last_run"], "last_started": _schedule["last_started"], "user": "scheduler"}
+
+
+def _golden_scheduler():
+    """Every GOLDEN_INTERVAL_HOURS a `golden` run (backup → intended → compliance) is queued as user `scheduler`, so drift shows up on
+    the Compliance page, in the drift history and as the ConfigDrift alert without anyone pressing the button. The first run is due
+    one interval after Nautobot's last compliance run (two minutes after start-up when that is already overdue); a run is skipped
+    while another run is queued or executing (that run ends with its own golden step) and while the headends are powered off."""
+    auth.current_user.set({"name": "scheduler", "role": "operator"})
+    try: last = datetime.strptime(compliance_report(refresh=False)["summary"]["last_compliance"] + "+0000", "%Y-%m-%d %H:%M:%S%z").timestamp()
+    except Exception: last = 0   # noqa: BLE001
+    _schedule["next"] = max(last + GOLDEN_INTERVAL_HOURS * 3600, time.time() + 120)
+    while True:
+        time.sleep(min(60, max(1, _schedule["next"] - time.time())))
+        if time.time() < _schedule["next"]: continue
+        hubs_up = any(st == "running" for (node, role), st in _vm_states().items() if role == "hub")
+        if registry.busy() or not hubs_up:
+            _schedule["next"] = time.time() + 600; continue   # try again in ten minutes
+        try:
+            run = registry.start(Run("golden", intent_mod.load(), {}, None)); _schedule["last_run"] = run["id"]; _schedule["last_started"] = time.time()
+            auth.audit(AUDIT, {"name": "scheduler", "role": "operator"}, "run.start", None, method="POST", path="/api/runs", mode="golden", run_id=run["id"], status=200, scheduled=True)
+        except Exception as e:  # noqa: BLE001
+            auth.audit(AUDIT, {"name": "scheduler", "role": "operator"}, "run.start", None, mode="golden", error=str(e)[:200])
+        _schedule["next"] = time.time() + GOLDEN_INTERVAL_HOURS * 3600
+
+
+@app.on_event("startup")
+def _start_scheduler():
+    if GOLDEN_INTERVAL_HOURS > 0 and not os.environ.get("GOLDEN_SCHEDULER_OFF"):
+        import threading; threading.Thread(target=_golden_scheduler, daemon=True, name="golden-scheduler").start()
 
 
 GITEA_URL = os.environ.get("GITEA_URL", "http://10.0.0.10:3000"); GITEA_PUBLIC_URL = os.environ.get("GITEA_PUBLIC_URL", "http://192.168.50.231:3000"); BACKUPS_REPO = os.environ.get("CONFIG_BACKUPS_REPO", "lab/config-backups")
@@ -1109,12 +1255,23 @@ def start_run(body: S.RunRequest, request: Request):
       (or retired) → staged terraform on the spoke and its headends → SAs re-authenticated and verified as modelled → Golden Config
     * **renew** – `spoke.name` (any router with a certificate-authenticated tunnel): a new CSR from the router, signed by the
       lab CA, imported → Nautobot's cert_* fields → the router's IKEv2 SAs cleared → every tunnel back READY with RSA; tests optional
+    * **golden** – Nautobot Golden Config: backup every router → render the intended configuration → compliance (nothing is pushed)
+    * **remediate** – `spoke.name` (any router; optional `spoke.features` to limit it): Nautobot's remediation lines for the router's
+      non-compliant features are pushed over SSH and saved, then Golden Config runs again for the verdict
+    * **reapply** – `spoke.name` (any router): the model re-asserted on that router alone — NaC render → Terraform plan / staged apply
+      targeted at the router's resources → Golden Config
     """
     body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome, renew, auth or golden")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden", "remediate", "reapply"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome, renew, auth, golden, remediate or reapply")
     spoke = None
-    if mode == "auth":
+    if mode in ("remediate", "reapply"):
+        spoke = body.get("spoke") or body.get("router") or {}; intent = intent_mod.load()
+        if not any(d["name"] == spoke.get("name") and d["role"] in ("hub", "spoke") for d in intent["devices"]): raise HTTPException(422, {"problems": [f"no such router: {spoke.get('name')!r}"]})
+        if mode == "remediate":
+            cached = _compliance_cache.get("r"); dev = next((d for d in (cached or {}).get("devices", []) if d["name"] == spoke["name"]), None)
+            if dev and dev["ok"] and not spoke.get("features"): raise HTTPException(422, {"problems": [f"{spoke['name']} is compliant — nothing to remediate (run Golden Config first if the router changed)"]})
+    elif mode == "auth":
         spoke = body.get("spoke") or {}; problems, _ = spokes.auth_plan(spoke.get("name", ""), spoke.get("ike_authentication"))
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()

@@ -48,7 +48,7 @@ with sync_playwright() as pw:
     page.evaluate("localStorage.setItem('portal-theme', 'dark'); applyTheme()"); page.goto(f"{PORTAL}/#inventory"); page.wait_for_function("document.querySelectorAll('#inv-tunnels tbody tr').length > 0", timeout=180000); time.sleep(1.5)
     page.evaluate("window.scrollTo(0, 0)"); time.sleep(0.5); page.screenshot(path=str(OUT / "portal-dark.png")); page.evaluate("localStorage.removeItem('portal-theme'); applyTheme()")
     page.goto(f"{PORTAL}/#firewalls"); page.wait_for_function("document.querySelectorAll('#fw-cards .card').length > 0", timeout=180000); time.sleep(1); page.screenshot(path=str(OUT / "portal-firewalls.png"))
-    page.goto(f"{PORTAL}/#compliance"); page.wait_for_function("document.querySelectorAll('#cmp-table tbody tr').length > 0", timeout=60000); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-compliance.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 640})
+    page.goto(f"{PORTAL}/#compliance"); page.wait_for_function("document.querySelectorAll('#cmp-table tbody tr').length > 0", timeout=60000); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-compliance.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 900})
     page.goto(f"{PORTAL}/#audit"); page.wait_for_function("document.querySelectorAll('#audit-table tbody tr').length > 0", timeout=60000); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-audit.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 520})
     page.goto(f"{PORTAL}/docs"); time.sleep(3); page.screenshot(path=str(OUT / "portal-swagger.png"))
     # ---- Nautobot ----

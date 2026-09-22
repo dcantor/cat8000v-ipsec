@@ -7,8 +7,10 @@ while a tunnel still uses it (IOS refuses). Three stages, each a saved plan appl
   1. every resource the plan creates (-target, dependencies come along)      -> new crypto profiles, keyrings, tunnels
   2. every resource the plan updates in place                                 -> tunnels re-pointed at their new profile
   3. the full plan                                                             -> the destroys, and anything left
-Usage: nac_apply.py [--dry-run]   (from the lab root; runs `./lab.sh nac ...`, which carries the router credentials and saves
-the running config after a successful full apply)"""
+Usage: nac_apply.py [--dry-run] [--device NAME]   (from the lab root; runs `./lab.sh nac ...`, which carries the router
+credentials and saves the running config after a successful full apply). With --device only that router's resources (the
+addresses keyed "NAME" or "NAME/...") are applied — the portal's "re-apply from the model" for one drifted router; every
+stage, the last one included, is then a targeted plan."""
 import argparse, json, os, subprocess, sys, tempfile
 from pathlib import Path
 
@@ -32,12 +34,18 @@ def changes(planfile):
     return [(c["address"], c["change"]["actions"]) for c in json.loads(show).get("resource_changes", []) if c.get("mode") == "managed"]
 
 
+def mine(addr, device):
+    return device is None or f'["{device}"]' in addr or f'["{device}/' in addr
+
+
 def main():
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0]); p.add_argument("--dry-run", action="store_true"); a = p.parse_args()
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0]); p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--device", help="apply only this router's resources (a targeted plan in every stage)"); a = p.parse_args()
     with tempfile.TemporaryDirectory() as td:
         full = f"{td}/full.tfplan"
         if not plan(full): print("No changes. Your infrastructure matches the configuration."); return
-        ch = changes(full)
+        ch = [(addr, act) for addr, act in changes(full) if mine(addr, a.device)]
+        if a.device and not ch: print(f"No changes for {a.device}. Its configuration matches the model."); return
         # the module's iosxe_cli templates depend on every other resource: targeting one drags the whole graph into the stage, so they
         # (and the model file) wait for the full plan
         creates = [addr for addr, act in ch if act == ["create"] and not ("local_sensitive_file" in addr or ".iosxe_cli." in addr)]
@@ -50,8 +58,8 @@ def main():
             if not targets: print(f"{stage}: nothing"); continue
             pf = f"{td}/{stage[6]}.tfplan"; print(f"==> {stage} ({len(targets)} resources)")
             if plan(pf, targets): tf("apply", *BASE, pf)
-        print("==> stage 3/3: the full plan")
-        if plan(full): tf("apply", *BASE, full)
+        print("==> stage 3/3: the full plan" if not a.device else f"==> stage 3/3: everything left for {a.device}")
+        if plan(full, [addr for addr, _ in ch] if a.device else ()): tf("apply", *BASE, full)
         else: print("nothing left to apply")
 
 

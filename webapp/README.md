@@ -287,6 +287,32 @@ device × feature grid (✓ / ✕), a KPI strip, and a detail panel for the clic
 first one opened). **Run Golden Config now** posts a `golden` run (the one `golden` step; operator) and refreshes the report when
 it finishes.
 
+Every feature row also carries Nautobot's `remediation` text, and a non-compliant cell offers **Remediate** (this feature, or every
+drifted feature of the router) and **Re-apply from the model**; every router row has the re-apply button:
+
+* `POST /api/runs {"mode": "remediate", "spoke": {"name": R, "features": [optional]}}` — steps `rem_validate` (the router's
+  non-compliant features from a fresh compliance read, their remediation lines — the run fails if there is nothing to do or Nautobot
+  computed no lines), `rem_push` (one configuration session over SSH, IOS rejecting a line fails the step, then `write memory`),
+  `golden`. Pre-shared keys in remediation lines are redacted in the log. A compliant router is refused with 422 unless features are named.
+* `POST /api/runs {"mode": "reapply", "spoke": {"name": R}}` — steps `render`, `reapply_plan` (`tools/nac_apply.py --device R --dry-run`:
+  the full plan filtered to the router's resource addresses), `reapply_apply` (the staged apply targeted at those addresses; skipped
+  when the plan is clean), `golden`.
+
+**Scheduled run.** A daemon thread queues a `golden` run every `GOLDEN_INTERVAL_HOURS` (env, default 6; `0` or `GOLDEN_SCHEDULER_OFF=1`
+disables it) as user `scheduler` (audited like any run start). The first one is due one interval after Nautobot's last compliance
+run, at the earliest two minutes after start-up; while a run is queued or executing, or the headends are powered off, it is
+retried ten minutes later. `schedule` in `GET /api/compliance` shows interval, next and last scheduled run.
+
+**Drift history.** Whenever the report sees a new `last_compliance` date it appends one line to `webapp/runs/compliance-history.jsonl`
+(per router: compliant, rows compliant / total, the drifted features). `GET /api/compliance` returns the last 30 snapshots
+(`history`, plus `history` per device) and `GET /api/compliance/history?device=R&limit=N` one router's series; the golden step
+refreshes the report at its end so the snapshot is written as soon as the verdict exists.
+
+**Metrics** (`/metrics`, from the 30-s cache): `lab_config_compliance_ok{device,role}`, `lab_config_noncompliant_features`,
+`lab_config_compliance_features`, `lab_config_compliance_last_run_timestamp_seconds`, `lab_config_compliance_interval_seconds`
+(`lab_config_compliance_error` when Nautobot cannot be read). The shared monitoring (lab-portal) alerts `ConfigDrift` and
+`ConfigComplianceStale` on them and the IPsec dashboard has a compliance row.
+
 ### Dark mode
 
 The header's **☾ dark / ☀ light** link switches the whole portal (every colour is a CSS token; `html[data-theme=dark]` redefines

@@ -129,6 +129,79 @@ The Compliance page reports Nautobot's Golden Config verdict for every router an
     Should Be Equal    ${res}[status]    success    msg=golden run ${run}[id] ended ${res}[status]: ${res}[error]
     ${after}=    Portal Get    /api/compliance    refresh=true
     Should Be True    $after['summary']['last_compliance'] > $c['summary']['last_compliance']    msg=the compliance run did not refresh the report
+    # the portal schedules the same run on its own (GOLDEN_INTERVAL_HOURS) and records one drift-history line per compliance run
+    Should Be True    $after['schedule']['enabled'] and $after['schedule']['interval_hours'] > 0    msg=no scheduled Golden Config run: ${after}[schedule]
+    Should Be True    $after['schedule']['next_run'] > time.time()    msg=the next scheduled run is in the past: ${after}[schedule]
+    Should Be Equal    ${after}[history][-1][at]    ${after}[summary][last_compliance]    msg=the run was not recorded in the drift history
+    Should Be Equal As Integers    ${after}[history][-1][devices_ok]    ${after}[history][-1][devices]
+
+Drift on a router is detected by the Golden Config run, remediated from the portal with Nautobot's remediation lines, and recorded in the drift history
+    [Documentation]    An extra static route is configured on a spoke by hand. The golden run marks its Static routes feature non-compliant
+    ...    with the `no ...` remediation line; a `remediate` run pushes that line and saves, the next verdict is compliant again, the drift
+    ...    history shows the drift and its repair, and Prometheus (via /metrics) saw the router non-compliant in between.
+    [Tags]    remediation
+    ${spoke}=    Set Variable    ${{ [n for n, r in $ROUTERS.items() if r['role'] == 'spoke'][-1] }}
+    ${host}=    Set Variable    ${ROUTERS}[${spoke}][host]
+    Configure Router    ${host}    ip route 10.99.99.0 255.255.255.0 Null0 name robot-drift
+    ${run}=    Portal Post    /api/runs    {"mode": "golden", "options": {}}
+    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    Should Be Equal    ${res}[status]    failed    msg=the golden run should fail on the drifted router (${res}[status])
+    Should Contain    ${res}[error]    ${spoke}
+    ${c}=    Portal Get    /api/compliance    refresh=true
+    ${d}=    Set Variable    ${{ [d for d in $c['devices'] if d['name'] == $spoke][0] }}
+    Should Not Be True    ${d}[ok]    msg=${spoke} still compliant after the drift
+    Should Not Be True    ${d}[features][Static routes][compliant]
+    Should Contain    ${d}[features][Static routes][extra]    10.99.99.0
+    Should Contain    ${d}[features][Static routes][remediation]    no ip route 10.99.99.0 255.255.255.0 Null0
+    Should Contain    ${c}[history][-1][drifted]    ${spoke}    msg=the drift is not in the history: ${c}[history][-1]
+    Should Be Equal As Integers    ${c}[summary][devices_ok]    ${{ len($ROUTER_NAMES) - 1 }}
+    ${m}=    Portal Get Text    /metrics
+    Should Match Regexp    ${m}    lab_config_compliance_ok\\{[^}]*device="${spoke}"[^}]*\\} 0
+    Should Match Regexp    ${m}    lab_config_noncompliant_features\\{[^}]*device="${spoke}"[^}]*\\} 1
+    # remediate that one feature from the portal
+    ${run}=    Portal Post    /api/runs    {"mode": "remediate", "spoke": {"name": "${spoke}", "features": ["Static routes"]}, "options": {}}
+    Should Be Equal    ${run}[mode]    remediate
+    Should Be Equal    ${{ [s['name'] for s in $run['steps']] }}    ${{ ['rem_validate', 'rem_push', 'golden'] }}
+    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    Should Be Equal    ${res}[status]    success    msg=remediate run ${run}[id] ended ${res}[status]: ${res}[error]
+    Should Contain    ${res}[steps][1][summary]    1 line(s) pushed
+    ${out}=    Run Command    ${host}    show running-config | include 10.99.99.0
+    Should Not Contain    ${out}    10.99.99.0    msg=the remediation did not remove the route
+    ${out}=    Run Command    ${host}    show startup-config | include 10.99.99.0
+    Should Not Contain    ${out}    10.99.99.0    msg=the remediation was not saved
+    ${c}=    Portal Get    /api/compliance    refresh=true
+    Should Be True    ${{ [d for d in $c['devices'] if d['name'] == $spoke][0]['ok'] }}    msg=${spoke} still non-compliant after the remediation
+    Should Be Equal As Integers    ${c}[summary][devices_ok]    ${c}[summary][devices]
+    ${h}=    Portal Get    /api/compliance/history    device=${spoke}
+    Should Not Be True    ${h}[runs][-2][ok]
+    Should Contain    ${h}[runs][-2][drifted]    Static routes
+    Should Be True    ${h}[runs][-1][ok]
+    ${m}=    Portal Get Text    /metrics
+    Should Match Regexp    ${m}    lab_config_compliance_ok\\{[^}]*device="${spoke}"[^}]*\\} 1
+    # a second remediation has nothing to do
+    ${r}=    Portal Request    POST    /api/runs    {"mode": "remediate", "spoke": {"name": "${spoke}"}}
+    Should Be Equal As Integers    ${r}[status]    422    msg=remediating a compliant router should be refused: ${r}[json]
+    [Teardown]    Run Keyword And Ignore Error    Configure Router    ${host}    no ip route 10.99.99.0 255.255.255.0 Null0 name robot-drift
+
+Re-apply from the model restores a modelled attribute that was changed by hand, through a Terraform apply targeted at that router
+    [Documentation]    Loopback0's description on a spoke is changed by hand (Terraform manages it). A `reapply` run renders the NaC data,
+    ...    plans and applies only that router's resources, and ends with Golden Config compliant; the description is back.
+    [Tags]    remediation
+    ${spoke}=    Set Variable    ${{ [n for n, r in $ROUTERS.items() if r['role'] == 'spoke'][0] }}
+    ${host}=    Set Variable    ${ROUTERS}[${spoke}][host]
+    ${before}=    Run Command    ${host}    show running-config interface Loopback0
+    ${desc}=    Set Variable    ${{ re.search(r'description (.*)', $before).group(1).strip() }}
+    Configure Router    ${host}    interface Loopback0    description robot-drift
+    ${run}=    Portal Post    /api/runs    {"mode": "reapply", "spoke": {"name": "${spoke}"}, "options": {}}
+    Should Be Equal    ${{ [s['name'] for s in $run['steps']] }}    ${{ ['render', 'reapply_plan', 'reapply_apply', 'golden'] }}
+    ${res}=    Wait Until Keyword Succeeds    10 min    10s    Run Finished    ${run}[id]
+    Should Be Equal    ${res}[status]    success    msg=reapply run ${run}[id] ended ${res}[status]: ${res}[error]
+    Should Contain    ${res}[steps][1][summary]    1 to update in place    msg=the targeted plan should see exactly the loopback: ${res}[steps][1][summary]
+    Should Contain    ${res}[steps][2][summary]    1 changed
+    ${after}=    Run Command    ${host}    show running-config interface Loopback0
+    Should Contain    ${after}    description ${desc}
+    Should Not Contain    ${after}    robot-drift
+    [Teardown]    Run Keyword And Ignore Error    Configure Router    ${host}    interface Loopback0    description ${desc}
 
 Single sign-on is offered and starts an authorization-code flow with PKCE at the provider
     ${o}=    Portal Get    /api/oidc

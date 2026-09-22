@@ -46,6 +46,15 @@ class LabLib:
         return out
 
     @keyword
+    def configure_router(self, host, *lines):
+        """Push configuration lines to a router over SSH (one configuration session; used to inject deliberate drift)."""
+        out = self._conn(host).send_config_set(list(lines), exit_config_mode=True, cmd_verify=False, read_timeout=60)
+        logger.info(f"<pre>{host}(config)# {chr(10).join(lines)}\n{out}</pre>", html=True)
+        bad = [l for l in out.splitlines() if l.startswith("%")]
+        if bad: raise AssertionError(f"{host} refused: {' | '.join(bad)}")
+        return out
+
+    @keyword
     def get_running_config(self, host):
         return self._conn(host).send_command("show running-config", read_timeout=120)
 
@@ -136,6 +145,12 @@ class LabLib:
         r = self._portal.get(f"{url}{path}", params=params, timeout=300)
         logger.info(f"GET {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status()
         return r.json()
+
+    @keyword
+    def portal_get_text(self, path):
+        """A plain-text read from the portal (no login needed: /metrics)."""
+        url = os.environ.get("PORTAL_URL", "http://127.0.0.1:8090"); r = requests.get(f"{url}{path}", timeout=120)
+        logger.info(f"GET {r.url} -> {r.status_code}\n{r.text[:1500]}"); r.raise_for_status(); return r.text
 
     @keyword
     def portal_post(self, path, body):

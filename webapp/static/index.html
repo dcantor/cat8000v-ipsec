@@ -75,6 +75,7 @@
   .steps { list-style:none; padding:0; margin:0 } .steps li { display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); align-items:flex-start }
   .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:var(--chip) }
   .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:var(--bar) }
+  .dots { display:inline-flex; gap:3px; vertical-align:middle } .dots .dot { width:9px; height:9px; margin:0 } .dot.ok { background:var(--ok) } .dot.fail { background:var(--bad) }
   @keyframes pulse { 50% { opacity:.3 } }
   .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
   .wide table.mesh, table.mesh { min-width:0; font-size:11.5px; width:100%; table-layout:fixed } table.mesh th, table.mesh td { padding:4px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } table.mesh .pill { padding:1px 6px }
@@ -271,6 +272,10 @@
     <h2>Report <small>one row per router, one column per compliance feature — click a cell for the missing / extra lines and the diff</small></h2>
     <div class="wide"><table id="cmp-table"><thead></thead><tbody></tbody></table></div>
     <div id="cmp-detail" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>Drift history <small id="cmp-hist-note">one line per compliance run — which routers drifted, and when it was fixed</small></h2>
+    <div class="wide"><table id="cmp-history"><thead><tr><th>Compliance run</th><th>Routers compliant</th><th>Drifted</th></tr></thead><tbody></tbody></table></div>
   </div>
 </main>
 <main id="view-audit" hidden style="grid-template-columns:1fr">
@@ -846,35 +851,57 @@ const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open 
 
 // ---- compliance report ----------------------------------------------------------------------------------------------
 let CMP = null;
+const histDots = h => h.map(x => `<span class="dot ${x.ok ? 'ok' : 'fail'}" title="${esc(x.at)}: ${x.ok ? 'compliant' : 'drifted — ' + x.drifted.join(', ')}"></span>`).join('');
 async function loadCompliance(refresh) {
   $('cmp-note').textContent = 'loading…';
   const r = await fetch('/api/compliance' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('cmp-note').textContent = `HTTP ${r.status}`; return; }
-  CMP = await r.json(); const s = CMP.summary; $('cmp-nb').href = CMP.nautobot;
-  $('cmp-note').textContent = `Nautobot Golden Config · last compliance run ${s.last_compliance || 'never'} · every router's last backup against the configuration rendered from the model, per feature`;
-  $('cmp-kpis').innerHTML = [[`${s.devices_ok} / ${s.devices}`, 'routers fully compliant', s.devices_ok === s.devices ? 'ok' : 'bad'], [`${s.rows_ok} / ${s.rows}`, 'compliance rows compliant', s.rows_ok === s.rows ? 'ok' : 'bad'], [CMP.features.length, 'features under compliance', ''], [s.last_compliance ? s.last_compliance.slice(0, 16) : '-', 'last compliance run', '']]
+  CMP = await r.json(); const s = CMP.summary, sch = CMP.schedule || {}; $('cmp-nb').href = CMP.nautobot; const op = can('operator');
+  $('cmp-note').textContent = `Nautobot Golden Config · last compliance run ${s.last_compliance || 'never'} · ` + (sch.enabled ? `scheduled every ${sch.interval_hours} h (next ${sch.next_run ? new Date(sch.next_run * 1000).toLocaleString() : 'soon'}${sch.last_run ? ', last scheduled run ' + sch.last_run : ''})` : 'no scheduled run') + ' · every router\'s last backup against the configuration rendered from the model, per feature';
+  $('cmp-kpis').innerHTML = [[`${s.devices_ok} / ${s.devices}`, 'routers fully compliant', s.devices_ok === s.devices ? 'ok' : 'bad'], [`${s.rows_ok} / ${s.rows}`, 'compliance rows compliant', s.rows_ok === s.rows ? 'ok' : 'bad'], [CMP.features.length, 'features under compliance', ''], [s.last_compliance ? s.last_compliance.slice(0, 16) : '-', 'last compliance run', ''], [sch.enabled ? `every ${sch.interval_hours} h` : 'off', 'scheduled Golden Config run', '']]
     .map(([v, l, c]) => `<div class="kpi"><div class="v ${c === 'ok' ? 'test-pass' : c === 'bad' ? 'test-fail' : ''}" style="font-size:22px;font-weight:600">${esc(v)}</div><div class="hint">${esc(l)}</div></div>`).join('');
-  $('cmp-table').querySelector('thead').innerHTML = `<tr><th>Router</th><th>Result</th>${CMP.features.map(f => `<th style="text-align:center;font-size:11px">${esc(f)}</th>`).join('')}<th>Backup</th><th>Compliance run</th></tr>`;
+  $('cmp-table').querySelector('thead').innerHTML = `<tr><th>Router</th><th>Result</th>${CMP.features.map(f => `<th style="text-align:center;font-size:11px">${esc(f)}</th>`).join('')}<th title="the router's verdict over the last compliance runs, oldest left">History</th><th>Backup</th><th>Compliance run</th><th></th></tr>`;
   $('cmp-table').querySelector('tbody').innerHTML = CMP.devices.map(d => `<tr><td style="white-space:nowrap">${branchLink(d.name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span></td><td style="white-space:nowrap"><span class="pill ${d.ok ? 'ok' : 'fail'}">${d.compliant} / ${d.total}</span></td>
     ${CMP.features.map(f => { const x = d.features[f]; return `<td style="text-align:center">${x ? `<a onclick="showCompliance('${esc(d.name)}','${esc(f)}')" title="${esc(f)} on ${esc(d.name)}: ${x.compliant ? 'compliant' : 'non-compliant'}"><span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? '✓' : '✕'}</span></a>` : '<span class="hint">–</span>'}</td>`; }).join('')}
-    <td class="hint" style="white-space:nowrap">${esc(d.backup_at || '-')}</td><td class="hint" style="white-space:nowrap">${esc(d.compliance_at || '-')}</td></tr>`).join('') || '<tr><td colspan="4" class="hint">no compliance data yet — run the Golden Config jobs</td></tr>';
+    <td style="white-space:nowrap"><span class="dots">${histDots((d.history || []).slice(-12))}</span></td>
+    <td class="hint" style="white-space:nowrap">${esc(d.backup_at || '-')}</td><td class="hint" style="white-space:nowrap">${esc(d.compliance_at || '-')}</td>
+    <td style="white-space:nowrap">${d.ok ? '' : `<button type="button" class="small remed" ${op ? '' : 'disabled title="operator role required"'} onclick="remediate('${esc(d.name)}')" title="push Nautobot's remediation lines for every drifted feature of ${esc(d.name)}, then run Golden Config again">Remediate</button> `}<button type="button" class="small reapply" ${op ? '' : 'disabled title="operator role required"'} onclick="reapply('${esc(d.name)}')" title="re-assert the model on ${esc(d.name)} alone: NaC render, Terraform plan and staged apply targeted at this router, then Golden Config">Re-apply from the model</button></td></tr>`).join('') || '<tr><td colspan="4" class="hint">no compliance data yet — run the Golden Config jobs</td></tr>';
   const bad = CMP.devices.flatMap(d => Object.entries(d.features).filter(([, x]) => !x.compliant).map(([f]) => [d.name, f]));
   $('cmp-detail').innerHTML = bad.length ? `<div class="msg">${bad.length} non-compliant row${bad.length === 1 ? '' : 's'}: ${bad.map(([d, f]) => `<a onclick="showCompliance('${esc(d)}','${esc(f)}')">${esc(d)} · ${esc(f)}</a>`).join(', ')}</div>` : '<div class="hint">every feature on every router matches the model — click a cell to see what Nautobot compared</div>';
   if (bad.length) showCompliance(bad[0][0], bad[0][1]);
+  const H = CMP.history || [];
+  $('cmp-hist-note').textContent = H.length ? `${H.length} compliance run${H.length === 1 ? '' : 's'} recorded — which routers drifted, and when it was fixed (newest first)` : 'no runs recorded yet — the portal records one line per Golden Config compliance run';
+  $('cmp-history').querySelector('tbody').innerHTML = H.slice().reverse().map(h => `<tr><td style="white-space:nowrap">${esc(h.at)}</td><td><span class="pill ${h.devices_ok === h.devices ? 'ok' : 'fail'}">${h.devices_ok} / ${h.devices}</span></td><td>${h.drifted.length ? h.drifted.map(n => branchLink(n)).join(', ') : '<span class="hint">none</span>'}</td></tr>`).join('') || '<tr><td colspan="3" class="hint">–</td></tr>';
 }
 function showCompliance(dev, feature) {
-  const d = CMP.devices.find(x => x.name === dev); const x = d && d.features[feature]; if (!x) return;
+  const d = CMP.devices.find(x => x.name === dev); const x = d && d.features[feature]; if (!x) return; const op = can('operator');
   const cls = l => l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : '';
-  $('cmp-detail').innerHTML = `<h3 style="font-size:13px;margin:0 0 6px">${branchLink(dev)} · ${esc(feature)} <span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? 'compliant' : 'non-compliant'}</span> <span class="hint">checked ${esc(x.updated)}${x.ordered ? ' · order-sensitive' : ' · order ignored'} · <a href="${esc(d.url)}" target="_blank">in Nautobot</a></span></h3>
+  const dis = op ? '' : 'disabled title="operator role required"';
+  $('cmp-detail').innerHTML = `<h3 style="font-size:13px;margin:0 0 6px">${branchLink(dev)} · ${esc(feature)} <span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? 'compliant' : 'non-compliant'}</span> <span class="hint">checked ${esc(x.updated)}${x.ordered ? ' · order-sensitive' : ' · order ignored'} · <a href="${esc(d.url)}" target="_blank">in Nautobot</a></span>
+      ${(d.history || []).length ? `<span class="dots" style="margin-left:8px" title="${esc(dev)} over the last compliance runs">${histDots(d.history.slice(-12))}</span>` : ''}</h3>
     <div class="grid g2"><div><b style="font-size:12px">Missing on the router</b><pre class="code" style="max-height:220px;margin-top:4px">${esc(x.missing || '(nothing)')}</pre></div><div><b style="font-size:12px">Extra on the router</b><pre class="code" style="max-height:220px;margin-top:4px">${esc(x.extra || '(nothing)')}</pre></div></div>
+    ${x.compliant ? '' : `<div style="margin-top:8px"><b style="font-size:12px">Remediation (what Nautobot would push)</b><pre class="code" style="max-height:220px;margin-top:4px">${esc(x.remediation || '(Nautobot computed no remediation lines for this feature)')}</pre>
+      <div class="actions" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="small remed" ${x.remediation ? dis : 'disabled title="no remediation lines"'} onclick="remediate('${esc(dev)}', ['${esc(feature)}'])">Remediate this feature</button><button type="button" class="small remed" ${dis} onclick="remediate('${esc(dev)}')">Remediate every drifted feature on ${esc(dev)}</button><button type="button" class="small reapply" ${dis} onclick="reapply('${esc(dev)}')">Re-apply from the model</button>
+      <span class="hint">remediate: the lines above over SSH + write memory · re-apply: NaC render → targeted Terraform plan / apply on ${esc(dev)} (what the model manages) — both finish with a Golden Config run</span></div></div>`}
     ${x.diff ? `<details style="margin-top:8px" ${x.compliant ? '' : 'open'}><summary style="cursor:pointer;font-size:13px">Running vs intended (this feature's lines)</summary><pre class="code" style="max-height:360px;margin-top:4px">${x.diff.split('\n').map(l => `<span class="${cls(l)}">${esc(l)}</span>`).join('\n')}</pre></details>` : '<div class="hint" style="margin-top:6px">running and intended are identical for this feature</div>'}`;
   $('cmp-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-$('cmp-run').onclick = async () => {
-  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'golden', options: {} }) });
-  if (!r.ok) { const e = await r.json().catch(() => ({})); alert(typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail)); return; }
-  const run = await r.json(); $('cmp-note').textContent = `Golden Config run ${run.id} started (${run.status}) — the report refreshes when it finishes`;
-  const wait = setInterval(async () => { const d = await (await fetch(`/api/runs/${run.id}`)).json(); if (['success', 'failed', 'cancelled', 'interrupted'].includes(d.status)) { clearInterval(wait); loadCompliance(true); } }, 5000);
-};
+async function complianceRun(body, label) {
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); alert(typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.problems ? e.detail.problems.join('\n') : JSON.stringify(e.detail))); return; }
+  const run = await r.json(); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="location.hash='#provision';watch('${run.id}')">${esc(run.id)}</a> ${esc(run.status)} — the report refreshes when it finishes`;
+  document.querySelectorAll('#view-compliance button').forEach(b => b.disabled = true);
+  const wait = setInterval(async () => { const d = await (await fetch(`/api/runs/${run.id}`)).json(); if (['success', 'failed', 'cancelled', 'interrupted'].includes(d.status)) { clearInterval(wait); await loadCompliance(true); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="location.hash='#provision';watch('${run.id}')">${esc(run.id)}</a> <span class="status ${d.status}">${d.status.toUpperCase()}</span>${d.error ? ' — ' + esc(d.error) : ''} · ` + $('cmp-note').textContent; document.querySelectorAll('#view-compliance button').forEach(b => b.disabled = false); applyRoles(); } }, 5000);
+}
+$('cmp-run').onclick = () => complianceRun({ mode: 'golden', options: {} }, 'Golden Config');
+function remediate(dev, features) {
+  const what = features ? `the feature ${features.join(', ')}` : 'every drifted feature';
+  if (!confirm(`Push Nautobot's remediation lines for ${what} on ${dev} (then write memory and run Golden Config)?`)) return;
+  complianceRun({ mode: 'remediate', spoke: { name: dev, ...(features ? { features } : {}) }, options: {} }, `Remediate ${dev}`);
+}
+function reapply(dev) {
+  if (!confirm(`Re-apply the model on ${dev}: NaC render, Terraform plan and staged apply targeted at ${dev}, then Golden Config?`)) return;
+  complianceRun({ mode: 'reapply', spoke: { name: dev }, options: {} }, `Re-apply ${dev}`);
+}
 
 // ---- branches list --------------------------------------------------------------------------------------------------
 async function loadBranches(refresh) {
@@ -905,7 +932,11 @@ async function loadConfig(refresh) {
   const r = await fetch(`/api/branch/${encodeURIComponent(name)}/config${refresh ? '?refresh=true' : ''}`); if (!r.ok) { $('br-config').textContent = `HTTP ${r.status}`; return; }
   CFG = await r.json(); showConfig();
   const g = CFG.golden || {};
-  $('br-compliance').innerHTML = g.error ? `Nautobot Golden Config: ${esc(g.error)}` : (g.compliance || []).length ? `Compliance (Nautobot, ${esc((g.compliance_at || '').slice(0, 19).replace('T', ' '))}): ${g.compliance.map(c => `<span class="pill ${c.compliant ? '' : 'fail'}" title="${esc(c.compliant ? 'compliant' : 'missing: ' + c.missing + '\nextra: ' + c.extra)}">${esc(c.feature)}</span>`).join(' ')} · <a href="${esc(g.url || '#')}" target="_blank">details</a>` : 'no compliance data in Nautobot yet';
+  $('br-compliance').innerHTML = g.error ? `Nautobot Golden Config: ${esc(g.error)}` : (g.compliance || []).length ? `Compliance (Nautobot, ${esc((g.compliance_at || '').slice(0, 19).replace('T', ' '))}): ${g.compliance.map(c => `<span class="pill ${c.compliant ? '' : 'fail'}" title="${esc(c.compliant ? 'compliant' : 'missing: ' + c.missing + '\nextra: ' + c.extra)}">${esc(c.feature)}</span>`).join(' ')} · <a href="${esc(g.url || '#')}" target="_blank">details</a>${(g.compliance || []).some(c => !c.compliant) ? ` · <a href="#compliance">remediate on the Compliance page</a>` : ''}<span id="br-drift"></span>` : 'no compliance data in Nautobot yet';
+  fetch(`/api/compliance/history?device=${encodeURIComponent(name)}&limit=30`).then(r => r.ok ? r.json() : null).then(h => {
+    if (!h || !h.runs.length || !$('br-drift')) return; const bad = h.runs.filter(x => !x.ok);
+    $('br-drift').innerHTML = ` · drift history (${h.runs.length} run${h.runs.length === 1 ? '' : 's'}${bad.length ? `, drifted in ${bad.length}, last ${esc(bad[bad.length - 1].at)}` : ', never drifted'}): <span class="dots">${histDots(h.runs.slice(-20))}</span>`;
+  }).catch(() => { });
   const diffs = (g.compliance || []).filter(c => c.diff);
   $('br-diff').innerHTML = diffs.length ? `<details ${diffs.some(c => !c.compliant) ? 'open' : ''} style="margin-bottom:8px"><summary style="cursor:pointer;font-size:13px">Running vs intended, per compliance feature (${diffs.length} with differences${diffs.every(c => c.compliant) ? ', all still compliant — ordering only' : ''})</summary>${diffs.map(c => `<div style="margin-top:6px"><b style="font-size:12px">${esc(c.feature)}</b> <span class="pill ${c.compliant ? '' : 'fail'}">${c.compliant ? 'compliant' : 'non-compliant'}</span><pre class="code" style="margin:4px 0">${c.diff.split('\n').map(l => `<span class="${l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : l.startsWith('@@') ? 'hunk' : ''}">${esc(l)}</span>`).join('\n')}</pre></div>`).join('')}</details>` : '<div class="hint" style="margin-bottom:8px">running and intended agree on every compliance feature</div>';
   loadHistory();
@@ -983,7 +1014,7 @@ function applyRoles() {
   const op = can('operator'), ap = can('approver');
   ['deploy', 'plan', 'testonly', 'add-spoke', 'cmp-run'].forEach(id => { const b = $(id); if (b) { b.disabled = !op; b.title = op ? '' : 'operator role required'; } });
   const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
-  document.querySelectorAll('button.rot, button.rh, button.renew, button.auth').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
+  document.querySelectorAll('button.rot, button.rh, button.renew, button.auth, button.remed, button.reapply').forEach(b => { if (b.title === 'no remediation lines') return; b.disabled = !op; if (!op) b.title = 'operator role required'; });
   document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
   $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span>${ME.via === 'oidc' ? ' <span class="hint">SSO</span>' : ''} <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
 }
