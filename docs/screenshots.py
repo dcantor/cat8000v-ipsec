@@ -35,6 +35,11 @@ with sync_playwright() as pw:
     page.goto(f"{PORTAL}/#inventory"); page.wait_for_function("document.querySelectorAll('#inv-tunnels tbody tr').length > 0", timeout=180000); time.sleep(1.5)
     page.screenshot(path=str(OUT / "portal-inventory.png"))
     page.evaluate("document.getElementById('inv-topo').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-topology.png"))
+    # the schematic view as well: it shows the DCI chain (interconnect + acquisition edge) as its own row, linked by dashed eBGP lines
+    page.evaluate("document.querySelector('input[name=\"topo-view\"][value=\"schematic\"]').checked = true; renderTopologyView(); document.getElementById('inv-topo').scrollIntoView({block:'start'})")
+    time.sleep(1.0); page.evaluate("const c = document.getElementById('inv-topo'); c.scrollLeft = c.scrollWidth"); time.sleep(0.5)
+    page.screenshot(path=str(OUT / "portal-topology-schematic.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 660})
+    page.evaluate("document.querySelector('input[name=\"topo-view\"][value=\"map\"]').checked = true; renderTopologyView()"); time.sleep(0.8)
     page.evaluate("document.getElementById('inv-capacity').parentElement.scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-capacity.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 560})
     page.evaluate("document.getElementById('inv-tunnels').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-tunnels.png"))
     page.evaluate("document.getElementById('inv-hosts').parentElement.parentElement.parentElement.scrollIntoView({block:'start'})"); page.click("#hosts-ping"); page.wait_for_function("document.querySelectorAll('#hosts-matrix table tr').length > 2", timeout=120000); time.sleep(0.8)

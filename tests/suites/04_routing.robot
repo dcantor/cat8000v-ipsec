@@ -19,7 +19,9 @@ Each hub has an Established eBGP session with each of its spokes over the tunnel
         ${count}=    Get Line Count    ${{ $sum.split('Neighbor', 1)[1].strip() }}
         ${core}=    Get Regexp Matches    ${sum}    (?m)^(172\\.19\\.\\d+\\.\\d+)\\s+4\\s+65000\\s    1    # the SRv6 core attachment (srv6-core lab), if that lab wired the headend
         Should Be True    len($core) <= 1    msg=${h}: more than one core attachment
-        Should Be Equal As Integers    ${count}    ${{ len($HUB_TUNNELS[$h]) + 1 + len($core) }}    msg=${h} must peer with its spokes (and at most the SRv6 core) only
+        # a headend may also carry the DCI chain: one plain eBGP session over a direct link (west-headend <-> DCI)
+        ${dci}=    Evaluate    [p for p in $DIRECT_PEERINGS if p['a'] == """${h}"""]
+        Should Be Equal As Integers    ${count}    ${{ len($HUB_TUNNELS[$h]) + 1 + len($core) + len($dci) }}    msg=${h} must peer with its spokes (its DCI and at most the SRv6 core) only
     END
 
 Every spoke peers with its hub(s) only and learns every other site

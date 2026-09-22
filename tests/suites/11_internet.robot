@@ -70,6 +70,8 @@ Every spoke prefers the nearest headend's default route (local preference by reg
     END
 
 Every LAN host reaches the internet through its router's preferred headend, and the firewall there logs the flow
+    [Documentation]    A branch host breaks out through its nearest headend. A host behind the DCI chain has no breakout preference of
+    ...    its own (its default route comes from the headend over eBGP) — suite 12 checks that path.
     FOR    ${h}    IN    @{LAN_HOSTS}
         ${r}=    Set Variable    ${LAN_HOSTS}[${h}][router]
         ${rc}    ${out}=    Run    ${LAN_HOSTS}[${h}][host]    ping -c 3 -W 2 1.1.1.1; traceroute -n -w 2 -q 1 -m 6 1.1.1.1
@@ -79,6 +81,10 @@ Every LAN host reaches the internet through its router's preferred headend, and 
             ${hub}=    Set Variable    ${BREAKOUT_PREF}[${r}][0]
             ${hub_ip}=    Evaluate    [t['hub_ip'] for t in $TUNNEL_LIST if t['spoke'] == $r and t['hub'] == $hub][0]
             Should Contain    ${out}    ${hub_ip}    msg=${h}: the path must go through ${hub} (its region's headend): ${out}
+        ELSE IF    $r in $EDGE_ROUTERS
+            # behind the DCI: the default route comes from the headend the chain hangs off, so it breaks out there
+            ${hub}=    Evaluate    $DCI_UPLINK_HUB
+            Should Contain    ${out}    ${{ [p['a_ip'] for p in $DIRECT_PEERINGS if p['b'] == $DCI_UPLINK][0] }}    msg=${h}: the path must cross the DCI: ${out}
         ELSE
             ${hub}=    Set Variable    ${r}
         END

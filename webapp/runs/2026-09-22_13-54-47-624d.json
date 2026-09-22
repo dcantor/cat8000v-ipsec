@@ -1,0 +1,105 @@
+{
+ "id": "2026-09-22_13-54-47-624d",
+ "mode": "plan",
+ "status": "failed",
+ "started": 1790099687.6654358,
+ "finished": 1790099718.5838387,
+ "steps": [
+  {
+   "name": "validate",
+   "title": "Validate intent",
+   "status": "success",
+   "started": 1790099687.7217765,
+   "finished": 1790099687.7401383,
+   "summary": "20 devices, 10 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "name": "save",
+   "title": "Save intent",
+   "status": "success",
+   "started": 1790099687.74069,
+   "finished": 1790099687.7414734,
+   "summary": "lab-intent.json written"
+  },
+  {
+   "name": "nautobot",
+   "title": "Nautobot source of truth (seed)",
+   "status": "failed",
+   "started": 1790099687.7416108,
+   "finished": 1790099718.5838244,
+   "summary": "Nautobot seed failed (rc=-15)"
+  },
+  {
+   "name": "render",
+   "title": "Render NAC data from Nautobot",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  },
+  {
+   "name": "plan",
+   "title": "Terraform plan",
+   "status": "skipped",
+   "started": null,
+   "finished": null,
+   "summary": ""
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": "Nautobot seed failed (rc=-15)",
+ "options": {
+  "golden": true,
+  "test": true,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4",
+  "DCI",
+  "ACME-acquisition",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "host-acquisition",
+  "host-central",
+  "host-east",
+  "host-spoke1",
+  "host-spoke2",
+  "host-spoke3",
+  "host-spoke4",
+  "host-west"
+ ],
+ "spoke": null,
+ "removal": null,
+ "rehome": null,
+ "user": "operator",
+ "log": [
+  {
+   "t": 1790099687.7401352,
+   "line": "20 devices, 10 tunnels, VPN IPSEC_VPN"
+  },
+  {
+   "t": 1790099687.7414722,
+   "line": "lab-intent.json written"
+  },
+  {
+   "t": 1790099687.7418888,
+   "line": "$ ./lab.sh nautobot seed"
+  },
+  {
+   "t": 1790099718.5838354,
+   "line": "!! Nautobot seed failed (rc=-15)"
+  }
+ ]
+}

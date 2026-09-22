@@ -12,6 +12,12 @@ Every router has a LAN host, reachable over the OOB network, addressed on the si
     FOR    ${r}    IN    @{ROUTER_NAMES}
         Dictionary Should Contain Key    ${HOST_OF}    ${r}    msg=${r} has no LAN host in the intent
     END
+    # the acquired company's edge behind the DCI has one too (ACME's interconnect itself carries no host)
+    FOR    ${r}    IN    @{EDGE_NAMES}
+        IF    '${EDGE_ROUTERS}[${r}][role]' == 'partner'
+            Dictionary Should Contain Key    ${HOST_OF}    ${r}    msg=${r} has no LAN host in the intent
+        END
+    END
     FOR    ${h}    IN    @{LAN_HOSTS}
         Host Ping    ${LAN_HOSTS}[${h}][host]
         Tcp Port Should Be Open    ${LAN_HOSTS}[${h}][host]    22
@@ -28,14 +34,14 @@ The hosts are modelled in Nautobot: device at the router's site, eth1 addressed 
     FOR    ${dev}    IN    @{d}[devices]
         ${h}=    Set Variable    ${LAN_HOSTS}[${dev}[name]]
         Should Be Equal    ${dev}[platform][name]    alpine
-        Should Be Equal    ${dev}[location][name]    ${ROUTERS}[${h}[router]][site]
+        Should Be Equal    ${dev}[location][name]    ${ALL_ROUTERS}[${h}[router]][site]
         Should Be Equal    ${dev}[primary_ip4][address]    ${h}[host]/24
         ${e1}=    Evaluate    [i for i in $dev['interfaces'] if i['name'] == 'eth1'][0]
         Should Be Equal    ${e1}[ip_addresses][0][address]    ${h}[lan_ip]/24
         Should Be Equal    ${e1}[ip_addresses][0][parent][prefix]    ${h}[lan]
         Should Be Equal    ${e1}[ip_addresses][0][parent][role][name]    site-lan
         Should Be Equal    ${e1}[connected_interface][device][name]    ${h}[router]
-        Should Be Equal    ${e1}[connected_interface][name]    ${ROUTERS}[${h}[router]][lan_if]
+        Should Be Equal    ${e1}[connected_interface][name]    ${ALL_ROUTERS}[${h}[router]][lan_if]
         Should Be Equal    ${e1}[connected_interface][ip_addresses][0][address]    ${h}[gateway]/24
     END
 

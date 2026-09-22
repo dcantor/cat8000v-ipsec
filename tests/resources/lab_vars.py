@@ -13,16 +13,29 @@ _I = intent_mod.load()
 HUBS = sorted(d["name"] for d in _I["devices"] if d["role"] == "hub")
 HUB = HUBS[0]
 SPOKES = sorted(d["name"] for d in _I["devices"] if d["role"] == "spoke")
-ROUTERS = {d["name"]: {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
-                       "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1]), "region": d.get("region"), "site": d.get("site"),
-                       "site_code": d.get("site_code", ""), "psk": d.get("psk")} for d in _I["devices"] if d["role"] in ("hub", "spoke")}
-for _n, _r in ROUTERS.items(): _r["lan_if"] = f"GigabitEthernet{intent_mod.lan_port(_I, _n)}"   # the site LAN lives on the router's LAN port (.1)
-# the LAN hosts: one Alpine VM behind every router (eth1 = .2 of the router's LAN /24, default gateway .1; OOB eth0, lab / lab)
-LAN_HOSTS = {d["name"]: {"host": d["mgmt_ip"], "router": d["router"], "lan": ROUTERS[d["router"]]["lan"], "lan_ip": str(ipaddress.IPv4Network(ROUTERS[d["router"]]["lan"])[2]),
-                         "gateway": ROUTERS[d["router"]]["lan_ip"]} for d in _I["devices"] if d["role"] == "host"}
+def _router(d):
+    return {"role": d["role"], "host": d["mgmt_ip"], "asn": str(d["asn"]), "router_id": d["router_id"], "lan": d["lan"],
+            "lan_ip": str(ipaddress.IPv4Network(d["lan"])[1]), "region": d.get("region"), "site": d.get("site"),
+            "site_code": d.get("site_code", ""), "psk": d.get("psk"), "lan_if": f"GigabitEthernet{intent_mod.lan_port(_I, d['name'])}"}
+# every Catalyst 8000v; ROUTERS stays the VPN routers (headends + branches) so suites 01-11 keep their scope, EDGE_ROUTERS is the
+# DCI chain off west-headend: ACME's interconnect and the acquired company's edge, which peer with plain eBGP (suite 12)
+ALL_ROUTERS = {d["name"]: _router(d) for d in _I["devices"] if d["role"] in intent_mod.ROUTER_ROLES}
+ROUTERS = {n: r for n, r in ALL_ROUTERS.items() if r["role"] in ("hub", "spoke")}
+EDGE_ROUTERS = {n: r for n, r in ALL_ROUTERS.items() if r["role"] in ("dci", "partner")}
+# the LAN hosts: one Alpine VM behind a router (eth1 = .2 of the router's LAN /24, default gateway .1; OOB eth0, lab / lab)
+LAN_HOSTS = {d["name"]: {"host": d["mgmt_ip"], "router": d["router"], "lan": ALL_ROUTERS[d["router"]]["lan"], "lan_ip": str(ipaddress.IPv4Network(ALL_ROUTERS[d["router"]]["lan"])[2]),
+                         "gateway": ALL_ROUTERS[d["router"]]["lan_ip"]} for d in _I["devices"] if d["role"] == "host"}
 HOST_OF = {h["router"]: n for n, h in LAN_HOSTS.items()}
 REGIONS = _I.get("regions", [])
 ROUTER_NAMES = list(ROUTERS)
+EDGE_NAMES = list(EDGE_ROUTERS)
+# the eBGP sessions that run over a direct link instead of a tunnel (west-headend <-> DCI <-> ACME-acquisition)
+DIRECT_PEERINGS = intent_mod.direct_peerings(_I)
+EXTRA_LOOPBACKS = {n: intent_mod.extra_loopbacks(_I, n) for n in ALL_ROUTERS}
+_ACQ_PREFIXES = sorted([EDGE_ROUTERS[n]["lan"] for n in EDGE_NAMES if EDGE_ROUTERS[n]["role"] == "partner"] +
+                       [str(ipaddress.IPv4Interface(lo["address"]).network) for n in EDGE_NAMES if EDGE_ROUTERS[n]["role"] == "partner" for lo in EXTRA_LOOPBACKS[n] if lo.get("advertise", True)])
+ACQUISITION_PREFIXES = _ACQ_PREFIXES                                          # what the acquired company originates
+ACQUISITION_IPS = [str(ipaddress.IPv4Network(p)[1]) for p in _ACQ_PREFIXES]   # the .1 of each: what a branch pings
 # VyOS firewalls: one per headend, between the headend (eth1) and its spokes (eth2..)
 LINKS = _I["links"]                                        # every WAN link of the intent (a, a_port, b, b_port, prefix)
 FIREWALLS = {d["name"]: {"host": d["mgmt_ip"], "hub": d["hub"], "region": d.get("region"), "site": d.get("site"), "bandwidth_mbps": int(d.get("bandwidth_mbps") or 0)} for d in _I["devices"] if d["role"] == "firewall"}
@@ -91,7 +104,8 @@ ESP_TRANSFORM = ({"AES-128-CBC": "esp-aes", "AES-192-CBC": "esp-192-aes", "AES-2
 # customers: every branch is a customer of ACME (the provider owning the headends) — a Nautobot tenant; the design pattern follows the tunnel count
 PROVIDER = _I.get("provider") or intent_mod.PROVIDER
 CUSTOMERS = {s: intent_mod.customer(_I, s) for s in SPOKES}
-PATTERNS = {r: intent_mod.design_pattern(_I, r) for r in ROUTER_NAMES}
+CUSTOMERS_ALL = {n: intent_mod.customer(_I, n) for n in ALL_ROUTERS if intent_mod.customer(_I, n)}
+PATTERNS = {r: intent_mod.design_pattern(_I, r) for r in ALL_ROUTERS}
 ADDRESSES = {r: (CUSTOMERS[r]["address"] if r in CUSTOMERS else next(d.get("address") for d in _I["devices"] if d["name"] == r)) for r in ROUTER_NAMES}
 PATTERN_CODES = sorted(p["code"] for p in intent_mod.PATTERNS.values())
 
@@ -109,3 +123,7 @@ for _s in SPOKES:
                 UNROUTED_WAN = {"spoke": _s, "spoke_if": SPOKE_TUNNELS[_s][0]["spoke_if"], "target": _t["spoke_wan"],
                                 "target_spoke": _o, "via_hub": _t["hub"]}
                 break
+
+# the DCI chain hangs off one headend: its name (and the interconnect router), so a host behind it is expected to break out there
+DCI_UPLINK = next((p["b"] for p in DIRECT_PEERINGS if ALL_ROUTERS.get(p["a"], {}).get("role") == "hub"), None)
+DCI_UPLINK_HUB = next((p["a"] for p in DIRECT_PEERINGS if ALL_ROUTERS.get(p["a"], {}).get("role") == "hub"), None)

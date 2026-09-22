@@ -4,9 +4,9 @@ A hub-and-spoke IPsec VPN built and operated **entirely as code**: Cisco Catalys
 libvirt/KVM, **Nautobot as the source of truth**, **Cisco Network-as-Code (Terraform)** for delivery,
 **Robot Framework** for proof, and a **web portal** that provisions spokes and headends end to end.
 
-It started as one hub and two spokes; everything since — a third, fourth and fifth spoke, a second and
-third headend, renames, per-spoke keys, a site hierarchy — was done through the portal, and the lab is
-the state the portal left it in.
+It started as one hub and two spokes; everything since — more spokes, a second and third headend, renames,
+per-spoke keys, a site hierarchy, customers, and a data-centre interconnect carrying an acquired company —
+was done through the portal or the same model-driven pipeline, and the lab is the state they left it in.
 
 ```
                     east-headend            central-headend          west-headend
@@ -16,11 +16,16 @@ the state the portal left it in.
    firewalls        fw-east (VyOS)          fw-central (VyOS)        fw-west (VyOS)
    (one per hub)    forward filter: only IKEv2 udp/500+4500, ESP, ICMP and established/related cross; rest dropped + logged
                         │ eth2..                │ eth2..                 │ eth2..
-   13 IPsec VTIs        │ │ │   one p2p /30 link per (firewall, spoke); one TunnelN per (headend, spoke) through the firewall
+   10 IPsec VTIs        │ │ │   one p2p /30 link per (firewall, spoke); one TunnelN per (headend, spoke) through the firewall
                         │ │ │                  │ │ │ │ │                │ │ │ │ │
-   spokes           spoke1 (East)  spoke2 (Central)  spoke3 (West)  spoke4 (Central)  spoke5 (West)
-                    → all three    → all three       → all three    → central + west  → central + west
-                    AS 65201       AS 65202          AS 65203       AS 65205          AS 65207
+   spokes           spoke1 (East)   spoke2 (Central)   spoke3 (West)      spoke4 (Central)
+   (customers)      → east+central  → central+west     → all three        → all three
+                    AS 65201        AS 65202           AS 65203           AS 65205
+
+   interconnect     west-headend Gi3 ─── 100.64.20.0/30 ─── DCI ─── 100.64.21.0/30 ─── ACME-acquisition
+   (no IPsec)       eBGP 65206 ↔ 65208 ↔ 65209 over direct links: ACME's data-centre interconnect carries an
+                    acquired company into the VPN. It originates 192.168.30.0/24 (its LAN, with a host) and
+                    10.60.0.0/24 (services, on Loopback1); west-headend re-advertises both to every branch.
 
    OOB: 10.2.0.0/24 (Mgmt-vrf, Gi1) shared with the NMS (Nautobot) at 10.2.0.10 · host 10.2.0.1
    crypto: IKEv2 AES-256-CBC / SHA256 / DH14, ESP AES-256-CBC / SHA256, DPD · one PSK per spoke
@@ -355,6 +360,27 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
 |---|---|
 | ![](docs/screenshots/nautobot-bgp.png) | ![](docs/screenshots/nautobot-compliance.png) |
 
+## The DCI: an acquired company inside the VPN
+
+`DCI` and `ACME-acquisition` are two more Catalyst 8000v routers, but they are **not branches**: they carry no IPsec. ACME's
+**data-centre interconnect** hangs off west-headend's Gi3 on a plain /30 (`100.64.20.0/30`), and the **acquired company's edge
+router** hangs off the DCI on another (`100.64.21.0/30`); each hop is an eBGP session (65206 ↔ 65208 ↔ 65209) built from the same
+nautobot-bgp-models peerings the tunnels use — only the transport differs. The acquisition originates two prefixes, its site LAN
+`192.168.30.0/24` (with an Alpine host behind it, in the ping mesh) and a service prefix `10.60.0.0/24` on `Loopback1`; west-headend
+re-advertises them over the tunnels, so **every branch reaches them** and the acquisition reaches every branch and the internet
+(through west-headend's firewall, which NATs every site LAN of the VPN).
+
+Everything is modelled the same way: device roles `vpn-dci` / `partner-edge`, ACME's tenant on the DCI and a **customer tenant of
+its own** for the acquisition (design patterns `ACME-DCI` / `ACME-PA`), the links as cables with their prefixes, the extra loopback
+as a prefix tagged `bgp:advertise`. The NaC renderer emits their configuration with no crypto block, and the Golden Config template
+renders them from the same file — both are **17/17 compliant** like every other router. Suite 12 proves the chain end to end.
+
+The portal draws the chain in both topology views — on the map at its cities (San Jose, Portland) and in the schematic as its own
+row — with **dashed links** and the AS pair, so it reads differently from an IPsec tunnel at a glance:
+
+![Topology with the DCI chain](docs/screenshots/portal-topology-schematic.png)
+![Branches with the DCI chain](docs/screenshots/portal-branches.png)
+
 ## Network-as-Code
 
 - `nac/data/global.nac.yaml` — the hand-written baseline (AAA, SSH/VTY hardening, management ACL, banner).
@@ -390,7 +416,8 @@ keys on every router**, BGP model vs live sessions, rendered NAC data == committ
 compliant; and suite 08 — the CA pinned on every router with a certificate tunnel, each certificate issued by it to the router's
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
 renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
-router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow);
+suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
 Each run keeps pre/post config backups and a diff under `results/`.
 

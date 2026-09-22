@@ -71,7 +71,7 @@ class DesignPattern(BaseModel):
 class Device(BaseModel):
     name: str = Field(..., description="hostname / Nautobot device name", examples=["spoke1"])
     mgmt_ip: str = Field(..., description="management address (fixed by the VM's day-0 config)", examples=["10.2.0.12"])
-    role: Literal["hub", "spoke", "firewall", "host"]
+    role: Literal["hub", "spoke", "dci", "partner", "firewall", "host"] = Field(..., description="hub / spoke: the VPN routers · dci: ACME's data-centre interconnect off a headend (plain eBGP) · partner: an acquired company's edge router behind the DCI · firewall · host: a LAN host")
     hub: Optional[str] = Field(None, description="firewall only: the headend it fronts")
     router: Optional[str] = Field(None, description="LAN host only: the router it hangs off (eth1 = .2 of that router's site LAN, gateway .1 on the router's LAN port)")
     asn: Optional[int] = Field(None, examples=[65201])
@@ -88,7 +88,8 @@ class Device(BaseModel):
     lat: Optional[float] = None; lon: Optional[float] = None
     psk_rotated: Optional[str] = Field(None, description="when the spoke's key was last rotated")
     ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="spokes only: how this spoke authenticates IKEv2 (chosen at provisioning, changeable later); unset = the lab default profile.ike.authentication")
-    customer: Optional[Customer] = Field(None, description="spokes only: the customer this branch belongs to (a Nautobot tenant; generated when missing)")
+    customer: Optional[Customer] = Field(None, description="spokes and partner routers: the customer this site belongs to (a Nautobot tenant; generated when missing)")
+    loopbacks: Optional[list[dict[str, Any]]] = Field(None, description="extra loopbacks the router originates besides Loopback0: [{name, address, description, advertise}] — the acquisition's service prefix")
     address: Optional[str] = Field(None, description="headends only: the street address of ACME's regional site (the Nautobot location's physical address)")
 
 

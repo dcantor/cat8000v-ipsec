@@ -33,7 +33,7 @@ port_far()   { echo $(( UDP_BASE + 10000 + NODE_IDX[$1]*100 + $2 )); }   # ...an
 node_ports() { case "${ROLE[$1]}" in hub) seq 2 $((1 + HUB_PORTS));; firewall) seq 1 "$FW_PORTS";; host) seq 1 "$HOST_PORTS";; *) seq 2 $((1 + SPOKE_PORTS));; esac; }
 is_fw()      { [[ "${ROLE[$1]}" == "firewall" ]]; }
 is_host()    { [[ "${ROLE[$1]}" == "host" ]]; }
-lan_port()   { case "${ROLE[$1]}" in hub) echo "$HUB_LAN_PORT";; spoke) echo "$SPOKE_LAN_PORT";; esac; }   # a router's site LAN port
+lan_port()   { case "${ROLE[$1]}" in hub) echo "$HUB_LAN_PORT";; firewall|host) ;; *) echo "$SPOKE_LAN_PORT";; esac; }   # a router's site LAN port (spoke, dci, partner: the last port)
 port_name()  { if is_fw "$1" || is_host "$1"; then echo "eth$2"; else echo "GigabitEthernet$2"; fi; }
 mac()        { printf '%s:%02x:%02x' "$MAC_OUI" "${NODE_IDX[$1]}" "$2"; }
 link_peer() {   # node port -> "peer_node peer_port prefix end(1|2)" or "" if unwired
@@ -319,7 +319,7 @@ build_host() {
 }
 
 build_firewall() {
-  local n="$1" d; d="$(node_dir "$n")"
+  local n="$1" d; d="$(node_dir "$n")"; mkdir -p "$d"
   [[ -f "$VYOS_IMAGE" ]] || die "VyOS base image not found: $VYOS_IMAGE (see tools/vyos_install.py)"
   if [[ ! -f "$d/disk.qcow2" ]]; then
     echo "[$n] creating overlay disk on $(basename "$VYOS_IMAGE")"
@@ -332,8 +332,14 @@ build_firewall() {
 build_router() {
   if is_fw "$1"; then build_firewall "$1"; return; fi
   if is_host "$1"; then build_host "$1"; return; fi
-  local n="$1" d; d="$(node_dir "$n")"
+  local n="$1" d; d="$(node_dir "$n")"; mkdir -p "$d"
   [[ -f "$C8000V_IMAGE" ]] || die "base image not found: $C8000V_IMAGE"
+  # a router added to lab.conf by hand has no day-0 config yet (the portal writes one when it provisions a spoke): render the template
+  if [[ ! -f "$d/iosxe_config.txt" ]]; then
+    echo "[$n] writing day-0 config from the template"
+    sed -e "s/__HOSTNAME__/$n/" -e "s/__MGMT_IP__/${MGMT_IP[$n]}/" -e "s/__GATEWAY__/$OOB_GATEWAY/" "$LAB_DIR/nodes/_template/spoke.iosxe_config.txt" > "$d/iosxe_config.txt"
+    cp -f "$LAB_DIR/nodes/_template/spoke.post-boot.txt" "$d/post-boot.txt"
+  fi
   if [[ ! -f "$d/disk.qcow2" ]]; then
     echo "[$n] creating overlay disk on $(basename "$C8000V_IMAGE")"
     qemu-img create -q -f qcow2 -b "$C8000V_IMAGE" -F qcow2 "$d/disk.qcow2"

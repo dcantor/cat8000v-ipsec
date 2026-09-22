@@ -9,12 +9,12 @@
   :root { --bg:#f4f6f9; --card:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe4ea; --accent:#0b62d6; --ok:#1a8f4a; --bad:#c62828; --warn:#b26a00; --run:#0b62d6;
           --surface:#f8fafc; --surface2:#f1f5f9; --input:#fff; --input-ro:#f1f3f6; --input-ro-ink:#4b5563; --pill:#e9edf3; --pill-ink:#374151; --pill2:#e2e8f0; --chip:#cbd5e1; --bar:#e5e7eb;
           --ok-bg:#dcfce7; --ok-ink:#166534; --bad-bg:#fee2e2; --bad-ink:#991b1b; --warn-bg:#fef3c7; --hub-bg:#fde2ec; --hub-ink:#9d174d; --spoke-bg:#e0ecff; --spoke-ink:#1e40af;
-          --header:#12203a; --header-ink:#fff; --header-muted:#9fb3d1; --nav:#c7d2e3; --nav-active:#243656; --map-land:#e8eef5; --map-edge:#fff; --node-fill:#fff; --node-stroke:#94a3b8; --label:#334155;
+          --header:#12203a; --header-ink:#fff; --header-muted:#9fb3d1; --nav:#c7d2e3; --nav-active:#243656; --map-land:#e8eef5; --map-edge:#fff; --node-fill:#fff; --node-stroke:#94a3b8; --label:#334155; --dci-bg:#cceff4; --partner-bg:#ead6f5;
           --code-bg:#0f172a; --code-ink:#d1e3ff; --shadow:rgba(0,0,0,.3); }
   html[data-theme="dark"] { --bg:#0b1220; --card:#131c2e; --ink:#e6edf7; --muted:#8fa3bf; --line:#263449; --accent:#5aa2ff; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffb454; --run:#5aa2ff;
           --surface:#182338; --surface2:#1c2941; --input:#0f172a; --input-ro:#182338; --input-ro-ink:#9fb3d1; --pill:#243656; --pill-ink:#d1dbe8; --pill2:#243656; --chip:#3b4c66; --bar:#263449;
           --ok-bg:#12351f; --ok-ink:#7ee2a8; --bad-bg:#3d1a1a; --bad-ink:#ff9c9c; --warn-bg:#3d2c0f; --hub-bg:#3a1a2a; --hub-ink:#ff9ccf; --spoke-bg:#172a4d; --spoke-ink:#9fc4ff;
-          --header:#070d1a; --header-ink:#e6edf7; --header-muted:#8fa3bf; --nav:#aebbd0; --nav-active:#243656; --map-land:#1c2941; --map-edge:#0b1220; --node-fill:#131c2e; --node-stroke:#3b4c66; --label:#c7d2e3;
+          --header:#070d1a; --header-ink:#e6edf7; --header-muted:#8fa3bf; --nav:#aebbd0; --nav-active:#243656; --map-land:#1c2941; --map-edge:#0b1220; --node-fill:#131c2e; --node-stroke:#3b4c66; --label:#c7d2e3; --dci-bg:#0d3a42; --partner-bg:#331750;
           --code-bg:#070d1a; --code-ink:#d1e3ff; --shadow:rgba(0,0,0,.7); }
   html[data-theme="dark"] { color-scheme:dark }
   * { box-sizing:border-box }
@@ -41,11 +41,13 @@
   #tools-table td, #tools-devices td { vertical-align:top } .cred { font-family:ui-monospace,Menlo,monospace; background:var(--surface2); padding:1px 6px; border-radius:4px }
   .topo { font:12px system-ui,sans-serif } .topo .node rect { fill:var(--node-fill); stroke:var(--node-stroke); stroke-width:1.2; rx:8 } .topo .node.hub rect { stroke:var(--hub-ink); fill:var(--hub-bg) } .topo .node.spoke rect { stroke:var(--spoke-ink); fill:var(--spoke-bg) }
   .topo .node text { fill:var(--ink) } .topo .node .nm { font-weight:600; font-size:13px } .topo .node .sub { fill:var(--muted); font-size:11px }
-  .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:var(--chip); stroke-dasharray:6 4 }
+  .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:var(--chip); stroke-dasharray:6 4 } .topo .edge.dci { stroke:#0891b2; stroke-dasharray:7 5; stroke-width:2 }
+  .topo .node.dci rect { fill:var(--dci-bg); stroke:#0e7490 } .topo .node.partner rect { fill:var(--partner-bg); stroke:#7e22ce }
+  .topo .node.dci text, .topo .node.partner text { fill:var(--ink) } .topo .node.dci .sub, .topo .node.partner .sub { fill:var(--muted) }
   .topo .edge:hover { stroke-width:4 } .topo .elabel { font-size:10px; fill:var(--label) } .topo .elabel rect { fill:var(--card); stroke:var(--line); rx:3 }
   .topo a { cursor:pointer }
   .map { position:relative } .map svg { width:100%; height:auto; display:block; font:12px system-ui,sans-serif } .map .state { fill:var(--map-land); stroke:var(--map-edge); stroke-width:1 }
-  .map .site circle { stroke:var(--card); stroke-width:2 } .map .site.hub circle { fill:#9d174d } .map .site.spoke circle { fill:#1e40af } .map .site.firewall rect { fill:#475569; stroke:var(--card); stroke-width:1.5 }
+  .map .site circle { stroke:var(--card); stroke-width:2 } .map .site.hub circle { fill:#9d174d } .map .site.spoke circle { fill:#1e40af } .map .site.firewall rect { fill:#475569; stroke:var(--card); stroke-width:1.5 } .map .site.dci circle { fill:#0e7490 } .map .site.partner circle { fill:#7e22ce }
   .map .site text { fill:var(--ink); font-weight:600; font-size:12px; paint-order:stroke; stroke:var(--card); stroke-width:3px; stroke-linejoin:round } .map .site .city { font-weight:400; fill:var(--muted); font-size:10.5px }
   .map .site.dim { opacity:.18 } .map .edge.dim { opacity:.12 }
   .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0 10px } .chips label { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; font-size:12px; cursor:pointer; background:#fff }
@@ -76,6 +78,8 @@
   .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:var(--chip) }
   .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:var(--bar) }
   .filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:0 0 10px } .filters input, .filters select { width:auto; padding:5px 8px; font-size:12px }
+  .pill.dci { background:#cceff4; color:#00606b } .pill.partner { background:#ead6f5; color:#5b2277 }
+  html[data-theme="dark"] .pill.dci { background:#0b4a52; color:#cceff4 } html[data-theme="dark"] .pill.partner { background:#452060; color:#ead6f5 }
   .pill.tier-gold { background:#f6e7a1; color:#6b5200 } .pill.tier-silver { background:#e3e6ea; color:#3d434a } .pill.tier-bronze { background:#efd6c2; color:#6e3d14 }
   html[data-theme="dark"] .pill.tier-gold { background:#5a4a10; color:#f6e7a1 } html[data-theme="dark"] .pill.tier-silver { background:#3d434a; color:#e3e6ea } html[data-theme="dark"] .pill.tier-bronze { background:#5c3a1f; color:#efd6c2 }
   .dots { display:inline-flex; gap:3px; vertical-align:middle } .dots .dot { width:9px; height:9px; margin:0 } .dot.ok { background:var(--ok) } .dot.fail { background:var(--bad) }
@@ -245,7 +249,7 @@
       <span style="float:right;display:inline-flex;gap:6px;align-items:center"><a id="brs-nb" href="#" target="_blank" class="hint">customers in Nautobot</a><button type="button" onclick="loadBranches(true)">Refresh live</button></span></h2>
     <div class="filters" id="brs-filters">
       <input id="bf-q" placeholder="search: router, company, city, address, account, site…" style="width:300px" oninput="renderBranches()">
-      <select id="bf-role" onchange="renderBranches()"><option value="">any role</option><option value="spoke">branches (customers)</option><option value="hub">headends (ACME)</option></select>
+      <select id="bf-role" onchange="renderBranches()"><option value="">any role</option><option value="spoke">branches (customers)</option><option value="hub">headends (ACME)</option><option value="dci">DCI (interconnect)</option><option value="partner">acquisition edge</option></select>
       <select id="bf-region" onchange="renderBranches()"><option value="">any region</option></select>
       <select id="bf-pattern" onchange="renderBranches()"><option value="">any design pattern</option></select>
       <select id="bf-tier" onchange="renderBranches()"><option value="">any service tier</option></select>
@@ -880,6 +884,7 @@ const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open 
 
 // ---- compliance report ----------------------------------------------------------------------------------------------
 let CMP = null;
+const roleName = r => ({ hub: 'headend', spoke: 'branch', dci: 'DCI', partner: 'acquisition' })[r] || r;
 const histDots = h => h.map(x => `<span class="dot ${x.ok ? 'ok' : 'fail'}" title="${esc(x.at)}: ${x.ok ? 'compliant' : 'drifted — ' + x.drifted.join(', ')}"></span>`).join('');
 async function loadCompliance(refresh) {
   $('cmp-note').textContent = 'loading…';
@@ -889,7 +894,7 @@ async function loadCompliance(refresh) {
   $('cmp-kpis').innerHTML = [[`${s.devices_ok} / ${s.devices}`, 'routers fully compliant', s.devices_ok === s.devices ? 'ok' : 'bad'], [`${s.rows_ok} / ${s.rows}`, 'compliance rows compliant', s.rows_ok === s.rows ? 'ok' : 'bad'], [CMP.features.length, 'features under compliance', ''], [s.last_compliance ? s.last_compliance.slice(0, 16) : '-', 'last compliance run', ''], [sch.enabled ? `every ${sch.interval_hours} h` : 'off', 'scheduled Golden Config run', '']]
     .map(([v, l, c]) => `<div class="kpi"><div class="v ${c === 'ok' ? 'test-pass' : c === 'bad' ? 'test-fail' : ''}" style="font-size:22px;font-weight:600">${esc(v)}</div><div class="hint">${esc(l)}</div></div>`).join('');
   $('cmp-table').querySelector('thead').innerHTML = `<tr><th>Router</th><th>Result</th>${CMP.features.map(f => `<th style="text-align:center;font-size:11px">${esc(f)}</th>`).join('')}<th title="the router's verdict over the last compliance runs, oldest left">History</th><th>Backup</th><th>Compliance run</th><th></th></tr>`;
-  $('cmp-table').querySelector('tbody').innerHTML = CMP.devices.map(d => `<tr><td style="white-space:nowrap">${branchLink(d.name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span></td><td style="white-space:nowrap"><span class="pill ${d.ok ? 'ok' : 'fail'}">${d.compliant} / ${d.total}</span></td>
+  $('cmp-table').querySelector('tbody').innerHTML = CMP.devices.map(d => `<tr><td style="white-space:nowrap">${branchLink(d.name)} <span class="pill ${d.role}">${roleName(d.role)}</span></td><td style="white-space:nowrap"><span class="pill ${d.ok ? 'ok' : 'fail'}">${d.compliant} / ${d.total}</span></td>
     ${CMP.features.map(f => { const x = d.features[f]; return `<td style="text-align:center">${x ? `<a onclick="showCompliance('${esc(d.name)}','${esc(f)}')" title="${esc(f)} on ${esc(d.name)}: ${x.compliant ? 'compliant' : 'non-compliant'}"><span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? '✓' : '✕'}</span></a>` : '<span class="hint">–</span>'}</td>`; }).join('')}
     <td style="white-space:nowrap"><span class="dots">${histDots((d.history || []).slice(-12))}</span></td>
     <td class="hint" style="white-space:nowrap">${esc(d.backup_at || '-')}</td><td class="hint" style="white-space:nowrap">${esc(d.compliance_at || '-')}</td>
@@ -940,7 +945,8 @@ async function loadBranches(refresh) {
   $('brs-note').textContent = refresh ? 'collecting live state from the headends…' : 'loading…';
   const r = await fetch('/api/branches' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('brs-note').textContent = `HTTP ${r.status}`; return; }
   BRS = await r.json(); const d = BRS;
-  $('brs-note').textContent = `${d.routers.length} routers · ${d.routers.filter(b => b.role === 'spoke').length} customer branches, ${d.routers.filter(b => b.role === 'hub').length} ${esc(d.provider.name)} headends · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
+  const edge = d.routers.filter(b => b.role === 'dci' || b.role === 'partner').length;
+  $('brs-note').textContent = `${d.routers.length} routers · ${d.routers.filter(b => b.role === 'spoke').length} customer branches, ${d.routers.filter(b => b.role === 'hub').length} ${d.provider.name} headends` + (edge ? `, ${edge} on the DCI (interconnect + acquisition, plain eBGP)` : '') + ` · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
   $('brs-nb').href = d.nautobot.tenants;
   try { const f = JSON.parse(localStorage.getItem('brs-filters') || '{}'); BF.forEach(k => { if (f[k] != null && !$('bf-' + k).value) $('bf-' + k).value = f[k]; }); } catch (e) { }
   fillSelect('bf-region', d.regions, 'any region'); fillSelect('bf-pattern', [...new Set(d.routers.map(b => b.pattern.name))], 'any design pattern');
@@ -956,7 +962,7 @@ function renderBranches() {
     && (!q || [b.name, b.owner, b.city, b.site, b.address, b.region, b.lan, b.mgmt_ip, b.industry, b.pattern.code, b.pattern.name, (b.customer || {}).account_id, b.comments].filter(Boolean).some(x => String(x).toLowerCase().includes(q))));
   $('bf-count').textContent = rows.length === BRS.routers.length ? `${rows.length} routers` : `${rows.length} of ${BRS.routers.length} routers match`;
   $('brs-table').querySelector('tbody').innerHTML = rows.map(b => `<tr style="cursor:pointer" onclick="location.hash='branch/${encodeURIComponent(b.name)}'">
-    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${b.role === 'hub' ? 'headend' : 'branch'}</span></td>
+    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${roleName(b.role)}</span></td>
     <td style="white-space:nowrap">${b.customer ? `<b>${esc(b.customer.company)}</b><div class="hint">${esc(b.customer.industry)} · ${esc(b.customer.account_id)}${b.customer.contract_start ? ' · since ' + esc(b.customer.contract_start) : ''}</div>` : `<b>${esc(b.owner)}</b><div class="hint">service provider</div>`}</td>
     <td style="white-space:nowrap">${esc(b.city || b.site || '')} <span class="hint">· ${esc(b.region || '')}</span><div class="hint">${esc(b.address || '')}</div></td>
     <td style="white-space:nowrap"><span class="pill ${b.role === 'hub' ? '' : b.pattern.tunnels >= 3 ? 'ok' : b.pattern.tunnels === 2 ? '' : 'warn'}" title="${esc(b.pattern.description)}">${esc(b.pattern.code)}</span> <span class="hint">${esc(b.pattern.name)}</span></td>
@@ -1022,7 +1028,7 @@ async function loadBranch(name, refresh) {
   const actions = isSpoke ? `<button type="button" class="auth" data-name="${esc(name)}" data-current="${d.authentication}" onclick="openAuth('${esc(name)}','${d.authentication}')">Change auth…</button> ${d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button> ` : ''}${d.authentication === 'psk' ? `<button type="button" class="rot" onclick="openRotate('${esc(name)}')">Rotate PSK…</button> ` : ''}<button type="button" class="rh" onclick="openRehome('${esc(name)}')">Re-home…</button> <button type="button" class="rm" onclick="openRemove('${esc(name)}')">Remove…</button>`
                           : (d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button>` : '');
   const ow = d.owner || {}; const cu = ow.customer;
-  $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span> <small>${esc(ow.tenant || '')} · ${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
+  $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${roleName(d.role)}</span> <small>${esc(ow.tenant || '')} · ${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
       <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadBranch('${esc(name)}', true)">Refresh live</button> <a href="#branches" class="hint">all branches</a></span></h2>
     <div class="review" style="margin-top:8px;grid-template-columns:1fr 1fr 1fr"><div class="box"><h4>${cu ? 'Customer' : 'Owner'} <span class="hint">Nautobot tenant · <a href="${esc(ow.nautobot_tenant || '#')}" target="_blank">open</a></span></h4><dl>
       <dt>${cu ? 'Company' : 'Provider'}</dt><dd><b>${esc(ow.tenant || '')}</b>${cu ? '' : ' <span class="hint">sells the VPN service; owns the headends and firewalls</span>'}</dd>
@@ -1266,6 +1272,10 @@ async function renderMap(d, hidden) {
     const [x, y] = albers(lon, lat); pos[n.name] = { x, y, guessed };
   });
   const hubs = d.devices.filter(x => x.role === 'hub'), spokes = d.devices.filter(x => x.role === 'spoke'), fws = d.devices.filter(x => x.role === 'firewall');
+  const chain = d.devices.filter(x => x.role === 'dci' || x.role === 'partner'), peers = d.peerings || [];
+  const dciEdges = peers.map(p => { const a = pos[p.a], b = pos[p.b]; if (!a || !b) return '';
+    const tip = `${p.a} Gi${p.a_port} (${p.a_ip}) ─ ${p.b} Gi${p.b_port} (${p.b_ip})\n${p.prefix} · direct link, no IPsec\neBGP AS ${p.a_asn} ↔ AS ${p.b_asn}`;
+    return `<path class="edge dci" d="M${a.x},${a.y} L${b.x},${b.y}"><title>${esc(tip)}</title></path>`; }).join('');
   // tunnels: a curve bowing north between hub and spoke; several tunnels of one spoke fan out by hub
   const edges = d.tunnels.map(t => {
     const a = pos[t.headend], b = pos[t.spoke]; if (!a || !b) return '';
@@ -1289,8 +1299,8 @@ async function renderMap(d, hidden) {
   const hiddenNote = hidden.size ? `<text x="${W - 12}" y="${H - 10}" text-anchor="end" fill="var(--muted)" font-size="11">${hidden.size} spoke${hidden.size > 1 ? 's' : ''} hidden by the filter</text>` : '';
   $('inv-topo').innerHTML = `<div class="map"><svg class="topo" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f8fafc"></rect>
     ${USA.states.map(st => `<path class="state" d="${st.d}"><title>${esc(st.name)}</title></path>`).join('')}
-    <text x="12" y="${H - 10}" fill="var(--muted)" font-size="11">hubs at their headend cities · spokes at their branches (Nautobot Location coordinates) · firewall = square beside its hub</text>${hiddenNote}
-    ${edges}${hubs.map(site).join('')}${fws.map(site).join('')}${spokes.map(site).join('')}</svg></div>`;
+    <text x="12" y="${H - 10}" fill="var(--muted)" font-size="11">hubs at their headend cities · spokes at their branches (Nautobot Location coordinates) · firewall = square beside its hub${chain.length ? ' · dashed = the DCI chain (plain eBGP)' : ''}</text>${hiddenNote}
+    ${edges}${dciEdges}${hubs.map(site).join('')}${fws.map(site).join('')}${spokes.map(site).join('')}${chain.map(site).join('')}</svg></div>`;
 }
 
 function renderTopology(d) {
@@ -1298,14 +1308,18 @@ function renderTopology(d) {
   const regions = [...new Set(d.devices.map(x => x.region || 'unassigned'))];
   const byRegion = (list) => [...list].sort((a, b) => regions.indexOf(a.region || 'unassigned') - regions.indexOf(b.region || 'unassigned') || a.name.localeCompare(b.name));
   const hubs = byRegion(d.devices.filter(x => x.role === 'hub')), spokes = byRegion(d.devices.filter(x => x.role === 'spoke')), fws = d.devices.filter(x => x.role === 'firewall');
+  // the DCI chain: ACME's interconnect off a headend and the acquired company's edge behind it — plain eBGP, no tunnel
+  const dcis = d.devices.filter(x => x.role === 'dci'), partners = d.devices.filter(x => x.role === 'partner'), peers = d.peerings || [];
   // node box: four text lines; width from the longest line (≈6.4px per character at 11px, 7.8px at 13px bold)
   const lines = n => n.role === 'firewall' ? [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · VyOS${n.bandwidth_mbps ? ' · ' + n.bandwidth_mbps + ' Mbps' : ''}`, `in front of ${n.hub || '?'}`] : [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
   const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
   const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, MID = fws.length ? 230 : null, BOT = fws.length ? 430 : 386, H = BOT + NH + 30;
   const REGION_COLORS = ['rgba(245,158,11,.10)', 'rgba(59,130,246,.10)', 'rgba(34,197,94,.10)', 'rgba(168,85,247,.10)', 'rgba(148,163,184,.10)'];   // translucent: readable on both themes
-  const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length) + 60);
+  const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length + (partners.length ? 1 : 0)) + 60);
   const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
-  place(hubs, TOP); place(spokes, BOT);
+  place(hubs, TOP); place(spokes.concat(partners), BOT);
+  // the DCI sits on the firewall row, under the headend it hangs off (the far end of its first peering)
+  dcis.forEach(n => { const up = (peers.find(p => p.b === n.name) || {}).a; const h = pos[up]; pos[n.name] = { x: h ? Math.min(W - NW - 12, h.x + NW * 0.75) : W - NW - 12, y: MID != null ? MID : (TOP + BOT) / 2 }; });
   // firewalls sit under their headend
   fws.forEach(f => { const h = pos[f.hub]; pos[f.name] = { x: h ? h.x : 20, y: MID }; });
   // physical links (cables): firewall <-> headend and firewall <-> spoke, thin grey lines under the tunnels
@@ -1331,6 +1345,15 @@ function renderTopology(d) {
     return `<a href="${t.url}" target="_blank"><path class="edge ${cls}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(tip)}</title></path>
       <g class="elabel" transform="translate(${lx},${ly})"><rect x="${-(label.length * 6.2 + 12) / 2}" y="-9" width="${label.length * 6.2 + 12}" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g></a>`;
   }).join('');
+  // the DCI chain's links: plain eBGP over a direct /30 (dashed, labelled with the AS pair) — no IPsec, so no tunnel curve
+  const dciEdges = peers.map(p => {
+    const a = pos[p.a], b = pos[p.b]; if (!a || !b) return '';
+    const x1 = a.x + NW / 2, y1 = a.y + NH, x2 = b.x + NW / 2, y2 = b.y, my = (y1 + y2) / 2;
+    const label = `eBGP ${p.a_asn ?? '?'} ↔ ${p.b_asn ?? '?'}`;
+    const tip = `${p.a} Gi${p.a_port} (${p.a_ip}) ─ ${p.b} Gi${p.b_port} (${p.b_ip})\n${p.prefix} · direct link, no IPsec\neBGP AS ${p.a_asn} ↔ AS ${p.b_asn}`;
+    return `<path class="edge dci" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(tip)}</title></path>
+      <g class="elabel" transform="translate(${(x1 + x2) / 2},${my})"><rect x="${-(label.length * 6.2 + 12) / 2}" y="-9" width="${label.length * 6.2 + 12}" height="16"></rect><text text-anchor="middle" y="3">${esc(label)}</text></g>`;
+  }).join('');
   // a tinted band per region behind the spoke row (and the hub row), labelled
   const bands = [];
   for (const [row, list, y] of [['hubs', hubs, TOP], ['spokes', spokes, BOT]]) {
@@ -1342,8 +1365,8 @@ function renderTopology(d) {
   }
   $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <text x="12" y="${TOP - 30}" fill="var(--muted)" font-size="11">headends</text><text x="12" y="${BOT - 30}" fill="var(--muted)" font-size="11">spokes · grouped by region</text>
-    ${fws.length ? `<text x="12" y="${MID - 12}" fill="var(--muted)" font-size="11">firewalls (VyOS) · underlay links in grey</text>` : ''}
-    ${bands.join('')}${wires}${edges}${hubs.map(node).join('')}${fws.map(node).join('')}${spokes.map(node).join('')}</svg>`;
+    ${fws.length ? `<text x="12" y="${MID - 12}" fill="var(--muted)" font-size="11">firewalls (VyOS) · underlay links in grey${dcis.length ? ' · DCI: plain eBGP over a direct link (dashed)' : ''}</text>` : ''}
+    ${bands.join('')}${wires}${dciEdges}${edges}${hubs.map(node).join('')}${fws.map(node).join('')}${spokes.map(node).join('')}${dcis.map(node).join('')}${partners.map(node).join('')}</svg>`;
 }
 
 whoami().then(() => { load(); loadRuns(); showView(); });

@@ -64,13 +64,15 @@ Every router has a page: identity, authentication, its tunnels with live state, 
 
 The Branches list names every router with its health, method, certificate and host, and each row opens the router's page
     ${l}=    Portal Get    /api/branches
-    Length Should Be    ${l}[routers]    ${{ len($ROUTER_NAMES) }}
+    Length Should Be    ${l}[routers]    ${{ len($ALL_ROUTERS) }}    msg=the list holds every Catalyst 8000v: the headends, the branches and the DCI chain
     FOR    ${b}    IN    @{l}[routers]
-        Should Contain    ${ROUTER_NAMES}    ${b}[name]
-        Should Be Equal    ${b}[health]    up
+        Should Contain    ${{ list($ALL_ROUTERS) }}    ${b}[name]
+        # the DCI chain has no tunnels: its health is reported as "none" and it holds no certificate
+        ${expect}=    Set Variable If    '${b}[role]' in ['dci', 'partner']    none    up
+        Should Be Equal    ${b}[health]    ${expect}
         Should Be Equal As Integers    ${b}[tunnels_up]    ${b}[tunnels]
-        Should Be Equal    ${b}[host]    ${HOST_OF}[${b}[name]]
-        Should Be Equal    ${b}[host_state]    running
+        Should Be Equal    ${b}[host]    ${{ $HOST_OF.get($b['name']) }}
+        IF    $b['host']    Should Be Equal    ${b}[host_state]    running
         IF    '${b}[role]' == 'spoke'    Should Be Equal    ${b}[authentication]    ${SPOKE_AUTH}[${b}[name]]
         Run Keyword If    $b['name'] in $CERT_ROUTERS    Should Be True    ${b}[cert_days] > 30
         Run Keyword If    $b['name'] not in $CERT_ROUTERS    Should Be Equal    ${b}[cert_days]    ${None}
@@ -115,12 +117,12 @@ A router's page shows its configuration history from Gitea, the diff of a backup
 The Compliance page reports Nautobot's Golden Config verdict for every router and feature, and a golden run refreshes it
     Skip If Started From A Portal Run    this test starts a golden run
     ${c}=    Portal Get    /api/compliance
-    Length Should Be    ${c}[devices]    ${{ len($ROUTER_NAMES) }}
+    Length Should Be    ${c}[devices]    ${{ len($ALL_ROUTERS) }}    msg=every Catalyst 8000v is in the Golden Config scope, the DCI chain included
     Should Be True    len($c['features']) >= 10
     Should Be Equal As Integers    ${c}[summary][devices_ok]    ${c}[summary][devices]    msg=non-compliant routers: ${{ [d['name'] for d in $c['devices'] if not d['ok']] }}
     Should Be Equal As Integers    ${c}[summary][rows_ok]    ${c}[summary][rows]
     FOR    ${d}    IN    @{c}[devices]
-        Should Contain    ${ROUTER_NAMES}    ${d}[name]
+        Should Contain    ${{ list($ALL_ROUTERS) }}    ${d}[name]
         Should Be Equal As Integers    ${d}[total]    ${{ len($c['features']) }}    msg=${d}[name]: a feature has no compliance row
         Should Not Be Empty    ${d}[compliance_at]
         Dictionary Should Contain Key    ${d}[features]    IKEv2/IPsec
@@ -171,7 +173,7 @@ Drift on a router is detected by the Golden Config run, remediated from the port
     Should Contain    ${d}[features][Static routes][extra]    10.99.99.0
     Should Contain    ${d}[features][Static routes][remediation]    no ip route 10.99.99.0 255.255.255.0 Null0
     Should Contain    ${c}[history][-1][drifted]    ${spoke}    msg=the drift is not in the history: ${c}[history][-1]
-    Should Be Equal As Integers    ${c}[summary][devices_ok]    ${{ len($ROUTER_NAMES) - 1 }}
+    Should Be Equal As Integers    ${c}[summary][devices_ok]    ${{ len($ALL_ROUTERS) - 1 }}
     ${m}=    Portal Get Text    /metrics
     Should Match Regexp    ${m}    lab_config_compliance_ok\\{[^}]*device="${spoke}"[^}]*\\} 0
     Should Match Regexp    ${m}    lab_config_noncompliant_features\\{[^}]*device="${spoke}"[^}]*\\} 1

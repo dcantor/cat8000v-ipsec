@@ -11,8 +11,9 @@ Suite Teardown Close Connections
     Close All Connections
 
 Router Host
+    [Documentation]    The management address of any Catalyst 8000v: a headend, a branch, or the DCI chain off west-headend.
     [Arguments]    ${r}
-    RETURN    ${ROUTERS}[${r}][host]
+    RETURN    ${ALL_ROUTERS}[${r}][host]
 
 Show
     [Documentation]    Run a show command on a router by name.

@@ -28,10 +28,10 @@ if problems: sys.exit("invalid intent:\n  " + "\n  ".join(problems))
 nb = pynautobot.api(a.url, token=a.token)
 H = {"Authorization": f"Token {a.token}", "Accept": "application/json"}
 SITE = I["site"]["name"]
-DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(n for n, d in DEV.items() if d["role"] in ("hub", "spoke")); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
+DEV = {d["name"]: d for d in I["devices"]}; ROUTERS = sorted(n for n, d in DEV.items() if d["role"] in intent_mod.ROUTER_ROLES); HUBS = sorted(n for n, d in DEV.items() if d["role"] == "hub")
 FIREWALLS = sorted(n for n, d in DEV.items() if d["role"] == "firewall"); LAN_HOSTS = sorted(n for n, d in DEV.items() if d["role"] == "host")
 NODES = intent_mod.nodes()                                # mgmt ip -> {node, idx, role} (VM facts)
-LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items() if d["role"] in ("hub", "spoke")}   # .1 = the router's LAN port; .2 = its host
+LAN_IP = {n: str(ipaddress.IPv4Network(d["lan"])[1]) for n, d in DEV.items() if d["role"] in intent_mod.ROUTER_ROLES}   # .1 = the router's LAN port; .2 = its host
 LINKS = I["links"]; TUNNELS = I["tunnels"]; PROF = I["profile"]
 LAN_LINKS = [l for l in LINKS if intent_mod.is_lan_link(I, l)]; WAN_LINKS = [l for l in LINKS if not intent_mod.is_lan_link(I, l)]
 def port_name(node, port): return f"eth{port}" if DEV[node]["role"] in ("firewall", "host") else f"GigabitEthernet{port}"
@@ -39,7 +39,9 @@ WIRED = {}                                              # (node, port) -> "peer 
 for l in LINKS:
     WIRED[(l["a"], l["a_port"])] = f"{l['b']} {port_name(l['b'], l['b_port'])}"; WIRED[(l["b"], l["b_port"])] = f"{l['a']} {port_name(l['a'], l['a_port'])}"
 SC = intent_mod.scalars("MAC_OUI", "HUB_PORTS", "SPOKE_PORTS", "FW_PORTS"); OUI = SC["MAC_OUI"] or "52:54:00:c7"
-PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": range(2, 2 + int(SC["SPOKE_PORTS"] or 2)), "firewall": range(1, 1 + int(SC["FW_PORTS"] or 8)), "host": range(1, 2)}
+SPOKE_RANGE = range(2, 2 + int(SC["SPOKE_PORTS"] or 2))
+PORTS = {"hub": range(2, 2 + int(SC["HUB_PORTS"] or 2)), "spoke": SPOKE_RANGE, "dci": SPOKE_RANGE, "partner": SPOKE_RANGE,
+         "firewall": range(1, 1 + int(SC["FW_PORTS"] or 8)), "host": range(1, 2)}
 LAN_PORT = {n: intent_mod.lan_port(I, n) for n in ROUTERS}   # the router's last port is its site LAN (.1 of the LAN /24; the host behind it .2)
 
 created = []
@@ -73,9 +75,11 @@ ns = nb.ipam.namespaces.get(name="Global"); plat = nb.dcim.platforms.get(name="c
 sg = nb.extras.secrets_groups.get(name="lab-devices"); mgmt_vrf = nb.ipam.vrfs.get(name="Mgmt-vrf", namespace=ns.id)
 roles = {"hub": get_or_create(nb.extras.roles, {"name": "vpn-hub"}, color="e91e63", content_types=["dcim.device"]),
          "spoke": get_or_create(nb.extras.roles, {"name": "vpn-spoke"}, color="f48fb1", content_types=["dcim.device"]),
-         "firewall": get_or_create(nb.extras.roles, {"name": "vpn-firewall"}, color="ff9800", content_types=["dcim.device"])}
+         "firewall": get_or_create(nb.extras.roles, {"name": "vpn-firewall"}, color="ff9800", content_types=["dcim.device"]),
+         "dci": get_or_create(nb.extras.roles, {"name": "vpn-dci"}, color="00bcd4", content_types=["dcim.device"]),
+         "partner": get_or_create(nb.extras.roles, {"name": "partner-edge"}, color="9c27b0", content_types=["dcim.device"])}
 prole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["ipam.prefix"])
-         for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"))}
+         for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"), ("service", "009688"))}
 tag_adv = get_or_create(nb.extras.tags, {"name": "bgp:advertise"}, color="ff5722", content_types=["ipam.prefix"])
 
 # site / device metadata as custom fields (site_code + contact on locations, contact on devices)
@@ -118,7 +122,7 @@ def ensure_choices(field, values):
     have = {c.value: c for c in nb.extras.custom_field_choices.filter(custom_field=field.id)}
     for i, v in enumerate(values):
         if v not in have: nb.extras.custom_field_choices.create(custom_field=field.id, value=v, weight=100 + i * 10); created.append(f"custom-field-choice:{field.key}={v}")
-PATTERN_NAMES = [pt["name"] for pt in intent_mod.PATTERNS.values()] + ["Service headend"]
+PATTERN_NAMES = [pt["name"] for pt in intent_mod.PATTERNS.values()] + ["Service headend", "Data-centre interconnect", "Acquisition edge"]
 for key, label, typ, ctypes, desc in (("acme_design_pattern", "ACME design pattern", "select", ["dcim.device", "dcim.location"], "how the branch is attached — follows from its number of tunnels: " + "; ".join(f"{pt['code']} = {pt['name']}" for pt in intent_mod.PATTERNS.values() if pt["code"] != "ACME-NC")),
                                        ("acme_pattern_tunnels", "ACME pattern: tunnels", "integer", ["dcim.device", "dcim.location"], "tunnels behind the design pattern (a headend: the branch tunnels it serves)"),
                                        ("acme_service_tier", "ACME service tier", "select", ["dcim.device", "dcim.location", "tenancy.tenant"], "the customer's service tier: " + " / ".join(intent_mod.TIERS)),
@@ -137,10 +141,11 @@ acme = get_or_create(nb.tenancy.tenants, {"name": PROVIDER["name"]}, tenant_grou
 ensure(acme, tenant_group=tg_prov.id, description=PROVIDER["description"], comments=PROVIDER.get("address", ""))
 tenants = {}   # spoke -> tenant
 for d in I["devices"]:
-    if d["role"] != "spoke": continue
+    if d["role"] not in ("spoke", "partner"): continue
     cu = intent_mod.customer(I, d["name"]) or intent_mod.fake_customer(d["name"], d.get("city"))
     t = get_or_create(nb.tenancy.tenants, {"name": cu["company"]}, tenant_group=tg_cust.id)
-    ensure(t, tenant_group=tg_cust.id, description=f"{cu['industry']} · branch {d['site']} ({d['name']}), {d.get('city', '')}", comments=cu["address"])
+    what = "branch" if d["role"] == "spoke" else "acquired company, reached over the DCI"
+    ensure(t, tenant_group=tg_cust.id, description=f"{cu['industry']} · {what} {d['site']} ({d['name']}), {d.get('city', '')}", comments=cu["address"])
     ensure_cf(t, acme_service_tier=cu["service_tier"], acme_account_id=cu["account_id"], acme_industry=cu["industry"], acme_contract_start=cu["contract_start"] or None)
     tenants[d["name"]] = t
 for t in nb.tenancy.tenants.filter(tenant_group=tg_cust.id):   # a customer whose branch is gone
@@ -245,7 +250,7 @@ CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # internet breakout: each firewall's uplink port (DHCP on the libvirt NAT network) masquerades the site LANs; only LAN -> uplink may cross
        # (rendered by render_vyos.py); the headend behind it holds a static default via the firewall and originates a default route to its spokes,
        # and every spoke prefers the nearest headend's default (render_nac.py: local preference per neighbour from `preference`)
-       "internet": {"enabled": bool(INET["enabled"]), "uplink": f"eth{INET['uplink_port']}", "nat_sources": sorted(d["lan"] for d in I["devices"] if d["role"] in ("hub", "spoke")), "preference": INET["preference"]}}
+       "internet": {"enabled": bool(INET["enabled"]), "uplink": f"eth{INET['uplink_port']}", "nat_sources": sorted(d["lan"] for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES), "preference": INET["preference"]}}   # nat_sources: every site behind the VPN, the DCI chain included
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})
@@ -324,6 +329,15 @@ for r in ROUTERS:
     lo10 = nb.dcim.interfaces.get(device=dev.id, name="Loopback10")
     if lo10: lo10.delete(); created.append(f"removed {r}/Loopback10 (the site LAN is GigabitEthernet{LAN_PORT[r]} now)")
     tag(ensure_prefix(d["lan"], prole["site-lan"], f"{r} site LAN")); ensure_ip(gi[(r, LAN_PORT[r])], f"{LAN_IP[r]}/24")
+    # extra loopbacks: prefixes the router originates besides its LAN (the acquired company's service prefix)
+    for lo in intent_mod.extra_loopbacks(I, r):
+        itf = ensure_iface(dev, lo["name"], "virtual", lo.get("description", ""))
+        pf = ensure_prefix(str(ipaddress.IPv4Interface(lo["address"]).network), prole["service"], f"{r} {lo.get('description') or lo['name']}")
+        if lo.get("advertise", True): tag(pf)
+        ensure_ip(itf, lo["address"])
+    for itf in nb.dcim.interfaces.filter(device=dev.id, type="virtual"):   # a loopback the intent no longer has
+        if itf.name != "Loopback0" and itf.name not in {lo["name"] for lo in intent_mod.extra_loopbacks(I, r)}:
+            itf.delete(); created.append(f"removed {r}/{itf.name} (not in the intent)")
     devs[r] = dev
 # LAN hosts: one Alpine VM behind every router (cloud-init, no onboarding); eth0 = management, eth1 = the router's LAN (.2)
 if LAN_HOSTS:
@@ -439,7 +453,8 @@ for old in nb.vpn.vpn_tunnels.filter(vpn=vpn.id):
 bgp = nb.plugins.bgp
 need = [ct for ct in ("nautobot_bgp_models.autonomoussystem", "nautobot_bgp_models.bgproutinginstance", "nautobot_bgp_models.peering") if ct not in active.content_types]
 if need: active.update({"content_types": list(active.content_types) + need})
-asn = {r: get_or_create(bgp.autonomous_systems, {"asn": int(DEV[r]["asn"])}, status=active.id, description=f"{r} site AS (eBGP over IPsec VTI)") for r in ROUTERS}
+asn = {r: get_or_create(bgp.autonomous_systems, {"asn": int(DEV[r]["asn"])}, status=active.id,
+                        description=f"{r} site AS (eBGP over " + ("a direct link)" if DEV[r]["role"] in ("dci", "partner") else "IPsec VTI)")) for r in ROUTERS}
 ri = {}
 for r in ROUTERS:
     rid_ip = nb.ipam.ip_addresses.get(address=f"{DEV[r]['router_id']}/32", namespace=ns.id)
@@ -468,9 +483,28 @@ for t in TUNNELS:
     for r, ep in eps.items():
         if bgp.peer_endpoint_address_families.get(peer_endpoint=ep.id, afi_safi="ipv4_unicast") is None:
             bgp.peer_endpoint_address_families.create(peer_endpoint=ep.id, afi_safi="ipv4_unicast"); created.append(f"bgp-endpoint-af:{r}/Tunnel{tid}")
+# eBGP over a direct router-to-router link (no tunnel): west-headend <-> DCI <-> ACME-acquisition. The endpoints are the two /30
+# addresses of the link itself, so the renderer emits `neighbor <far /30 address> remote-as <far AS>` on both routers.
+for dp in intent_mod.direct_peerings(I):
+    near, far = dp["a"], dp["b"]
+    ip_of = {near: nb.ipam.ip_addresses.get(address=f"{dp['a_ip']}/30", namespace=ns.id), far: nb.ipam.ip_addresses.get(address=f"{dp['b_ip']}/30", namespace=ns.id)}
+    if not all(ip_of.values()): sys.exit(f"{near} <-> {far}: the link addresses are not in Nautobot yet")
+    desc = {near: f"eBGP {far} ({dp['prefix']})", far: f"eBGP {near} ({dp['prefix']})"}
+    eps_near = list(bgp.peer_endpoints.filter(routing_instance=ri[near].id))
+    existing = [e for e in eps_near if str(getattr(e.source_ip, "id", "")) == ip_of[near].id] or [e for e in eps_near if str(e.description or "") == desc[near]]
+    if existing:
+        eps = {near: existing[0], far: existing[0].peer}
+        for r in (near, far): ensure(eps[r], source_ip=ip_of[r].id, autonomous_system=asn[r].id, description=desc[r])
+    else:
+        peering = bgp.peerings.create(status=active.id); created.append(f"bgp-peering:{near}<->{far} ({dp['prefix']})")
+        eps = {r: bgp.peer_endpoints.create(peering=peering.id, routing_instance=ri[r].id, source_ip=ip_of[r].id, autonomous_system=asn[r].id, description=desc[r], enabled=True) for r in (near, far)}
+    for r, ep in eps.items():
+        if bgp.peer_endpoint_address_families.get(peer_endpoint=ep.id, afi_safi="ipv4_unicast") is None:
+            bgp.peer_endpoint_address_families.create(peer_endpoint=ep.id, afi_safi="ipv4_unicast"); created.append(f"bgp-endpoint-af:{r}/{dp['prefix']}")
+
 # unused autonomous systems (after an AS change) are removed
 for x in bgp.autonomous_systems.all():
-    if "IPsec VTI" in (x.description or "") and x.asn not in {int(DEV[r]["asn"]) for r in ROUTERS}: x.delete(); created.append(f"removed AS {x.asn}")
+    if "site AS" in (x.description or "") and x.asn not in {int(DEV[r]["asn"]) for r in ROUTERS}: x.delete(); created.append(f"removed AS {x.asn}")
 
 QUERY = (Path(__file__).resolve().parent / "nac-c8000v-ipsec-model.graphql").read_text().replace("__LOCATION__", SITE).replace("__DEVICES__", ", ".join(f'"{r}"' for r in ROUTERS))
 gq = nb.extras.graphql_queries.get(name="nac-c8000v-ipsec-model")

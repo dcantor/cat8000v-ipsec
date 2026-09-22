@@ -23,6 +23,13 @@ QUERY = """
 }"""
 
 
+def _city_of(desc):
+    """The city out of a branch location's description — "<what> of <router> — <city> — <owner>" since every site carries its
+    customer (or ACME) as well; the middle segment is the city, and an older two-part description ends with it."""
+    parts = [p.strip() for p in (desc or "").split(" — ")]
+    return parts[1] if len(parts) >= 3 else (parts[1] if len(parts) == 2 else None)
+
+
 class Inventory:
     def __init__(self, url, public_url, token_fn, username="admin", password="admin", ttl=30):
         self.url, self.public_url, self.token_fn, self.creds, self.ttl = url, public_url, token_fn, (username, password), ttl
@@ -31,7 +38,7 @@ class Inventory:
     # ---- Nautobot ----------------------------------------------------------
     def devices(self):
         """VPN routers for the topology map: role, management IP, AS, site LAN (the router's LAN port), serial."""
-        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name description latitude longitude cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
+        q = """{ devices(role: ["vpn-hub", "vpn-spoke", "vpn-firewall", "vpn-dci", "partner-edge"], location: ["%s"]) { id name serial role { name } primary_ip4 { address } location { name description latitude longitude cf_site_code cf_contact parent { name } } cf_firewall_bandwidth_mbps
                  bgp_routing_instances { autonomous_system { asn } router_id { address } }
                  interfaces { name ip_addresses { address parent { prefix role { name } } } } } }"""
         import sys; from pathlib import Path
@@ -42,13 +49,13 @@ class Inventory:
         for d in r.json()["data"]["devices"]:
             ri = (d["bgp_routing_instances"] or [{}])[0]
             lo = next((ip for i in (d["interfaces"] or []) for ip in (i.get("ip_addresses") or []) if ((ip.get("parent") or {}).get("role") or {}).get("name") == "site-lan"), {})
-            out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
+            out.append({"name": d["name"], "role": {"vpn-hub": "hub", "vpn-spoke": "spoke", "vpn-firewall": "firewall", "vpn-dci": "dci", "partner-edge": "partner"}[d["role"]["name"]], "mgmt_ip": (d["primary_ip4"] or {}).get("address", "").split("/")[0],
                         "site": (d["location"] or {}).get("name"), "region": ((d["location"] or {}).get("parent") or {}).get("name"),
                         "site_code": (d["location"] or {}).get("cf_site_code"), "contact": (d["location"] or {}).get("cf_contact"), "serial": d["serial"],
                         # where the site is (Nautobot Location latitude / longitude, the city from its description) for the map
                         "lat": float((d["location"] or {}).get("latitude")) if (d["location"] or {}).get("latitude") is not None else None,
                         "lon": float((d["location"] or {}).get("longitude")) if (d["location"] or {}).get("longitude") is not None else None,
-                        "city": ((d["location"] or {}).get("description") or "").split(" — ")[-1] if " — " in ((d["location"] or {}).get("description") or "") else None, "bandwidth_mbps": d.get("cf_firewall_bandwidth_mbps"), "asn": (ri.get("autonomous_system") or {}).get("asn"),
+                        "city": _city_of((d["location"] or {}).get("description")), "bandwidth_mbps": d.get("cf_firewall_bandwidth_mbps"), "asn": (ri.get("autonomous_system") or {}).get("asn"),
                         "router_id": (ri.get("router_id") or {}).get("address", "").split("/")[0], "lan": (lo.get("parent") or {}).get("prefix"),
                         "url": f"{self.public_url}/dcim/devices/{d['id']}/"})
         # a firewall's headend: the device on the far side of its eth1 (from Nautobot cables)
@@ -58,7 +65,7 @@ class Inventory:
             hub_of = {i["device"]["name"]: (i.get("connected_interface") or {}).get("device", {}).get("name") for i in r2.get("data", {}).get("interfaces", [])}
             for d in out:
                 if d["role"] == "firewall": d["hub"] = hub_of.get(d["name"])
-        return sorted(out, key=lambda d: ({"hub": 0, "firewall": 1, "spoke": 2}[d["role"]], d["name"]))
+        return sorted(out, key=lambda d: ({"hub": 0, "firewall": 1, "spoke": 2, "dci": 3, "partner": 4}.get(d["role"], 9), d["name"]))
 
     def model(self):
         r = requests.post(f"{self.url}/api/graphql/", json={"query": QUERY}, headers={"Authorization": f"Token {self.token_fn()}"}, timeout=60)
@@ -110,7 +117,15 @@ class Inventory:
                 h["effective_capacity"] = min(h["capacity"], h["bandwidth_tunnel_capacity"]); h["effective_free"] = min(h["free"], (bw - h["tunnels"] * per) // per)
             else:
                 h.update({"binding": "tunnels", "aggregate_utilisation": h["utilisation"], "effective_capacity": h["capacity"], "effective_free": h["free"]})
+        # the DCI chain: eBGP over direct links instead of tunnels (west-headend <-> DCI <-> the acquired company's edge) — the
+        # topology draws them as plain links, and a branch's route to the acquisition's prefixes arrives over the tunnels above
+        import sys as _sys; from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "nautobot")); import intent as _intent
+        _I = _intent.load()
+        peerings = [{**p, "a_asn": next((d.get("asn") for d in devices if d["name"] == p["a"]), None),
+                     "b_asn": next((d.get("asn") for d in devices if d["name"] == p["b"]), None)} for p in _intent.direct_peerings(_I)]
         return {"tunnels": sorted(tunnels, key=lambda x: (x["headend"], int(x["tunnel_id"] or 0))), "headends": sorted(headends.values(), key=lambda h: h["name"]), "devices": devices,
+                "peerings": peerings,
                 "vpns": [{"name": v["name"], "status": (v["status"] or {}).get("name"), "tunnels": len(v["vpn_tunnels"]), "profile": (v["vpn_profile"] or {}).get("name"),
                           "url": f"{self.public_url}/vpn/vpns/{v['id']}/"} for v in data["data"]["vpns"]]}
 

@@ -6,9 +6,10 @@
 {%- set ns = namespace(prof=none) -%}
 {%- for i in interfaces if i.vpn_tunnel_endpoints_tunnel %}{% set ns.prof = i.vpn_tunnel_endpoints_tunnel.vpn_profile %}{% endfor -%}
 {%- set prof = ns.prof -%}
-{%- set ios = prof.extra_options.ios -%}
-{%- set p1 = prof.vpn_phase1_policies[0] -%}
-{%- set p2 = prof.vpn_phase2_policies[0] -%}
+{#- a router without tunnels (ACME's DCI, the acquired company's edge) has no VPN profile and no crypto at all -#}
+{%- set ios = prof.extra_options.ios if prof else none -%}
+{%- set p1 = prof.vpn_phase1_policies[0] if prof else none -%}
+{%- set p2 = prof.vpn_phase2_policies[0] if prof else none -%}
 {%- set ike_enc = {'AES_256_CBC': 'aes-cbc-256', 'AES_192_CBC': 'aes-cbc-192', 'AES_128_CBC': 'aes-cbc-128', 'AES_256_GCM': 'aes-gcm-256', 'AES_128_GCM': 'aes-gcm-128'} -%}
 {%- set esp_enc = {'AES_256_CBC': 'esp-aes 256', 'AES_192_CBC': 'esp-aes 192', 'AES_128_CBC': 'esp-aes', 'AES_256_GCM': 'esp-gcm 256', 'AES_128_GCM': 'esp-gcm'} -%}
 {%- set esp_hmac = {'SHA256': 'esp-sha256-hmac', 'SHA384': 'esp-sha384-hmac', 'SHA512': 'esp-sha512-hmac', 'SHA1': 'esp-sha-hmac', 'MD5': 'esp-md5-hmac'} -%}
@@ -57,7 +58,7 @@ ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.
 {{ r }}
 {% endfor %}
 !
-{% set pref = (inet.preference or {})[hostname] if inet.enabled and not is_hub else [] -%}
+{% set pref = (inet.preference or {}).get(hostname, []) if inet.enabled and not is_hub else [] -%}   {#- a router off the DCI has no breakout preference: its default comes from the headend over eBGP -#}
 {% if pref %}
 ip prefix-list DEFAULT-ROUTE description the default route the headends originate (internet breakout)
 ip prefix-list DEFAULT-ROUTE seq 5 permit 0.0.0.0/0
@@ -113,6 +114,7 @@ interface {{ i.name }}
  tunnel protection ipsec profile {{ ep.vpn_profile.extra_options.ios.ipsec_profile }}
 !
 {% endfor %}
+{% if prof %}
 crypto ikev2 proposal {{ ios.ikev2_proposal }}
  encryption{% for e in p1.encryption_algorithm %} {{ ike_enc[e | upper | replace('-', '_')] }}{% endfor +%}
  integrity {{ p1.integrity_algorithm | map('lower') | join(' ') }}
@@ -175,6 +177,8 @@ crypto ipsec profile {{ pios.ipsec_profile }}
  set ikev2-profile {{ pios.ikev2_profile }}
 !
 {% endfor %}
+{% endif %}
+{#- a router without tunnels (ACME's DCI and the acquired company's edge: plain eBGP over a direct link) has no crypto at all -#}
 {% set own = [] %}
 {% for i in interfaces %}{% for ip in i.ip_addresses if ip.parent %}{% for t in ip.parent.tags if t.name == 'bgp:advertise' and ip.parent.prefix not in own %}{% set _ = own.append(ip.parent.prefix) %}{% endfor %}{% endfor %}{% endfor %}
 {% for ri in bgp_routing_instances %}

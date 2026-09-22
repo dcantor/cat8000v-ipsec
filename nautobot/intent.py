@@ -6,6 +6,9 @@ import datetime, hashlib, ipaddress, json, re, secrets, string, subprocess
 from pathlib import Path
 
 LAB = Path(__file__).resolve().parents[1]
+# roles that are Catalyst 8000v routers: the headends, the branches, ACME's data-centre interconnect and the edge router of an
+# acquired company behind it (dci / partner carry no IPsec — they peer with plain eBGP over a direct link)
+ROUTER_ROLES = ("hub", "spoke", "dci", "partner")
 INTENT_FILE = LAB / "lab-intent.json"
 IOS_NAMES = {"ikev2_proposal": "VPN-PROP", "ikev2_policy": "VPN-POL", "ikev2_keyring": "VPN-KEYRING", "keyring_peer": "ANY",
              "ikev2_profile": "VPN-IKEV2", "transform_set": "VPN-TS", "ipsec_profile": "VPN-IPSEC"}
@@ -155,9 +158,10 @@ def fake_customer(name, city):
 
 
 def customer(I, name):
-    """The customer of a branch (stored on the spoke; generated once by upgrade()). Headends have none — they are ACME's."""
+    """The customer a router belongs to: a branch (stored on the spoke, generated once by upgrade()) or the acquired company on the
+    far side of the DCI. Headends, firewalls and the DCI itself have none — they are ACME's."""
     d = next((x for x in I["devices"] if x["name"] == name), None) or {}
-    return d.get("customer") if d.get("role") == "spoke" else None
+    return d.get("customer") if d.get("role") in ("spoke", "partner") else None
 
 
 def design_pattern(I, name):
@@ -165,6 +169,8 @@ def design_pattern(I, name):
     "pattern" is the number of branches it serves — reported, not a pattern."""
     d = next((x for x in I["devices"] if x["name"] == name), None) or {}
     tuns = [t for t in I.get("tunnels") or [] if name in (t["hub"], t["spoke"])]
+    if d.get("role") == "dci": return {"code": "ACME-DCI", "name": "Data-centre interconnect", "description": "plain eBGP off a headend, no IPsec — carries an acquired company into the VPN", "tunnels": 0}
+    if d.get("role") == "partner": return {"code": "ACME-PA", "name": "Acquisition edge", "description": "the acquired company's router behind the DCI: eBGP, its own prefixes", "tunnels": 0}
     if d.get("role") != "spoke": return {"code": "ACME-HE", "name": "Service headend", "description": f"ACME headend serving {len(tuns)} branch tunnel(s)", "tunnels": len(tuns)}
     return {**PATTERNS[min(len(tuns), 3)], "tunnels": len(tuns)}
 
@@ -181,6 +187,25 @@ def auths_in_use(I):
 def router_auths(I, name):
     """The methods a router's tunnels use: a spoke has one, a headend as many as its spokes chose."""
     return {spoke_auth(I, t["spoke"]) for t in I.get("tunnels") or [] if name in (t["hub"], t["spoke"])}
+def direct_peerings(I):
+    """eBGP sessions that run over a direct link between two routers rather than over a tunnel (the DCI chain): one per link whose
+    both ends are routers — (a, a_ip, b, b_ip, prefix), the first end of the link holding .1."""
+    by_name = {d["name"]: d for d in I["devices"]}
+    out = []
+    for l in I.get("links") or []:
+        a, b = by_name.get(l["a"], {}), by_name.get(l["b"], {})
+        if a.get("role") not in ROUTER_ROLES or b.get("role") not in ROUTER_ROLES: continue
+        net = ipaddress.IPv4Network(l["prefix"])
+        out.append({"a": l["a"], "a_port": l["a_port"], "a_ip": str(net[1]), "b": l["b"], "b_port": l["b_port"], "b_ip": str(net[2]), "prefix": l["prefix"]})
+    return out
+
+
+def extra_loopbacks(I, name):
+    """Loopbacks a router carries besides Loopback0 (the acquisition's advertised service prefix)."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("loopbacks") or []
+
+
 def tunnel_wans(I):
     """Per tunnel: the WAN addresses IKE runs between — {"id", "hub", "spoke", "hub_wan", "spoke_wan", "auth"}."""
     out = []
@@ -192,7 +217,7 @@ def tunnel_wans(I):
         out.append({"id": int(t["id"]), "hub": t["hub"], "spoke": t["spoke"], "spoke_wan": str(sw[1] if sl["b"] == t["spoke"] else sw[0]),
                     "hub_wan": str(hw[1] if hl["b"] == t["hub"] else hw[0]), "auth": spoke_auth(I, t["spoke"])})
     return out
-def cert_routers(I): return sorted(d["name"] for d in I["devices"] if d["role"] in ("hub", "spoke") and "certificate" in router_auths(I, d["name"]))
+def cert_routers(I): return sorted(d["name"] for d in I["devices"] if d["role"] in ("hub", "spoke") and "certificate" in router_auths(I, d["name"]))   # only tunnel routers hold certificates
 def profile_names(I, auth):
     """Cisco object names of the IKEv2 / IPsec profile for an authentication method: the intent's names for the default method,
     suffixed -PSK / -CERT for the other one (so a lab can run both at once, and switching the default renames nothing on most routers)."""
@@ -278,7 +303,7 @@ def validate(intent):
     devs = intent.get("devices") or []
     names = [d.get("name", "") for d in devs]
     if len(set(names)) != len(names): errs.append("device hostnames must be unique")
-    routers = [d for d in devs if d.get("role") in ("hub", "spoke")]
+    routers = [d for d in devs if d.get("role") in ROUTER_ROLES]
     for d in devs:
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{0,62}", d.get("name", "")): errs.append(f"invalid hostname {d.get('name')!r}")
         if d.get("role") == "firewall":
@@ -291,7 +316,7 @@ def validate(intent):
             try: ipaddress.IPv4Address(d.get("mgmt_ip", ""))
             except ValueError: errs.append(f"{d.get('name')}: mgmt_ip {d.get('mgmt_ip')!r} is not an IPv4 address")
             r = next((x for x in devs if x.get("name") == d.get("router")), None)
-            if not r or r.get("role") not in ("hub", "spoke"): errs.append(f"{d.get('name')}: router {d.get('router')!r} is not a router")
+            if not r or r.get("role") not in ROUTER_ROLES: errs.append(f"{d.get('name')}: router {d.get('router')!r} is not a router")
             elif not any({l.get("a"), l.get("b")} == {d["name"], r["name"]} and l.get("prefix") == r.get("lan") for l in intent.get("links") or []):
                 errs.append(f"{d.get('name')}: needs a LAN link to {r['name']} with prefix {r.get('lan')}")
             continue

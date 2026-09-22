@@ -835,7 +835,7 @@ def tools():
     I = intent_mod.load(); nodes = {v["node"]: v for v in intent_mod.nodes().values()}
     devices = []
     for d in sorted(I["devices"], key=lambda x: ({"hub": 0, "firewall": 1, "spoke": 2}.get(x["role"], 3), x["name"])):
-        n = nodes.get(d["name"], {}); ios = d["role"] in ("hub", "spoke")
+        n = nodes.get(d["name"], {}); ios = d["role"] in intent_mod.ROUTER_ROLES
         devices.append({"name": d["name"], "role": d["role"], "platform": "Cisco C8000v (IOS-XE)" if ios else "VyOS", "mgmt_ip": d["mgmt_ip"], "region": d.get("region"), "site": d.get("site"), "city": d.get("city"),
                         "ssh": f"ssh {ios_u if ios else vy_u}@{d['mgmt_ip']}", "username": ios_u if ios else vy_u, "password": ios_p if ios else vy_p,
                         "restconf": f"https://{d['mgmt_ip']}/restconf/" if ios else None, "netconf": f"{d['mgmt_ip']}:830" if ios else None,
@@ -953,7 +953,7 @@ def branch_config(name: str, request: Request, refresh: bool = Query(False, desc
     do on the Routers table); `intended` and `compliance` come from Nautobot's Golden Config app (its last backup / intended /
     compliance runs — the portal's golden step, or `./lab.sh nautobot golden`), with the missing / extra lines per feature."""
     I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name), None)
-    if dev is None or dev["role"] not in ("hub", "spoke"): raise HTTPException(404, "no such router")
+    if dev is None or dev["role"] not in intent_mod.ROUTER_ROLES: raise HTTPException(404, "no such router")
     c = _config_cache.get(name)
     if refresh or not c or time.time() - c["generated"] > 60:
         from netmiko import ConnectHandler
@@ -996,7 +996,7 @@ def compliance_report(refresh: bool = Query(False, description="read Nautobot ag
     c = _compliance_cache.get("r")
     if refresh or not c or time.time() - c["generated"] > 30:
         import difflib
-        I = intent_mod.load(); routers = {d["name"]: d for d in I["devices"] if d["role"] in ("hub", "spoke")}
+        I = intent_mod.load(); routers = {d["name"]: d for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES}
         tok = nautobot_token(); H = {"Authorization": f"Token {tok}"}
         devs = requests.get(f"{NAUTOBOT_URL}/api/dcim/devices/", params={"location": I["site"]["name"], "platform": "cisco_xe", "limit": 200}, headers=H, timeout=30).json()["results"]
         ids = {d["id"]: d["name"] for d in devs}
@@ -1100,7 +1100,7 @@ def branch_history(name: str, sha: str = Query(None, description="return this co
     step, `./lab.sh nautobot golden`): the commits that touched this router's file, newest first, and — with `sha` — the unified
     diff of that commit restricted to the file. Pre-shared keys are masked by IOS (`service password-encryption`) in the backups."""
     I = intent_mod.load()
-    if not any(d["name"] == name and d["role"] in ("hub", "spoke") for d in I["devices"]): raise HTTPException(404, "no such router")
+    if not any(d["name"] == name and d["role"] in intent_mod.ROUTER_ROLES for d in I["devices"]): raise HTTPException(404, "no such router")
     try:
         r = requests.get(f"{GITEA_URL}/api/v1/repos/{BACKUPS_REPO}/commits", params={"path": f"{name}.cfg", "limit": limit, "stat": "false", "verification": "false"}, timeout=20); r.raise_for_status()
         commits = [{"sha": c["sha"], "date": (c["commit"]["committer"]["date"] or "")[:19].replace("T", " "), "author": c["commit"]["author"]["name"], "message": c["commit"]["message"].strip()[:120],
@@ -1121,7 +1121,7 @@ SHOW = {"ike": "show crypto ikev2 sa detail", "ipsec": "show crypto ipsec sa | i
 _show_cache = {}
 @app.get("/api/branch/{name}/show/{what}", tags=["inventory"], summary="A live show command on the router (an allow-list: ike, ipsec, bgp, routes, default, interfaces, pki, platform, log)")
 def branch_show(name: str, what: str, refresh: bool = Query(False, description="run it again now (otherwise cached for 20 s)")):
-    I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name and d["role"] in ("hub", "spoke")), None)
+    I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name and d["role"] in intent_mod.ROUTER_ROLES), None)
     if dev is None: raise HTTPException(404, "no such router")
     if what not in SHOW: raise HTTPException(404, f"unknown snippet; one of {', '.join(SHOW)}")
     key = (name, what); c = _show_cache.get(key)
@@ -1144,7 +1144,7 @@ def branches(refresh: bool = Query(False, description="re-collect the tunnels' l
     except Exception as e: inv_d = {"tunnels": [], "headends": [], "error": str(e)}  # noqa: BLE001
     runs = registry.list(300); out = []; provider = I.get("provider") or intent_mod.PROVIDER
     for d in sorted(I["devices"], key=lambda x: (x["role"] != "hub", x["name"])):
-        if d["role"] not in ("hub", "spoke"): continue
+        if d["role"] not in intent_mod.ROUTER_ROLES: continue
         tuns = [t for t in inv_d.get("tunnels", []) if d["name"] in (t.get("headend"), t.get("spoke"))]
         health = [(t.get("live") or {}).get("health") for t in tuns]
         last = next((r for r in runs if (r.get("spoke") or {}).get("name") == d["name"] or (r.get("hub") or {}).get("name") == d["name"]), None)
@@ -1170,7 +1170,7 @@ def branch_page(name: str, refresh: bool = Query(False, description="re-collect 
     firewalls (rules whose address groups contain its WAN addresses, log lines from or to them; the firewall's own SSH view, 3 h),
     the LAN host, and the runs whose spec named it."""
     I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name), None)
-    if dev is None or dev["role"] not in ("hub", "spoke"): raise HTTPException(404, "no such router")
+    if dev is None or dev["role"] not in intent_mod.ROUTER_ROLES: raise HTTPException(404, "no such router")
     wans = intent_mod.tunnel_wans(I); my_wans = sorted({(t["spoke_wan"] if dev["role"] == "spoke" else t["hub_wan"]) for t in wans if name in (t["hub"], t["spoke"])})
     auth_method = intent_mod.spoke_auth(I, name) if dev["role"] == "spoke" else None
     methods = sorted(intent_mod.router_auths(I, name))
@@ -1278,7 +1278,7 @@ def start_run(body: S.RunRequest, request: Request):
     spoke = None
     if mode in ("remediate", "reapply"):
         spoke = body.get("spoke") or body.get("router") or {}; intent = intent_mod.load()
-        if not any(d["name"] == spoke.get("name") and d["role"] in ("hub", "spoke") for d in intent["devices"]): raise HTTPException(422, {"problems": [f"no such router: {spoke.get('name')!r}"]})
+        if not any(d["name"] == spoke.get("name") and d["role"] in intent_mod.ROUTER_ROLES for d in intent["devices"]): raise HTTPException(422, {"problems": [f"no such router: {spoke.get('name')!r}"]})
         if mode == "remediate":
             cached = _compliance_cache.get("r"); dev = next((d for d in (cached or {}).get("devices", []) if d["name"] == spoke["name"]), None)
             if dev and dev["ok"] and not spoke.get("features"): raise HTTPException(422, {"problems": [f"{spoke['name']} is compliant — nothing to remediate (run Golden Config first if the router changed)"]})

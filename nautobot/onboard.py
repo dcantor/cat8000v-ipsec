@@ -2,13 +2,17 @@
 """Discover the C8000v routers into the shared Nautobot with the Device Onboarding app
 (location c8000v-ipsec-lab, secrets group lab-devices, job "Sync Devices From Network")."""
 import argparse, os, sys, time
+from pathlib import Path
 import pynautobot
+sys.path.insert(0, str(Path(__file__).resolve().parent)); import intent as intent_mod   # noqa: E402
 
 p = argparse.ArgumentParser()
 p.add_argument("--url", default=os.environ.get("NAUTOBOT_URL", "http://10.0.0.10:8080"))
 p.add_argument("--token", default=os.environ.get("NAUTOBOT_TOKEN"))
-p.add_argument("ips", nargs="*", default=["10.2.0.11", "10.2.0.12", "10.2.0.13"])
+p.add_argument("ips", nargs="*", help="management addresses to onboard (default: every Catalyst 8000v in lab-intent.json)")
 a = p.parse_args()
+if not a.ips:   # every Catalyst 8000v of the lab: headends, branches, the DCI chain (the job skips the ones Nautobot already knows)
+    a.ips = [d["mgmt_ip"] for d in intent_mod.load()["devices"] if d["role"] in intent_mod.ROUTER_ROLES]
 nb = pynautobot.api(a.url, token=a.token)
 
 def get_or_create(ep, lookup, **defaults):

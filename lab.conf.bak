@@ -42,7 +42,6 @@ LINKS=(
   "fw-central:2 spoke1:3 100.65.4.0/30"
   "fw-central:4 spoke3:3 100.65.6.0/30"
   "fw-central:5 spoke4:2 100.65.7.0/30"
-  "fw-west:3 spoke2:4 100.65.9.0/30"
   "fw-west:4 spoke3:4 100.65.10.0/30"
   "fw-west:5 spoke4:3 100.65.11.0/30"
   "fw-east:3 spoke4:4 100.65.2.0/30"
@@ -55,6 +54,7 @@ LINKS=(
   "spoke3:5 host-spoke3:1 192.168.13.0/24"
   "spoke4:5 host-spoke4:1 192.168.15.0/24"
   "fw-east:5 spoke2:2 100.65.8.0/30"
+  "fw-central:3 spoke2:3 100.65.5.0/30"
 )
 # IPsec VTI tunnels over those links: "hub-tunnel spoke tunnel-prefix"
 TUNNELS=(
@@ -63,11 +63,11 @@ TUNNELS=(
   "4 central-headend spoke1 172.17.4.0/30"
   "6 central-headend spoke3 172.17.6.0/30"
   "7 central-headend spoke4 172.17.7.0/30"
-  "9 west-headend spoke2 172.17.9.0/30"
   "10 west-headend spoke3 172.17.10.0/30"
   "11 west-headend spoke4 172.17.11.0/30"
   "2 east-headend spoke4 172.17.2.0/30"
   "8 east-headend spoke2 172.17.8.0/30"
+  "5 central-headend spoke2 172.17.5.0/30"
 )
 
 declare -A CONSOLE_PORT=( [east-headend]=5201 [spoke1]=5202 [spoke2]=5203 [spoke3]=5204 [central-headend]=5205 [spoke4]=5206 [west-headend]=5207 [fw-east]=5209 [fw-central]=5210 [fw-west]=5211
