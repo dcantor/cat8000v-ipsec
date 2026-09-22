@@ -237,7 +237,11 @@ plans, the branch pages, hosts and the ping mesh, firewalls, PKI, runs (queue, r
 ![Swagger](docs/screenshots/portal-swagger.png)
 
 ### Demos and documentation
-- `webapp/demo/portal-demo.mp4` / `.gif` — a 90-second tour of the portal (`webapp/demo/record.py` re-records it).
+- `webapp/demo/portal-demo.mp4` / `.gif` — a 3½-minute annotated tour of the portal: sign-in and roles, the intent form and the
+  routers' day-2 actions, the spoke wizard with the customer block, runs and the queue, the inventory (topology, capacity, ping
+  mesh live), Branches with the ACME customers / design patterns and filters, a router's page (live show, configuration, history),
+  Firewalls, Compliance with Remediate / Re-apply, the drift history and a real Golden Config run, Tools, Audit, dark mode, the API
+  (`webapp/demo/record.py` re-records it against the running lab; `--no-runs` starts nothing).
 - `webapp/demo/nautobot-nac-demo.gif` — where the data lives in Nautobot and how NaC consumes it.
 - **`docs/workflows.pdf`** — workflows, system-to-system data flows and decision trees, in detail
   (28 pages, 25 diagrams; source `docs/workflows.html`).

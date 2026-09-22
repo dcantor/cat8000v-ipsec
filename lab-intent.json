@@ -68,7 +68,8 @@
       "contact": "noc-central@lab.local",
       "city": "Chicago, IL",
       "lat": 41.8781,
-      "lon": -87.6298
+      "lon": -87.6298,
+      "address": "8273 Commerce Blvd, Suite 289, Chicago, IL 59411"
     },
     {
       "name": "east-headend",
@@ -84,7 +85,8 @@
       "contact": "noc-east@lab.local",
       "city": "New York, NY",
       "lat": 40.7128,
-      "lon": -74.006
+      "lon": -74.006,
+      "address": "5289 Enterprise Way, Suite 249, New York, NY 13621"
     },
     {
       "name": "west-headend",
@@ -100,7 +102,8 @@
       "contact": "noc-west@lab.local",
       "city": "Los Angeles, CA",
       "lat": 34.0522,
-      "lon": -118.2437
+      "lon": -118.2437,
+      "address": "6115 Harbor Dr, Suite 514, Los Angeles, CA 80823"
     },
     {
       "name": "spoke1",
@@ -118,7 +121,15 @@
       "city": "Boston, MA",
       "lat": 42.3601,
       "lon": -71.0589,
-      "psk_rotated": "2026-09-20T20:59:16-04:00"
+      "psk_rotated": "2026-09-20T20:59:16-04:00",
+      "customer": {
+        "company": "Pinecrest Publishing Inc.",
+        "address": "808 Maple St, Suite 781, Boston, MA 62712",
+        "industry": "Media",
+        "account_id": "ACME-923374",
+        "service_tier": "Gold",
+        "contract_start": "2023-11-20"
+      }
     },
     {
       "name": "spoke2",
@@ -136,7 +147,15 @@
       "city": "Dallas, TX",
       "lat": 32.7767,
       "lon": -96.797,
-      "ike_authentication": "psk"
+      "ike_authentication": "psk",
+      "customer": {
+        "company": "Beacon Legal Inc.",
+        "address": "3983 Commerce Blvd, Suite 211, Dallas, TX 72553",
+        "industry": "Legal",
+        "account_id": "ACME-166737",
+        "service_tier": "Bronze",
+        "contract_start": "2023-11-06"
+      }
     },
     {
       "name": "spoke3",
@@ -155,7 +174,15 @@
       "lat": 47.6062,
       "lon": -122.3321,
       "psk_rotated": "2026-09-20T18:37:22-04:00",
-      "ike_authentication": "psk"
+      "ike_authentication": "psk",
+      "customer": {
+        "company": "Northwind Retail Group Co.",
+        "address": "320 Main St, Suite 550, Seattle, WA 26955",
+        "industry": "Retail",
+        "account_id": "ACME-543511",
+        "service_tier": "Gold",
+        "contract_start": "2025-08-02"
+      }
     },
     {
       "name": "spoke4",
@@ -172,7 +199,15 @@
       "psk": "TEACJ8LoJ4W47wgG02e0GHHu",
       "city": "Denver, CO",
       "lat": 39.7392,
-      "lon": -104.9903
+      "lon": -104.9903,
+      "customer": {
+        "company": "Evergreen Hotels Ltd.",
+        "address": "5351 Oak Ave, Suite 668, Denver, CO 86860",
+        "industry": "Hospitality",
+        "account_id": "ACME-670728",
+        "service_tier": "Silver",
+        "contract_start": "2024-07-07"
+      }
     },
     {
       "name": "fw-central",
@@ -506,5 +541,11 @@
   "internet": {
     "enabled": true,
     "uplink_port": 9
+  },
+  "provider": {
+    "name": "ACME Networks",
+    "group": "Service provider",
+    "address": "1 ACME Plaza, Chicago, IL 60601",
+    "description": "sells the managed IPsec VPN service: owns the headends, their firewalls and the LAN hosts behind the headends"
   }
 }
