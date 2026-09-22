@@ -88,3 +88,9 @@ IKE_SA_ENCR = {"AES-128-CBC": "AES-CBC, keysize: 128", "AES-192-CBC": "AES-CBC, 
 IKE_PROPOSAL_ENCR = {"AES-128-CBC": "AES-CBC-128", "AES-192-CBC": "AES-CBC-192", "AES-256-CBC": "AES-CBC-256", "AES-128-GCM": "AES-GCM-128", "AES-256-GCM": "AES-GCM-256"}[IKE["encryption"]]
 ESP_TRANSFORM = ({"AES-128-CBC": "esp-aes", "AES-192-CBC": "esp-192-aes", "AES-256-CBC": "esp-256-aes", "AES-128-GCM": "esp-gcm", "AES-256-GCM": "esp-gcm 256"}[IPSEC["encryption"]]
                  + " " + {"SHA1": "esp-sha-hmac", "SHA256": "esp-sha256-hmac", "SHA384": "esp-sha384-hmac", "SHA512": "esp-sha512-hmac", "MD5": "esp-md5-hmac"}[IPSEC["integrity"]])
+# customers: every branch is a customer of ACME (the provider owning the headends) — a Nautobot tenant; the design pattern follows the tunnel count
+PROVIDER = _I.get("provider") or intent_mod.PROVIDER
+CUSTOMERS = {s: intent_mod.customer(_I, s) for s in SPOKES}
+PATTERNS = {r: intent_mod.design_pattern(_I, r) for r in ROUTER_NAMES}
+ADDRESSES = {r: (CUSTOMERS[r]["address"] if r in CUSTOMERS else next(d.get("address") for d in _I["devices"] if d["name"] == r)) for r in ROUTER_NAMES}
+PATTERN_CODES = sorted(p["code"] for p in intent_mod.PATTERNS.values())

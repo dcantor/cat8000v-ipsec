@@ -321,8 +321,21 @@ setting (`prefers-color-scheme`). The router page's code panes keep their own to
 
 ### Branches tab and per-branch page
 
-The **Branches** tab (`GET /api/branches`) lists every branch and headend with VM state, tunnels up, IKE method, certificate days
-left, LAN host state, free slots (headends) and the last run that named it; a row opens the router's page. Every router name in
+The **Branches** tab (`GET /api/branches`) lists every branch and headend with its customer / owner, address, ACME design pattern,
+service tier, VM state, tunnels up, IKE method, certificate days left, LAN host state, free slots (headends) and the last run that
+named it; a row opens the router's page. Every branch is a customer of ACME Networks (`intent.provider`; the headends, firewalls
+and HQ sites are ACME's): the spoke's `customer` {company, address, industry, account_id, service_tier, contract_start} — generated
+deterministically by `intent.fake_customer()` when a branch has none (`upgrade()`), proposed by `GET /api/spokes/suggest` and editable
+in the wizard's Customer block, validated (company 2-80 chars and unique, tier from the catalogue, ISO contract date) — becomes a
+Nautobot tenant in the seed (group *Customers*; `ACME Networks` in *Service provider*) on the router, its LAN host and its location,
+the address the location's `physical_address`, and the ACME custom fields (`acme_account_id`, `acme_service_tier`, `acme_industry`,
+`acme_contract_start` on the tenant; `acme_design_pattern` + `acme_pattern_tunnels` on router and location). The **design pattern**
+follows from the branch's tunnel count (`intent.design_pattern()`: 1 `ACME-SH`, 2 `ACME-DH`, 3+ `ACME-MH`; headends `ACME-HE`) —
+re-homing a branch onto a third headend changes its pattern at the next seed. Removing a branch deletes its tenant once no device is
+left with it. The response also carries `provider`, `patterns` (with counts), `tiers`, `regions` and Nautobot links, which feed the
+**filter bar**: free-text search over router, company, city, address, account, site, LAN, pattern and comments, plus selects for role,
+region, pattern, tier, industry, IKE auth, health and VM state — applied client-side, remembered in `localStorage` (`brs-filters`).
+`GET /api/branch/{name}` adds `owner` {tenant, address, customer, provider, pattern, nautobot_tenant} for the page's first box. Every router name in
 the Routers table (*page ⧉*) and in the tunnel tables links there too: `#branch/<name>` (`GET /api/branch/{name}`) — identity
 (site, router-id, LAN, WAN addresses, the firewall in front of a headend), IKE authentication (the spoke's method, or the methods a
 headend serves; the certificate with days left; whether a key is held), the day-2 actions (Change auth, Renew cert, Rotate PSK,

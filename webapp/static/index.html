@@ -75,6 +75,9 @@
   .steps { list-style:none; padding:0; margin:0 } .steps li { display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); align-items:flex-start }
   .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:var(--chip) }
   .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:var(--bar) }
+  .filters { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:0 0 10px } .filters input, .filters select { width:auto; padding:5px 8px; font-size:12px }
+  .pill.tier-gold { background:#f6e7a1; color:#6b5200 } .pill.tier-silver { background:#e3e6ea; color:#3d434a } .pill.tier-bronze { background:#efd6c2; color:#6e3d14 }
+  html[data-theme="dark"] .pill.tier-gold { background:#5a4a10; color:#f6e7a1 } html[data-theme="dark"] .pill.tier-silver { background:#3d434a; color:#e3e6ea } html[data-theme="dark"] .pill.tier-bronze { background:#5c3a1f; color:#efd6c2 }
   .dots { display:inline-flex; gap:3px; vertical-align:middle } .dots .dot { width:9px; height:9px; margin:0 } .dot.ok { background:var(--ok) } .dot.fail { background:var(--bad) }
   @keyframes pulse { 50% { opacity:.3 } }
   .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
@@ -238,9 +241,22 @@
 </main>
 <main id="view-branches" hidden style="grid-template-columns:1fr">
   <div class="card">
-    <h2>Branches and headends <small id="brs-note">every router with its page: tunnels, authentication, certificate, firewall rules, LAN host, runs — click a row</small>
-      <span style="float:right"><button type="button" onclick="loadBranches(true)">Refresh live</button></span></h2>
-    <div class="wide"><table id="brs-table"><thead><tr><th>Router</th><th>Role</th><th>Site</th><th>AS</th><th>Site LAN</th><th>VM</th><th>Tunnels</th><th>IKE auth</th><th>Certificate</th><th>LAN host</th><th>Free slots</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
+    <h2>Branches and headends <small id="brs-note">every branch is a customer of ACME; the headends are ACME's — each router with its page: tunnels, authentication, certificate, firewall rules, LAN host, runs — click a row</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><a id="brs-nb" href="#" target="_blank" class="hint">customers in Nautobot</a><button type="button" onclick="loadBranches(true)">Refresh live</button></span></h2>
+    <div class="filters" id="brs-filters">
+      <input id="bf-q" placeholder="search: router, company, city, address, account, site…" style="width:300px" oninput="renderBranches()">
+      <select id="bf-role" onchange="renderBranches()"><option value="">any role</option><option value="spoke">branches (customers)</option><option value="hub">headends (ACME)</option></select>
+      <select id="bf-region" onchange="renderBranches()"><option value="">any region</option></select>
+      <select id="bf-pattern" onchange="renderBranches()"><option value="">any design pattern</option></select>
+      <select id="bf-tier" onchange="renderBranches()"><option value="">any service tier</option></select>
+      <select id="bf-industry" onchange="renderBranches()"><option value="">any industry</option></select>
+      <select id="bf-auth" onchange="renderBranches()"><option value="">any IKE auth</option><option value="psk">pre-shared key</option><option value="certificate">certificate</option></select>
+      <select id="bf-health" onchange="renderBranches()"><option value="">any health</option><option value="up">all tunnels up</option><option value="degraded">degraded</option><option value="down">down</option></select>
+      <select id="bf-state" onchange="renderBranches()"><option value="">any VM state</option><option value="running">running</option><option value="shut off">shut off</option></select>
+      <button type="button" class="small" onclick="clearBranchFilters()">Clear</button><span class="hint" id="bf-count"></span>
+    </div>
+    <div class="wide"><table id="brs-table"><thead><tr><th>Router</th><th>Role</th><th>Customer / owner</th><th>Site</th><th>Design pattern</th><th>Tier</th><th>AS</th><th>Site LAN</th><th>VM</th><th>Tunnels</th><th>IKE auth</th><th>Certificate</th><th>LAN host</th><th>Free slots</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="hint" id="brs-patterns" style="margin-top:8px"></div>
   </div>
 </main>
 <main id="view-branch" hidden style="grid-template-columns:1fr">
@@ -354,6 +370,12 @@
         <div><label>Pre-shared key <span class="suggest">generated</span></label><input id="sp.psk" autocomplete="off" title="kept in the intent even when the branch authenticates with a certificate, so it can switch back"></div>
         <div><label>Change ticket</label><input id="sp.change_ticket"></div>
         <div style="grid-column:1/-1"><label>Comments</label><input id="sp.comments" placeholder="e.g. branch office 3, opened 2026-09"></div>
+        <div style="grid-column:1/-1;margin-top:4px"><b style="font-size:13px">Customer</b> <span class="hint">— every branch is a customer of ACME (a Nautobot tenant; the address becomes the branch location's physical address). A proposed company is filled in; change it freely.</span></div>
+        <div><label>Company <span class="suggest">proposed</span></label><input id="sp.customer.company"></div>
+        <div><label>Industry</label><input id="sp.customer.industry" list="industry-list" autocomplete="off"><datalist id="industry-list"></datalist></div>
+        <div><label>Service tier</label><select id="sp.customer.service_tier"><option>Bronze</option><option>Silver</option><option>Gold</option></select></div>
+        <div style="grid-column:1/3"><label>Street address</label><input id="sp.customer.address"></div>
+        <div><label>ACME account · contract start</label><div style="display:flex;gap:6px"><input id="sp.customer.account_id" style="width:55%"><input id="sp.customer.contract_start" type="date" style="width:45%"></div></div>
         <div style="grid-column:1/-1"><label>Connect to headends <span class="hint">(select at least 2 — every spoke gets redundant headends)</span></label><div id="sp.hubs" style="display:flex;gap:16px;flex-wrap:wrap;padding:4px 0"></div></div>
       </div>
       <div class="hint" style="margin-top:8px">The spoke is a new Catalyst 8000v VM on this host (<span id="sp.ram"></span> MiB RAM). Its management address goes into the day-0 config; everything else is pushed by Network-as-Code after Nautobot has been updated.</div>
@@ -619,7 +641,10 @@ $('testonly').onclick = () => start('test');
 $('reload').onclick = load;
 // ---- add-spoke wizard -------------------------------------------------------
 let wizStep = 1, wizSpec = null;
-const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'city', 'lat', 'lon', 'site_code', 'contact', 'psk', 'ike_authentication', 'change_ticket', 'comments', 'router_id', 'lan', 'asn'];
+const SP_FIELDS = ['name', 'mgmt_ip', 'region', 'site', 'city', 'lat', 'lon', 'site_code', 'contact', 'psk', 'ike_authentication', 'change_ticket', 'comments', 'router_id', 'lan', 'asn',
+                   'customer.company', 'customer.address', 'customer.industry', 'customer.service_tier', 'customer.account_id', 'customer.contract_start'];
+const getPath = (o, k) => k.split('.').reduce((x, p) => (x == null ? undefined : x[p]), o);
+const setPath = (o, k, v) => { const ps = k.split('.'); let x = o; ps.slice(0, -1).forEach(p => { x[p] = x[p] || {}; x = x[p]; }); x[ps[ps.length - 1]] = v; };
 // the city catalogue (GET /api/cities): a known city fills the coordinates, anything else needs them typed; the hint shows where it lands
 let CITIES = [];
 async function loadCities() { if (!CITIES.length) { try { CITIES = await (await fetch('/api/cities')).json(); } catch { CITIES = []; } } fillCityList(); }
@@ -637,7 +662,8 @@ async function openWizard() {
   const r = await fetch('/api/spokes/suggest'); if (!r.ok) { alert('cannot suggest a spoke: ' + (await r.text())); return; }
   wizSpec = await r.json();
   $('sp.region').innerHTML = wizSpec.context.regions.map(r => `<option>${esc(r)}</option>`).join('');
-  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = wizSpec[k] ?? ''; });
+  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) el.value = getPath(wizSpec, k) ?? ''; });
+  $('industry-list').innerHTML = ['Logistics', 'Retail', 'Healthcare', 'Financial services', 'Manufacturing', 'Education', 'Hospitality', 'Legal', 'Media', 'Energy'].map(i => `<option value="${i}">`).join('');
   loadCities().then(cityChanged);
   $('sp.ram').textContent = wizSpec.ram_mib; renderHubChoices();
   wizStep = 1; showWiz(); $('wiz').hidden = false;
@@ -665,8 +691,8 @@ async function refreshLinks() {
     return `${l.hub}: ${l.hub_tunnels + 1} of ${wizSpec.context.capacity} tunnels after` + (hc && hc.bandwidth_mbps ? `, ${hc.bandwidth_used_mbps + hc.bandwidth_per_tunnel_mbps} of ${hc.bandwidth_mbps} Mbps on ${hc.firewall} (${hc.effective_free} slot${hc.effective_free === 1 ? '' : 's'} before)` : ''); }).join(' · ');
 }
 function wizCollect() {
-  const spec = { ...wizSpec };
-  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) spec[k] = el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value.trim(); });
+  const spec = { ...wizSpec, customer: { ...(wizSpec.customer || {}) } };
+  SP_FIELDS.forEach(k => { const el = $('sp.' + k); if (el) setPath(spec, k, el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value.trim()); });
   spec.links = (wizSpec.links || []).map(l => ({ ...l, spoke: spec.name }));
   document.querySelectorAll('#sp\\.links input[data-l]').forEach(el => { spec.links[el.dataset.l][el.dataset.k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
   return spec;
@@ -681,7 +707,7 @@ async function wizNext() {
     await refreshLinks();
     const spec = wizCollect();
     const v = await (await fetch('/api/spokes/validate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spoke: spec }) })).json();
-    const mine = v.problems.filter(p => /hostname|management IP|memory|intent|exists|city|lat/.test(p));
+    const mine = v.problems.filter(p => /hostname|management IP|memory|intent|exists|city|lat|customer/.test(p));
     if (mine.length) { $('wiz-problems').textContent = '• ' + mine.join('\n• '); return; }
     wizStep = 2; showWiz(); return;
   }
@@ -690,7 +716,10 @@ async function wizNext() {
   if (v.problems.length) { $('wiz-problems').textContent = '• ' + v.problems.join('\n• '); return; }
   if (wizStep === 2) {
     const h = v.hub_changes;
+    const cu = spec.customer || {};
     $('wiz-review').innerHTML = `<div class="box"><h4>Spoke ${esc(spec.name)} (new VM, ${esc(spec.mgmt_ip)})</h4><dl>
+        <dt>Customer</dt><dd><b>${esc(cu.company || '?')}</b> · ${esc(cu.industry || '')} · ${esc(cu.service_tier || 'Bronze')} · ${esc(cu.account_id || '')}<br><span class="hint">${esc(cu.address || '')}</span></dd>
+        <dt>Design pattern</dt><dd>${(spec.links || []).length >= 3 ? 'ACME-MH Multi headend (any-region)' : (spec.links || []).length === 2 ? 'ACME-DH Dual headend (resilient)' : 'ACME-SH Single headend'} <span class="hint">(${(spec.links || []).length} tunnels)</span></dd>
         ${h.links.map(l => `<dt>${esc(l.hub)}</dt><dd>${esc(l.spoke.interface)} ${esc(l.spoke.wan_ip)} · ${esc(l.spoke.tunnel)} ${esc(l.spoke.tunnel_ip)} → ${esc(l.spoke.tunnel_destination)} · neighbor ${esc(l.spoke.bgp_neighbor)}${l.spoke.route ? ' · ' + esc(l.spoke.route) : ''}</dd>`).join('')}
         <dt>Loopbacks</dt><dd>${esc(h.loopbacks)}</dd><dt>eBGP</dt><dd>AS ${esc(spec.asn)}</dd>
         <dt>Internet</dt><dd>${base.internet && base.internet.enabled ? `breakout enabled — every firewall's eth${esc(base.internet.uplink_port || 9)} on the NAT network; headends originate a default, branches prefer the nearest` : 'no breakout (no default route on the branches)'}</dd>
@@ -904,19 +933,41 @@ function reapply(dev) {
 }
 
 // ---- branches list --------------------------------------------------------------------------------------------------
+let BRS = null; const BF = ['q', 'role', 'region', 'pattern', 'tier', 'industry', 'auth', 'health', 'state'];
+function fillSelect(id, values, label) { const el = $(id); const cur = el.value; el.innerHTML = `<option value="">${label}</option>` + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''); if ([...el.options].some(o => o.value === cur)) el.value = cur; }
+function clearBranchFilters() { BF.forEach(k => $('bf-' + k).value = ''); renderBranches(); }
 async function loadBranches(refresh) {
   $('brs-note').textContent = refresh ? 'collecting live state from the headends…' : 'loading…';
   const r = await fetch('/api/branches' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('brs-note').textContent = `HTTP ${r.status}`; return; }
-  const d = await r.json(); const nm = a => a === 'certificate' ? 'certificate' : 'PSK';
-  $('brs-note').textContent = `${d.routers.length} routers · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
-  $('brs-table').querySelector('tbody').innerHTML = d.routers.map(b => `<tr style="cursor:pointer" onclick="location.hash='branch/${encodeURIComponent(b.name)}'">
-    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${b.role === 'hub' ? 'headend' : 'branch'}</span></td><td>${esc(b.city || b.site || '')}<div class="hint">${esc(b.region || '')}</div></td><td class="cred">${esc(b.asn)}</td><td class="cred">${esc(b.lan || '')}</td>
-    <td><span class="pill ${b.state === 'running' ? '' : 'fail'}">${esc(b.state)}</span></td><td><span class="health ${esc(b.health)}"></span> ${b.tunnels_up}/${b.tunnels} up</td>
-    <td>${b.role === 'spoke' ? `<span class="pill ${b.authentication === 'certificate' ? 'hub' : ''}">${nm(b.authentication)}</span>` : `<span class="hint">${b.methods.map(nm).join(' + ') || '-'}</span>`}</td>
+  BRS = await r.json(); const d = BRS;
+  $('brs-note').textContent = `${d.routers.length} routers · ${d.routers.filter(b => b.role === 'spoke').length} customer branches, ${d.routers.filter(b => b.role === 'hub').length} ${esc(d.provider.name)} headends · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
+  $('brs-nb').href = d.nautobot.tenants;
+  try { const f = JSON.parse(localStorage.getItem('brs-filters') || '{}'); BF.forEach(k => { if (f[k] != null && !$('bf-' + k).value) $('bf-' + k).value = f[k]; }); } catch (e) { }
+  fillSelect('bf-region', d.regions, 'any region'); fillSelect('bf-pattern', [...new Set(d.routers.map(b => b.pattern.name))], 'any design pattern');
+  fillSelect('bf-tier', d.tiers, 'any service tier'); fillSelect('bf-industry', [...new Set(d.routers.map(b => b.industry).filter(Boolean))].sort(), 'any industry');
+  $('brs-patterns').innerHTML = 'ACME design patterns (from the number of tunnels a branch has): ' + d.patterns.filter(pt => pt.code !== 'ACME-NC' || pt.count).map(pt => `<a onclick="$('bf-pattern').value='${esc(pt.name)}';renderBranches()" title="${esc(pt.description)}"><b>${esc(pt.code)}</b> ${esc(pt.name)}</a> <span class="pill">${pt.count}</span>`).join(' · ');
+  renderBranches();
+}
+function renderBranches() {
+  if (!BRS) return; const f = {}; BF.forEach(k => f[k] = $('bf-' + k).value); try { localStorage.setItem('brs-filters', JSON.stringify(f)); } catch (e) { }
+  const q = f.q.trim().toLowerCase(); const nm = a => a === 'certificate' ? 'certificate' : 'PSK';
+  const rows = BRS.routers.filter(b => (!f.role || b.role === f.role) && (!f.region || b.region === f.region) && (!f.pattern || b.pattern.name === f.pattern) && (!f.tier || b.service_tier === f.tier)
+    && (!f.industry || b.industry === f.industry) && (!f.auth || (b.role === 'spoke' ? b.authentication === f.auth : b.methods.includes(f.auth))) && (!f.health || b.health === f.health) && (!f.state || b.state === f.state)
+    && (!q || [b.name, b.owner, b.city, b.site, b.address, b.region, b.lan, b.mgmt_ip, b.industry, b.pattern.code, b.pattern.name, (b.customer || {}).account_id, b.comments].filter(Boolean).some(x => String(x).toLowerCase().includes(q))));
+  $('bf-count').textContent = rows.length === BRS.routers.length ? `${rows.length} routers` : `${rows.length} of ${BRS.routers.length} routers match`;
+  $('brs-table').querySelector('tbody').innerHTML = rows.map(b => `<tr style="cursor:pointer" onclick="location.hash='branch/${encodeURIComponent(b.name)}'">
+    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${b.role === 'hub' ? 'headend' : 'branch'}</span></td>
+    <td style="white-space:nowrap">${b.customer ? `<b>${esc(b.customer.company)}</b><div class="hint">${esc(b.customer.industry)} · ${esc(b.customer.account_id)}${b.customer.contract_start ? ' · since ' + esc(b.customer.contract_start) : ''}</div>` : `<b>${esc(b.owner)}</b><div class="hint">service provider</div>`}</td>
+    <td style="white-space:nowrap">${esc(b.city || b.site || '')} <span class="hint">· ${esc(b.region || '')}</span><div class="hint">${esc(b.address || '')}</div></td>
+    <td style="white-space:nowrap"><span class="pill ${b.role === 'hub' ? '' : b.pattern.tunnels >= 3 ? 'ok' : b.pattern.tunnels === 2 ? '' : 'warn'}" title="${esc(b.pattern.description)}">${esc(b.pattern.code)}</span> <span class="hint">${esc(b.pattern.name)}</span></td>
+    <td>${b.service_tier ? `<span class="pill tier-${esc(b.service_tier.toLowerCase())}">${esc(b.service_tier)}</span>` : '<span class="hint">-</span>'}</td>
+    <td class="cred">${esc(b.asn)}</td><td class="cred">${esc(b.lan || '')}</td>
+    <td><span class="pill ${b.state === 'running' ? '' : 'fail'}">${esc(b.state)}</span></td><td style="white-space:nowrap"><span class="health ${esc(b.health)}"></span> ${b.tunnels_up}/${b.tunnels} up</td>
+    <td style="white-space:nowrap">${b.role === 'spoke' ? `<span class="pill ${b.authentication === 'certificate' ? 'hub' : ''}">${nm(b.authentication)}</span>` : `<span class="hint">${b.methods.map(nm).join(' + ') || '-'}</span>`}</td>
     <td>${b.cert_days == null ? '<span class="hint">-</span>' : `<span class="pill ${b.cert_expired ? 'fail' : b.cert_days < 30 ? 'warn' : ''}">${b.cert_expired ? 'expired' : Math.floor(b.cert_days) + ' d'}</span>`}</td>
     <td>${b.host ? `${esc(b.host)} <span class="pill ${b.host_state === 'running' ? '' : 'fail'}">${esc(b.host_state)}</span>` : '<span class="hint">none</span>'}</td><td class="num">${b.free_slots ?? ''}</td>
     <td>${b.last_run ? `<span class="status ${b.last_run.status}">${esc(b.last_run.mode)}</span> <span class="hint">${new Date(b.last_run.started * 1000).toLocaleDateString()}${b.last_run.user ? ' · ' + esc(b.last_run.user) : ''}</span>` : '<span class="hint">-</span>'}</td>
-    <td><a href="#branch/${encodeURIComponent(b.name)}"><button type="button" class="small">Open</button></a></td></tr>`).join('');
+    <td><a href="#branch/${encodeURIComponent(b.name)}"><button type="button" class="small">Open</button></a></td></tr>`).join('') || '<tr><td colspan="16" class="hint">no router matches the filters</td></tr>';
 }
 
 // ---- per-branch page: configuration ----------------------------------------------------------------------------------
@@ -970,9 +1021,15 @@ async function loadBranch(name, refresh) {
   const cert = d.certificate ? `<span class="pill ${d.certificate.expired ? 'fail' : Math.floor(d.certificate.days_left) < 30 ? 'warn' : ''}" title="serial ${esc(d.certificate.serial)} · SHA-1 ${esc(d.certificate.fingerprint)}">${d.certificate.expired ? 'expired' : Math.floor(d.certificate.days_left) + ' d left'}</span> <span class="hint">until ${esc((d.certificate.not_after || '').slice(0, 10))}, issued ${esc((d.certificate.issued || '').slice(0, 10))}</span>` : '<span class="hint">none (keys only)</span>';
   const actions = isSpoke ? `<button type="button" class="auth" data-name="${esc(name)}" data-current="${d.authentication}" onclick="openAuth('${esc(name)}','${d.authentication}')">Change auth…</button> ${d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button> ` : ''}${d.authentication === 'psk' ? `<button type="button" class="rot" onclick="openRotate('${esc(name)}')">Rotate PSK…</button> ` : ''}<button type="button" class="rh" onclick="openRehome('${esc(name)}')">Re-home…</button> <button type="button" class="rm" onclick="openRemove('${esc(name)}')">Remove…</button>`
                           : (d.certificate ? `<button type="button" class="renew" onclick="openRenew('${esc(name)}')">Renew cert…</button>` : '');
-  $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span> <small>${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
+  const ow = d.owner || {}; const cu = ow.customer;
+  $('br-head').innerHTML = `<h2>${esc(name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span> <small>${esc(ow.tenant || '')} · ${esc(dev.city || dev.site || '')} · ${esc(dev.region || '')} · AS ${esc(dev.asn)} · mgmt ${esc(dev.mgmt_ip)}</small>
       <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadBranch('${esc(name)}', true)">Refresh live</button> <a href="#branches" class="hint">all branches</a></span></h2>
-    <div class="review" style="margin-top:8px"><div class="box"><h4>Identity</h4><dl>
+    <div class="review" style="margin-top:8px;grid-template-columns:1fr 1fr 1fr"><div class="box"><h4>${cu ? 'Customer' : 'Owner'} <span class="hint">Nautobot tenant · <a href="${esc(ow.nautobot_tenant || '#')}" target="_blank">open</a></span></h4><dl>
+      <dt>${cu ? 'Company' : 'Provider'}</dt><dd><b>${esc(ow.tenant || '')}</b>${cu ? '' : ' <span class="hint">sells the VPN service; owns the headends and firewalls</span>'}</dd>
+      <dt>Address</dt><dd>${esc(ow.address || '-')}</dd>
+      ${cu ? `<dt>Industry</dt><dd>${esc(cu.industry || '-')}</dd><dt>Account</dt><dd class="cred">${esc(cu.account_id || '-')}</dd><dt>Service tier</dt><dd><span class="pill tier-${esc((cu.service_tier || '').toLowerCase())}">${esc(cu.service_tier || '-')}</span></dd><dt>Contract</dt><dd>since ${esc(cu.contract_start || '-')}</dd>` : ''}
+      <dt>Design pattern</dt><dd><span class="pill">${esc(ow.pattern.code)}</span> ${esc(ow.pattern.name)} <span class="hint">— ${esc(ow.pattern.description)}${isSpoke ? ` (${ow.pattern.tunnels} tunnel${ow.pattern.tunnels === 1 ? '' : 's'})` : ''}</span></dd></dl></div>
+    <div class="box"><h4>Identity</h4><dl>
       <dt>Site</dt><dd>${esc(dev.site || '')}${dev.site_code ? ' (' + esc(dev.site_code) + ')' : ''}${dev.contact ? ' · ' + esc(dev.contact) : ''}</dd>
       <dt>Router-id</dt><dd class="cred">${esc(dev.router_id)}</dd><dt>Site LAN</dt><dd class="cred">${esc(dev.lan)} <span class="hint">(.1 on the LAN port${d.host ? ', host .2' : ''})</span></dd>
       <dt>WAN</dt><dd class="cred">${d.wan_addresses.map(esc).join(', ')}</dd>${d.role === 'hub' && d.firewall ? `<dt>Firewall</dt><dd>${esc(d.firewall)}</dd>` : ''}

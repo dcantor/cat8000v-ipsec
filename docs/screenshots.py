@@ -11,7 +11,7 @@ TOKEN = subprocess.run(["bash", "-c", f"cd {LAB} && ./lab.sh nautobot token"], c
 def api(path, **p): return requests.get(f"{NB}/api/{path}", params=p, headers=H, timeout=30).json()
 ids = {"loc": api("dcim/locations/", name="c8000v-ipsec-lab")["results"][0]["id"], "vpn": api("vpn/vpns/")["results"][0]["id"],
        "tun": api("vpn/vpn-tunnels/", name="east-headend-spoke1")["results"][0]["id"], "prof": api("vpn/vpn-profiles/", name="VPN-IPSEC")["results"][0]["id"],
-       "dev": api("dcim/devices/", name="east-headend")["results"][0]["id"]}
+       "dev": api("dcim/devices/", name="east-headend")["results"][0]["id"], "spoke": api("dcim/devices/", name="spoke3")["results"][0]["id"]}
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(channel="chrome", headless=True); ctx = b.new_context(viewport={"width": 1400, "height": 900}, device_scale_factor=1)
@@ -24,8 +24,8 @@ with sync_playwright() as pw:
     page.screenshot(path=str(OUT / "portal-provision.png"))
     page.evaluate("document.getElementById('devices').scrollIntoView({block:'start'})"); time.sleep(0.6); page.screenshot(path=str(OUT / "portal-routers.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 520})
     page.click("#devices button.auth >> nth=0"); time.sleep(1.5); page.screenshot(path=str(OUT / "portal-change-auth.png"), clip={"x": 250, "y": 30, "width": 900, "height": 620}); page.click("#auth-cancel")
-    page.click("#add-spoke"); time.sleep(1.2); page.screenshot(path=str(OUT / "portal-wizard-1.png"), clip={"x": 150, "y": 30, "width": 1100, "height": 560})
-    page.click("#wiz-next"); time.sleep(2.5); page.screenshot(path=str(OUT / "portal-wizard-2.png"), clip={"x": 150, "y": 30, "width": 1100, "height": 520})
+    page.click("#add-spoke"); time.sleep(1.2)
+    page.screenshot(path=str(OUT / "portal-wizard-1.png"), clip={"x": 150, "y": 30, "width": 1100, "height": 760}); page.click("#wiz-next"); time.sleep(2.5); page.screenshot(path=str(OUT / "portal-wizard-2.png"), clip={"x": 150, "y": 30, "width": 1100, "height": 520})
     page.click("#wiz-next"); time.sleep(2.5); page.screenshot(path=str(OUT / "portal-wizard-3.png"), clip={"x": 150, "y": 30, "width": 1100, "height": 720})
     page.click("#wiz-cancel")
     page.click("#devices button.rm >> nth=-1"); time.sleep(1.5); page.screenshot(path=str(OUT / "portal-remove.png"), clip={"x": 250, "y": 30, "width": 900, "height": 560}); page.click("#rm-cancel")
@@ -39,7 +39,7 @@ with sync_playwright() as pw:
     page.evaluate("document.getElementById('inv-tunnels').scrollIntoView({block:'start'})"); time.sleep(0.8); page.screenshot(path=str(OUT / "portal-tunnels.png"))
     page.evaluate("document.getElementById('inv-hosts').parentElement.parentElement.parentElement.scrollIntoView({block:'start'})"); page.click("#hosts-ping"); page.wait_for_function("document.querySelectorAll('#hosts-matrix table tr').length > 2", timeout=120000); time.sleep(0.8)
     page.screenshot(path=str(OUT / "portal-hosts.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 620})
-    page.goto(f"{PORTAL}/#branches"); page.wait_for_function("document.querySelectorAll('#brs-table tbody tr').length > 0", timeout=120000); time.sleep(1); page.screenshot(path=str(OUT / "portal-branches.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 560})
+    page.goto(f"{PORTAL}/#branches"); page.wait_for_function("document.querySelectorAll('#brs-table tbody tr').length > 0", timeout=120000); time.sleep(1); page.screenshot(path=str(OUT / "portal-branches.png"), clip={"x": 0, "y": 0, "width": 1400, "height": 780})
     page.goto(f"{PORTAL}/#branch/spoke3"); page.wait_for_function("document.querySelectorAll('#br-tunnels tbody tr').length > 0", timeout=120000); page.wait_for_function("document.getElementById('br-show').textContent.includes('READY')", timeout=60000); time.sleep(1)
     page.screenshot(path=str(OUT / "portal-branch.png"))
     page.wait_for_function("document.getElementById('br-config').textContent.includes('hostname')", timeout=120000)
@@ -55,7 +55,8 @@ with sync_playwright() as pw:
     page.goto(f"{NB}/login/"); page.fill("input[name=username]", "admin"); page.fill("input[name=password]", "admin"); page.click("button[type=submit]"); page.wait_for_load_state("networkidle")
     shots = {"nautobot-devices": f"/dcim/devices/?location={ids['loc']}", "nautobot-locations": "/dcim/locations/", "nautobot-vpn": f"/vpn/vpns/{ids['vpn']}/",
              "nautobot-tunnels": f"/vpn/vpn-tunnels/?vpn={ids['vpn']}", "nautobot-tunnel": f"/vpn/vpn-tunnels/{ids['tun']}/", "nautobot-profile": f"/vpn/vpn-profiles/{ids['prof']}/",
-             "nautobot-device": f"/dcim/devices/{ids['dev']}/", "nautobot-bgp": "/plugins/bgp/peerings/", "nautobot-compliance": "/plugins/golden-config/config-compliance/"}
+             "nautobot-device": f"/dcim/devices/{ids['dev']}/", "nautobot-bgp": "/plugins/bgp/peerings/", "nautobot-compliance": "/plugins/golden-config/config-compliance/",
+             "nautobot-tenants": "/tenancy/tenants/?tenant_group=Customers", "nautobot-branch-device": f"/dcim/devices/{ids['spoke']}/"}
     for name, url in shots.items():
         page.goto(NB + url, wait_until="networkidle"); time.sleep(1); page.screenshot(path=str(OUT / f"{name}.png"))
     b.close()

@@ -165,8 +165,20 @@ latencies updating in place (■ Stop ends it; the SSH sessions to the hosts sta
 ![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
 
 ### Branches tab and the router page
-**Branches** lists every branch and headend — VM state, tunnels up, IKE method, certificate days left, LAN host, free slots,
-last run — and each row opens the router's page: identity, authentication and certificate, the internet breakout preference,
+Every branch is a **customer** of **ACME Networks**, the provider that sells the VPN service and owns the headends and their
+firewalls. Each customer has a company name, street address, industry, ACME account, service tier (Bronze / Silver / Gold) and
+contract start (generated deterministically for the lab, editable in the spoke wizard) and is a **Nautobot tenant** (group
+*Customers*; ACME in *Service provider*) on the branch's router, LAN host and location; the address is the location's physical
+address; the ACME custom fields carry account / tier / industry / contract on the tenant and the **ACME design pattern** on the
+router and its location. The pattern is not chosen — it **follows from the number of tunnels** the branch has: `ACME-SH` single
+headend (1), `ACME-DH` dual headend, resilient (2), `ACME-MH` multi headend, any-region (3+); headends show `ACME-HE`.
+
+**Branches** lists every branch and headend — customer / owner, site and address, design pattern, tier, VM state, tunnels up,
+IKE method, certificate days left, LAN host, free slots, last run — with a **filter bar**: free-text search (router, company,
+city, address, account, site…) and selects for role, region, design pattern, service tier, industry, IKE authentication, tunnel
+health and VM state (remembered per browser; the pattern legend below the table filters too). Each row opens the router's page,
+which starts with the customer (or owner) box: company, address, industry, account, tier, contract, design pattern, and the
+tenant in Nautobot; then identity, authentication and certificate, the internet breakout preference,
 the day-2 actions, its tunnels with live IKE / VTI / eBGP / ESP state, the firewall rules and log lines touching it, its LAN
 host, the runs that involved it, **live show commands**, and its **configuration** — the running config read over SSH, the
 intended config and last backup from Nautobot's Golden Config with the compliance verdict per feature, a running-vs-intended
@@ -306,6 +318,7 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
 
 | What | Where in Nautobot |
 |---|---|
+| Customers | **tenants**: ACME Networks (group *Service provider*: headends, firewalls, HQ sites) and one tenant per customer company (group *Customers*: the branch's router, LAN host and location) with the ACME custom fields `acme_account_id`, `acme_service_tier`, `acme_industry`, `acme_contract_start`; the branch location's `physical_address`; `acme_design_pattern` (select: single / dual / multi headend — from the tunnel count) and `acme_pattern_tunnels` on routers and locations |
 | Sites | location hierarchy **lab site → Region (East/Central/West) → Branch** (`east-hq`, `branch-1`…) with `site_code` / `contact` custom fields; regions are ordered so the wizard can pick the nearest headends |
 | Routers | devices discovered by the Device Onboarding app (model, serial, platform, mgmt IP); roles `vpn-hub` / `vpn-spoke` / `vpn-firewall`; `vpn_tunnel_capacity` custom field on headends, `firewall_bandwidth_mbps` on firewalls |
 | Physical | interfaces (spoke-facing ports, loopbacks, `TunnelN` of type *tunnel*), **cables** for the p2p WAN links, prefixes with roles (`wan-p2p`, `vpn-tunnel`, `site-lan`, `loopback`), `bgp:advertise` tags |
@@ -317,6 +330,10 @@ read everything from Nautobot objects (details in [nautobot/README.md](nautobot/
 | Devices at the lab location | Location hierarchy |
 |---|---|
 | ![](docs/screenshots/nautobot-devices.png) | ![](docs/screenshots/nautobot-locations.png) |
+
+| Customers (tenants) with the ACME fields | A branch device: tenant, address on its location, design pattern |
+|---|---|
+| ![](docs/screenshots/nautobot-tenants.png) | ![](docs/screenshots/nautobot-branch-device.png) |
 
 | The VPN service | Its tunnels |
 |---|---|

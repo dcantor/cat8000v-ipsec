@@ -1,0 +1,414 @@
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/central-headend.running-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/central-headend.running-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/central-headend.running-config.txt	2026-09-21 21:25:48.846959908 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/central-headend.running-config.txt	2026-09-21 21:52:51.529947357 -0400
+@@ -1,9 +1,9 @@
+-! central-headend (10.2.0.15) show running-config captured 2026-09-21 21:25:47
++! central-headend (10.2.0.15) show running-config captured 2026-09-21 21:52:49
+ Building configuration...
+ 
+-Current configuration : 16496 bytes
++Current configuration : 16559 bytes
+ !
+-! Last configuration change at 22:37:07 UTC Mon Sep 21 2026 by admin
++! Last configuration change at 01:50:45 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -289,6 +289,7 @@
+ crypto ikev2 profile VPN-IKEV2-PSK
+  match identity remote address 100.65.5.2 255.255.255.255 
+  match identity remote address 100.65.6.2 255.255.255.255 
++ match identity remote address 100.65.4.2 255.255.255.255 
+  authentication remote pre-share
+  authentication local pre-share
+  keyring local VPN-KEYRING
+@@ -340,7 +341,7 @@
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.65.4.2
+- tunnel protection ipsec profile VPN-IPSEC
++ tunnel protection ipsec profile VPN-IPSEC-PSK
+ !
+ interface Tunnel5
+  description IPsec VTI to spoke2
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/central-headend.startup-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/central-headend.startup-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/central-headend.startup-config.txt	2026-09-21 21:25:49.333911163 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/central-headend.startup-config.txt	2026-09-21 21:52:52.017509164 -0400
+@@ -1,7 +1,7 @@
+-! central-headend (10.2.0.15) show startup-config captured 2026-09-21 21:25:47
+-Using 7518 out of 33554432 bytes
++! central-headend (10.2.0.15) show startup-config captured 2026-09-21 21:52:49
++Using 7581 out of 33554432 bytes
+ !
+-! Last configuration change at 22:37:07 UTC Mon Sep 21 2026 by admin
++! Last configuration change at 01:50:45 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -160,6 +160,7 @@
+ crypto ikev2 profile VPN-IKEV2-PSK
+  match identity remote address 100.65.5.2 255.255.255.255 
+  match identity remote address 100.65.6.2 255.255.255.255 
++ match identity remote address 100.65.4.2 255.255.255.255 
+  authentication remote pre-share
+  authentication local pre-share
+  keyring local VPN-KEYRING
+@@ -211,7 +212,7 @@
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.65.4.2
+- tunnel protection ipsec profile VPN-IPSEC
++ tunnel protection ipsec profile VPN-IPSEC-PSK
+ !
+ interface Tunnel5
+  description IPsec VTI to spoke2
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/east-headend.running-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/east-headend.running-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/east-headend.running-config.txt	2026-09-21 21:25:50.907372634 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/east-headend.running-config.txt	2026-09-21 21:52:53.651090138 -0400
+@@ -1,9 +1,9 @@
+-! east-headend (10.2.0.11) show running-config captured 2026-09-21 21:25:47
++! east-headend (10.2.0.11) show running-config captured 2026-09-21 21:52:49
+ Building configuration...
+ 
+-Current configuration : 15807 bytes
++Current configuration : 15870 bytes
+ !
+-! Last configuration change at 22:37:06 UTC Mon Sep 21 2026 by admin
++! Last configuration change at 01:50:45 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -284,6 +284,7 @@
+ !
+ crypto ikev2 profile VPN-IKEV2-PSK
+  match identity remote address 100.65.3.2 255.255.255.255 
++ match identity remote address 100.65.1.2 255.255.255.255 
+  authentication remote pre-share
+  authentication local pre-share
+  keyring local VPN-KEYRING
+@@ -335,7 +336,7 @@
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.65.1.2
+- tunnel protection ipsec profile VPN-IPSEC
++ tunnel protection ipsec profile VPN-IPSEC-PSK
+ !
+ interface Tunnel2
+  description IPsec VTI to spoke4
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/east-headend.startup-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/east-headend.startup-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/east-headend.startup-config.txt	2026-09-21 21:25:51.393623049 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/east-headend.startup-config.txt	2026-09-21 21:52:54.148654301 -0400
+@@ -1,7 +1,7 @@
+-! east-headend (10.2.0.11) show startup-config captured 2026-09-21 21:25:47
+-Using 6853 out of 33554432 bytes
++! east-headend (10.2.0.11) show startup-config captured 2026-09-21 21:52:49
++Using 6916 out of 33554432 bytes
+ !
+-! Last configuration change at 22:37:06 UTC Mon Sep 21 2026 by admin
++! Last configuration change at 01:50:45 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -155,6 +155,7 @@
+ !
+ crypto ikev2 profile VPN-IKEV2-PSK
+  match identity remote address 100.65.3.2 255.255.255.255 
++ match identity remote address 100.65.1.2 255.255.255.255 
+  authentication remote pre-share
+  authentication local pre-share
+  keyring local VPN-KEYRING
+@@ -206,7 +207,7 @@
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.65.1.2
+- tunnel protection ipsec profile VPN-IPSEC
++ tunnel protection ipsec profile VPN-IPSEC-PSK
+ !
+ interface Tunnel2
+  description IPsec VTI to spoke4
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke1.running-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke1.running-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke1.running-config.txt	2026-09-21 21:25:54.873078097 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke1.running-config.txt	2026-09-21 21:52:57.665837433 -0400
+@@ -1,9 +1,9 @@
+-! spoke1 (10.2.0.12) show running-config captured 2026-09-21 21:25:47
++! spoke1 (10.2.0.12) show running-config captured 2026-09-21 21:52:49
+ Building configuration...
+ 
+-Current configuration : 15353 bytes
++Current configuration : 9854 bytes
+ !
+-! Last configuration change at 01:20:42 UTC Tue Sep 22 2026 by admin
++! Last configuration change at 01:52:09 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -84,20 +84,7 @@
+  revocation-check crl
+  hash sha512
+ !
+-crypto pki trustpoint LAB-CA
+- enrollment terminal pem
+- fqdn spoke1.lab.local
+- fingerprint 0BCEF662C033CA9A928299464752014DED4A365C
+- subject-name CN=spoke1.lab.local,O=cat8000v-ipsec
+- subject-alt-name spoke1.lab.local
+- revocation-check none
+- rsakeypair LAB-VPN
+- hash sha256
+-!
+-!
+ !
+-crypto pki certificate map LAB-CERT-MAP 10
+- issuer-name co cat8000v-ipsec lab ca
+ !
+ crypto pki certificate chain TP-self-signed-2484569218
+  certificate self-signed 01
+@@ -157,81 +144,6 @@
+   418616A9 4093E049 4D10AB75 27E86F73 932E35B5 8862FDAE 0275156F 719BB2F0 
+   D697DF7F 28
+   	quit
+-crypto pki certificate chain LAB-CA
+- certificate 406FBA7D8A91C53EEB82079DE917C41280317940
+-  30820437 3082029F A0030201 02021440 6FBA7D8A 91C53EEB 82079DE9 17C41280 
+-  31794030 0D06092A 864886F7 0D01010B 05003039 31173015 06035504 0A0C0E63 
+-  61743830 3030762D 69707365 63311E30 1C060355 04030C15 63617438 30303076 
+-  2D697073 6563206C 61622043 41301E17 0D323630 39323132 32333532 365A170D 
+-  32373039 32313232 33353236 5A305531 17301506 0355040A 130E6361 74383030 
+-  30762D69 70736563 31193017 06035504 03131073 706F6B65 312E6C61 622E6C6F 
+-  63616C31 1F301D06 092A8648 86F70D01 09021610 73706F6B 65312E6C 61622E6C 
+-  6F63616C 30820122 300D0609 2A864886 F70D0101 01050003 82010F00 3082010A 
+-  02820101 00B8C090 06F2C878 948E7DBF 7CEC3897 393196A6 1FF4A081 688F4EA2 
+-  DDB0ED4D 11F9DD39 26748F4A C11DA5D9 F856A6ED 11443B7B 0175FCFE 5BCEB733 
+-  1DB221E5 60871238 2D673315 ACAE8B01 BEFF4D0B 05133119 4D7AE1AA 162199B9 
+-  3207CDBB 7262EF66 B384B589 D31BCB35 FB8E3E53 2647867A 0B1EC427 C9BAC5E2 
+-  B6E8D23E 95815496 278E0D23 BA4519A4 487EAC4B FA195B49 856A06DE 42E6FB1B 
+-  8B644792 2937673D A16BCA5D 1E5B51F8 81232A13 493FDA4B 7C260A73 0A56CA80 
+-  2D360B4F BFB328AA 62457518 7246FE74 283FC134 69F1BB5F 9559D38D 788CEC95 
+-  F3FF85E5 3CBD999E 59BD5449 699A9AB0 FA13216E CFE5AE29 A2896956 59F2B687 
+-  1829ED28 8F020301 0001A381 9A308197 30090603 551D1304 02300030 0E060355 
+-  1D0F0101 FF040403 0205A030 1D060355 1D250416 30140608 2B060105 05070301 
+-  06082B06 01050507 0302301D 0603551D 0E041604 14D5F7CB D8170441 327FDD8C 
+-  0DA142AD 15EB8820 E2301F06 03551D23 04183016 8014F16C 1AB669E7 D705E9F7 
+-  DA9C83C0 EB58E10D 9787301B 0603551D 11041430 12821073 706F6B65 312E6C61 
+-  622E6C6F 63616C30 0D06092A 864886F7 0D01010B 05000382 01810067 57EBFBC0 
+-  93E342FC 1FB1D5F3 C672D867 38E14FA3 87FB8E8D DB2FA129 15CF2216 09D40E3C 
+-  F45387D1 01D197D8 C22CAFF7 C30D7E04 C2F8F6EB 03DA7D61 50FA8C4F 3C41A639 
+-  4AD62CD7 0AF505EF EBDBE4E8 D7354BD2 FDE69AC5 2B7EB69E 48E18B8F 52F5EB31 
+-  0A4B0B17 FAEC8A96 97692DE2 D1860E57 DD9FCC44 1501E9BE 711B6477 998F4F98 
+-  DB50D589 9DCCD405 65487497 4E7B81FB 99FCC965 1C436585 A00BF9A6 C24AA53E 
+-  7DE38775 60FEF68E 7D8D93D8 9EC13EB0 C344AA5E 40EEFFB4 CA2213C4 711F23BB 
+-  4A5C74E8 EF2F229D 7178EC4A B7153BF6 B05B3752 11AADEB3 7007D0A0 DE31D549 
+-  DAFA0F0B A01F6514 B50EE3CE EFD98E6F 6D348093 B85A1D92 683BD765 59645BEE 
+-  A6A6A482 40FEA770 5CF0D503 EA993930 BEF0763D 7839F860 158B8013 67934357 
+-  4DD139A1 9B16B3BD 403AB04B 48B745E2 8402C5DA D0BB0089 D9725336 6E5A3012 
+-  B86F6178 FBDE0E3B 6659E0CE 7813D2BD 5774C176 F0C119B1 FE46B052 EDA13A74 
+-  B1747993 F497EF5C 2E0120DD E3492C07 2643829E FA8856CF C8A2B1
+-  	quit
+- certificate ca 4ED99872D79A02E90EB7C79AB8039FBABB691E61
+-  30820463 308202CB A0030201 0202144E D99872D7 9A02E90E B7C79AB8 039FBABB 
+-  691E6130 0D06092A 864886F7 0D01010B 05003039 31173015 06035504 0A0C0E63 
+-  61743830 3030762D 69707365 63311E30 1C060355 04030C15 63617438 30303076 
+-  2D697073 6563206C 61622043 41301E17 0D323630 39323131 33303034 355A170D 
+-  33363039 31383133 30303435 5A303931 17301506 0355040A 0C0E6361 74383030 
+-  30762D69 70736563 311E301C 06035504 030C1563 61743830 3030762D 69707365 
+-  63206C61 62204341 308201A2 300D0609 2A864886 F70D0101 01050003 82018F00 
+-  3082018A 02820181 00DAEC28 0AA486D2 63A03497 14B28D9D CB7D3FB4 853F21B0 
+-  F6E29A50 75FC4CAA C1EADF2D 0A525593 9450A855 9295541F 387B677D 5614B626 
+-  B4A6930A 5B42A4CB DA4C2332 83575747 E9E39331 9F865669 A735F030 684EA79E 
+-  069AB9EE 96917C78 67C29D50 31ECFB3A F38A354E E44A93EB 4753F3C4 9CC41054 
+-  96B0386B D7F31303 DCC2F684 1D44B778 2D7ECA7A B6E104CF F0A99197 C2B5EBCA 
+-  7170ACD5 D67B91EC 79CC9489 E201C0BC 11406C54 517BBE23 55ED8C38 E5E4ED7B 
+-  037946E7 8AF393A1 2A2C5018 BC0B6A44 395495B2 A533C343 8446E319 D961516E 
+-  296023D2 F0704F17 A2549962 C6EB4692 631C6B93 C511F009 836C84FE B495D9EF 
+-  168B192A AB7E60EF 234CE9B6 6CD670B0 90DB628D D747B49D E1C3AD03 F9911A27 
+-  2252263D 25841A27 7DC74767 47EAA1B8 1F83C5CC 816097DA 4E235491 2FBA1CB3 
+-  6674E3F2 90F561C4 3810894E 958A133F 77599215 59F6ED1D 00CA2619 57F9E917 
+-  26A8C8BA 2376160C 46A24819 AA659479 D26D0F49 21DE9BBE DBC9F84B EB855A85 
+-  3987B448 B26DF6D5 A9020301 0001A363 3061301D 0603551D 0E041604 14F16C1A 
+-  B669E7D7 05E9F7DA 9C83C0EB 58E10D97 87301F06 03551D23 04183016 8014F16C 
+-  1AB669E7 D705E9F7 DA9C83C0 EB58E10D 9787300F 0603551D 130101FF 04053003 
+-  0101FF30 0E060355 1D0F0101 FF040403 02010630 0D06092A 864886F7 0D01010B 
+-  05000382 018100D0 C83BF590 561D466F DD1A4C7C F2D08C23 C6F25EB4 66A093CB 
+-  1E8A2170 821C4989 9288411F 90045931 0C98EDF6 0914C2EE 3D0F6D8C 24F4AFA5 
+-  A0F1781E D723C828 985D954D 21C4C747 533AC36B 392A3D18 BCE613A3 658D4D8F 
+-  3711682B 9BE63C0E B20EBB7E 53050980 998D8CB7 613FE4AD 871DEE48 BDC3AC6C 
+-  591FF3D6 B30A1143 C7E301B2 7114525B 5309C427 829C8E94 531A82C6 3A348F39 
+-  A5F083B5 63138F40 7B26E789 FD016153 92FC49CF C8A78BB5 53017E2A 6730B739 
+-  CDD53D63 32CEBA90 DDE4E8BC 5B7F7DD3 FACFBFDD 5310F027 1A9AB92F A1A186F1 
+-  06A1F15D 64CDA7AA 99D9E28F 587CA9D3 2ADF50E0 805EBD57 BA37D2F5 ADE1CF54 
+-  A7089BB2 C88287C5 9DCF2F2A 931F4FA0 4A6B2D9E B6F6870C 59F6999D A1D24D2F 
+-  41F5CE1E AB081DD5 F61BF671 C12CADE7 F3584566 B805E72A BFE80CF9 251FEFB5 
+-  A5D768E5 4B1833F8 05B8296B 83FA8E5A B1DE4375 636B7EB4 14515CD0 C9851F09 
+-  4C1AEE8E F91819B6 9D02222F 54F1FA4D 4913AF22 BC252F8A 074C3263 968695B3 
+-  795C9431 E25470
+-  	quit
+ !
+ !
+ !
+@@ -266,13 +178,22 @@
+ crypto ikev2 policy VPN-POL 
+  proposal VPN-PROP
+ !
++crypto ikev2 keyring VPN-KEYRING
++ peer central-headend
++  address 100.64.2.2
++  pre-shared-key rGHZylYxSYQUZGzXdG6LzyoI
++ !
++ peer east-headend
++  address 100.64.1.2
++  pre-shared-key rGHZylYxSYQUZGzXdG6LzyoI
++ !
++!
+ !
+ crypto ikev2 profile VPN-IKEV2
+  match certificate LAB-CERT-MAP
+  identity local dn 
+  authentication remote rsa-sig
+  authentication local rsa-sig
+- pki trustpoint LAB-CA
+  dpd 20 3 on-demand
+ !
+ !
+@@ -300,7 +221,6 @@
+ !
+ !
+ !
+-!
+ ! 
+ ! 
+ !
+@@ -314,6 +234,7 @@
+  ip address 172.17.1.2 255.255.255.252
+  ip mtu 1400
+  ip tcp adjust-mss 1360
++ shutdown
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.64.1.2
+@@ -324,6 +245,7 @@
+  ip address 172.17.4.2 255.255.255.252
+  ip mtu 1400
+  ip tcp adjust-mss 1360
++ shutdown
+  tunnel source GigabitEthernet3
+  tunnel mode ipsec ipv4
+  tunnel destination 100.64.2.2
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke1.startup-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke1.startup-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke1.startup-config.txt	2026-09-21 21:25:55.371502506 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke1.startup-config.txt	2026-09-21 21:52:58.162406449 -0400
+@@ -1,7 +1,7 @@
+-! spoke1 (10.2.0.12) show startup-config captured 2026-09-21 21:25:47
+-Using 6439 out of 33554432 bytes
++! spoke1 (10.2.0.12) show startup-config captured 2026-09-21 21:52:49
++Using 6079 out of 33554432 bytes
+ !
+-! Last configuration change at 01:19:48 UTC Tue Sep 22 2026 by admin
++! Last configuration change at 01:51:19 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+@@ -82,28 +82,12 @@
+  revocation-check crl
+  hash sha512
+ !
+-crypto pki trustpoint LAB-CA
+- enrollment terminal pem
+- fqdn spoke1.lab.local
+- fingerprint 0BCEF662C033CA9A928299464752014DED4A365C
+- subject-name CN=spoke1.lab.local,O=cat8000v-ipsec
+- subject-alt-name spoke1.lab.local
+- revocation-check none
+- rsakeypair LAB-VPN
+- hash sha256
+-!
+ !
+ !
+-crypto pki certificate map LAB-CERT-MAP 10
+- issuer-name co cat8000v-ipsec lab ca
+-!
+ crypto pki certificate chain TP-self-signed-2484569218
+  certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+ crypto pki certificate chain SLA-TrustPoint
+  certificate ca 01 nvram:CiscoLicensi#1CA.cer
+-crypto pki certificate chain LAB-CA
+- certificate 406FBA7D8A91C53EEB82079DE917C41280317940 nvram:cat8000v-ips#7940.cer
+- certificate ca 4ED99872D79A02E90EB7C79AB8039FBABB691E61 nvram:cat8000v-ips#1E61CA.cer
+ !
+ !
+ !
+@@ -138,13 +122,22 @@
+ crypto ikev2 policy VPN-POL 
+  proposal VPN-PROP
+ !
++crypto ikev2 keyring VPN-KEYRING
++ peer central-headend
++  address 100.64.2.2
++  pre-shared-key rGHZylYxSYQUZGzXdG6LzyoI
++ !
++ peer east-headend
++  address 100.64.1.2
++  pre-shared-key rGHZylYxSYQUZGzXdG6LzyoI
++ !
++!
+ !
+ crypto ikev2 profile VPN-IKEV2
+  match certificate LAB-CERT-MAP
+  identity local dn 
+  authentication remote rsa-sig
+  authentication local rsa-sig
+- pki trustpoint LAB-CA
+  dpd 20 3 on-demand
+ !
+ !
+@@ -172,7 +165,6 @@
+ !
+ !
+ !
+-!
+ ! 
+ ! 
+ !
+@@ -186,6 +178,7 @@
+  ip address 172.17.1.2 255.255.255.252
+  ip mtu 1400
+  ip tcp adjust-mss 1360
++ shutdown
+  tunnel source GigabitEthernet2
+  tunnel mode ipsec ipv4
+  tunnel destination 100.64.1.2
+@@ -196,6 +189,7 @@
+  ip address 172.17.4.2 255.255.255.252
+  ip mtu 1400
+  ip tcp adjust-mss 1360
++ shutdown
+  tunnel source GigabitEthernet3
+  tunnel mode ipsec ipv4
+  tunnel destination 100.64.2.2
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke4.running-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke4.running-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke4.running-config.txt	2026-09-21 21:26:01.017765562 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke4.running-config.txt	2026-09-21 21:53:03.721365944 -0400
+@@ -1,9 +1,9 @@
+-! spoke4 (10.2.0.16) show running-config captured 2026-09-21 21:25:47
++! spoke4 (10.2.0.16) show running-config captured 2026-09-21 21:52:49
+ Building configuration...
+ 
+ Current configuration : 16219 bytes
+ !
+-! Last configuration change at 01:22:31 UTC Tue Sep 22 2026 by admin
++! Last configuration change at 01:49:22 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in
+diff -ru -I '^! .* captured ' /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke4.startup-config.txt /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke4.startup-config.txt
+--- /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/pre-run/spoke4.startup-config.txt	2026-09-21 21:26:01.514420077 -0400
++++ /home/dcantor/cat8000v-ipsec/results/2026-09-21_21-25-46/configs/post-run/spoke4.startup-config.txt	2026-09-21 21:53:04.218520373 -0400
+@@ -1,7 +1,7 @@
+-! spoke4 (10.2.0.16) show startup-config captured 2026-09-21 21:25:47
++! spoke4 (10.2.0.16) show startup-config captured 2026-09-21 21:52:49
+ Using 7305 out of 33554432 bytes
+ !
+-! Last configuration change at 01:21:41 UTC Tue Sep 22 2026 by admin
++! Last configuration change at 01:49:22 UTC Tue Sep 22 2026 by admin
+ !
+ version 17.15
+ service tcp-keepalives-in

@@ -110,7 +110,49 @@ CAPACITY = int((I.get("capacity") or {}).get("tunnels_per_headend") or 50)
 if "firewall_bandwidth_mbps" not in cf:   # the second headend constraint: the bandwidth of the firewall in front of it
     cf["firewall_bandwidth_mbps"] = nb.extras.custom_fields.create(key="firewall_bandwidth_mbps", label="Firewall bandwidth (Mbps)", type="integer", content_types=["dcim.device"],
                                                                    grouping="VPN", description="Throughput the firewall can carry; every tunnel commits bandwidth_per_tunnel_mbps of it"); created.append("custom-field:firewall_bandwidth_mbps")
-ensure(site, description=I["site"]["description"]); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
+# ACME metadata: every branch is a customer of ACME (the provider that sells the service and owns the headends). The customer is a
+# tenant (group Customers; ACME itself in group Service provider) on the branch's router, LAN host and location; the branch address is
+# the location's physical address; the ACME custom fields carry the account, tier, industry and contract on the tenant, and the design
+# pattern — which follows from the number of tunnels the branch has — on the router and its location (so both filter on it in Nautobot).
+def ensure_choices(field, values):
+    have = {c.value: c for c in nb.extras.custom_field_choices.filter(custom_field=field.id)}
+    for i, v in enumerate(values):
+        if v not in have: nb.extras.custom_field_choices.create(custom_field=field.id, value=v, weight=100 + i * 10); created.append(f"custom-field-choice:{field.key}={v}")
+PATTERN_NAMES = [pt["name"] for pt in intent_mod.PATTERNS.values()] + ["Service headend"]
+for key, label, typ, ctypes, desc in (("acme_design_pattern", "ACME design pattern", "select", ["dcim.device", "dcim.location"], "how the branch is attached — follows from its number of tunnels: " + "; ".join(f"{pt['code']} = {pt['name']}" for pt in intent_mod.PATTERNS.values() if pt["code"] != "ACME-NC")),
+                                       ("acme_pattern_tunnels", "ACME pattern: tunnels", "integer", ["dcim.device", "dcim.location"], "tunnels behind the design pattern (a headend: the branch tunnels it serves)"),
+                                       ("acme_service_tier", "ACME service tier", "select", ["dcim.device", "dcim.location", "tenancy.tenant"], "the customer's service tier: " + " / ".join(intent_mod.TIERS)),
+                                       ("acme_account_id", "ACME account", "text", ["dcim.device", "tenancy.tenant"], "the customer's ACME account number"),
+                                       ("acme_industry", "Industry", "text", ["tenancy.tenant"], "the customer's line of business"),
+                                       ("acme_contract_start", "Contract start", "date", ["tenancy.tenant"], "when the customer's VPN service contract started")):
+    if key not in cf:
+        cf[key] = nb.extras.custom_fields.create(key=key, label=label, type=typ, content_types=ctypes, grouping="ACME", description=desc); created.append(f"custom-field:{key}")
+        nudge_cf(cf[key], desc)
+    elif sorted(cf[key].content_types) != sorted(ctypes): cf[key].update({"content_types": ctypes}); created.append(f"custom-field:{key} content types")
+ensure_choices(cf["acme_design_pattern"], PATTERN_NAMES); ensure_choices(cf["acme_service_tier"], list(intent_mod.TIERS))
+PROVIDER = I.get("provider") or intent_mod.PROVIDER
+tg_prov = get_or_create(nb.tenancy.tenant_groups, {"name": PROVIDER["group"]}, description="the provider selling the VPN service")
+tg_cust = get_or_create(nb.tenancy.tenant_groups, {"name": "Customers"}, description="one tenant per customer company; every branch belongs to one")
+acme = get_or_create(nb.tenancy.tenants, {"name": PROVIDER["name"]}, tenant_group=tg_prov.id)
+ensure(acme, tenant_group=tg_prov.id, description=PROVIDER["description"], comments=PROVIDER.get("address", ""))
+tenants = {}   # spoke -> tenant
+for d in I["devices"]:
+    if d["role"] != "spoke": continue
+    cu = intent_mod.customer(I, d["name"]) or intent_mod.fake_customer(d["name"], d.get("city"))
+    t = get_or_create(nb.tenancy.tenants, {"name": cu["company"]}, tenant_group=tg_cust.id)
+    ensure(t, tenant_group=tg_cust.id, description=f"{cu['industry']} · branch {d['site']} ({d['name']}), {d.get('city', '')}", comments=cu["address"])
+    ensure_cf(t, acme_service_tier=cu["service_tier"], acme_account_id=cu["account_id"], acme_industry=cu["industry"], acme_contract_start=cu["contract_start"] or None)
+    tenants[d["name"]] = t
+for t in nb.tenancy.tenants.filter(tenant_group=tg_cust.id):   # a customer whose branch is gone
+    if t.id not in {x.id for x in tenants.values()} and not nb.dcim.devices.filter(tenant=t.id): t.delete(); created.append(f"removed tenant {t.name} (no branch)")
+def tenant_of(name):
+    d = DEV.get(name) or {}
+    r = d.get("router") if d.get("role") == "host" else (d.get("hub") if d.get("role") == "firewall" else name)
+    return tenants[r].id if r in tenants else acme.id
+def acme_cf(name):
+    pt = intent_mod.design_pattern(I, name); cu = intent_mod.customer(I, name)
+    return {"acme_design_pattern": pt["name"], "acme_pattern_tunnels": pt["tunnels"], **({"acme_service_tier": cu["service_tier"], "acme_account_id": cu["account_id"]} if cu else {})}
+ensure(site, description=I["site"]["description"], tenant=acme.id); ensure_cf(site, site_code=I["site"]["site_code"], contact=I["site"]["contact"])
 
 # site hierarchy: lab site -> Region -> Branch (one location per branch/HQ; site_code + contact live on the branch)
 lt_site = nb.dcim.location_types.get(name="Site")
@@ -119,14 +161,16 @@ lt_branch = get_or_create(nb.dcim.location_types, {"name": "Branch"}, parent=lt_
 regions, branches = {}, {}
 for i, name in enumerate(I["regions"]):
     regions[name] = get_or_create(nb.dcim.locations, {"name": name}, location_type=lt_region.id, parent=site.id, status=active.id)
-    ensure(regions[name], parent=site.id, description=f"region #{i + 1} of {len(I['regions'])}")
+    ensure(regions[name], parent=site.id, description=f"region #{i + 1} of {len(I['regions'])}", tenant=acme.id)
 for d in sorted(I["devices"], key=lambda x: x["role"] in ("firewall", "host")):   # routers first: a firewall / a LAN host shares (and never re-describes) its router's site
     br = branches.get(d["site"]) or get_or_create(nb.dcim.locations, {"name": d["site"]}, location_type=lt_branch.id, parent=regions[d["region"]].id, status=active.id)
     if d["role"] not in ("firewall", "host"):
         where = f" — {d['city']}" if d.get("city") else ""   # the city and its coordinates place the site on the portal's map (Location latitude / longitude)
-        ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}{where}",
+        cu = intent_mod.customer(I, d["name"])
+        ensure(br, parent=regions[d["region"]].id, description=f"{'headend site' if d['role'] == 'hub' else 'branch office'} of {d['name']}{where}" + (f" — {cu['company']}" if cu else f" — {PROVIDER['name']}"),
+               tenant=tenant_of(d["name"]), physical_address=(cu["address"] if cu else d.get("address")) or "",
                **({"latitude": f"{float(d['lat']):.6f}", "longitude": f"{float(d['lon']):.6f}"} if d.get("lat") is not None else {}))
-        ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", ""))
+        ensure_cf(br, site_code=d.get("site_code", ""), contact=d.get("contact", ""), **{k: v for k, v in acme_cf(d["name"]).items() if k != "acme_account_id"})
     branches[d["site"]] = br
 
 # VPN model: Nautobot's core "vpn" app (3.2+). Phase 1 / Phase 2 policies -> profile -> VPN -> tunnels with
@@ -258,8 +302,8 @@ def foreign_wired(dev, name):
 for r in ROUTERS:
     d = DEV[r]
     dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else sys.exit(f"no device with primary IP {d['mgmt_ip']} at {SITE} (run onboard.py)")
-    ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""), location=branches[d["site"]].id)
-    ensure_cf(dev, contact=d.get("contact", ""), **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))   # every hub is a headend
+    ensure(dev, name=r, role=roles[d["role"]].id, secrets_group=sg.id, platform=plat.id, status=active.id, comments=d.get("comments", ""), location=branches[d["site"]].id, tenant=tenant_of(r))
+    ensure_cf(dev, contact=d.get("contact", ""), **acme_cf(r), **({"vpn_tunnel_capacity": CAPACITY} if d["role"] == "hub" else {}))   # every hub is a headend
     if nb.ipam.vrf_device_assignments.get(vrf=mgmt_vrf.id, device=dev.id) is None:
         nb.ipam.vrf_device_assignments.create(vrf=mgmt_vrf.id, device=dev.id); created.append(f"vrf-device:{r}")
     idx = NODES[d["mgmt_ip"]]["idx"]
@@ -292,7 +336,7 @@ if LAN_HOSTS:
         dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else nb.dcim.devices.get(name=h)
         if dev is None:
             dev = nb.dcim.devices.create(name=h, device_type=htype.id, role=hrole.id, platform=hplat.id, status=active.id, location=branches[DEV[r]["site"]].id); created.append(f"device:{h}")
-        ensure(dev, name=h, role=hrole.id, platform=hplat.id, status=active.id, location=branches[DEV[r]["site"]].id, comments=d.get("comments", ""))
+        ensure(dev, name=h, role=hrole.id, platform=hplat.id, status=active.id, location=branches[DEV[r]["site"]].id, comments=d.get("comments", ""), tenant=tenant_of(h))
         idx = NODES[d["mgmt_ip"]]["idx"]
         e0 = ensure_iface(dev, "eth0", "1000base-t", "OOB management", mgmt_only=True, mac=f"{OUI}:{idx:02x}:00")
         ensure_ip(e0, f"{d['mgmt_ip']}/24", primary_of=dev)
@@ -309,7 +353,7 @@ if FIREWALLS:
         dev = nb.dcim.devices.get(by_mgmt[d["mgmt_ip"]]) if d["mgmt_ip"] in by_mgmt else nb.dcim.devices.get(name=f)
         if dev is None:
             dev = nb.dcim.devices.create(name=f, device_type=dtype.id, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id); created.append(f"device:{f}")
-        ensure(dev, name=f, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id, comments=d.get("comments", ""))
+        ensure(dev, name=f, role=roles["firewall"].id, platform=vplat.id, status=active.id, location=branches[d["site"]].id, comments=d.get("comments", ""), tenant=acme.id)
         ensure_cf(dev, contact=DEV[d["hub"]].get("contact", ""), firewall_bandwidth_mbps=int(d.get("bandwidth_mbps") or 0))
         idx = NODES[d["mgmt_ip"]]["idx"]
         e0 = ensure_iface(dev, "eth0", "1000base-t", "OOB management", mgmt_only=True, mac=f"{OUI}:{idx:02x}:00")

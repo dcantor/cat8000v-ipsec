@@ -117,6 +117,51 @@ Locations form the hierarchy lab site -> region -> branch, with site metadata on
     ${rg}=    Nautobot Graphql    { locations(location_type:"Region") { name } }
     Should Be Equal    ${{ sorted([l["name"] for l in $rg["locations"]]) }}    ${{ sorted($REGIONS) }}
 
+Every branch is a customer of ACME: a tenant per company on the router, its LAN host and its location, the address on the location, the ACME metadata and a design pattern that follows the tunnel count
+    [Documentation]    The headends belong to the provider (ACME Networks, tenant group Service provider); each branch to its customer
+    ...    company (tenant group Customers) with account, industry, tier and contract start as custom fields on the tenant. The branch
+    ...    location carries the street address; router and location carry the ACME design pattern, which is derived from how many
+    ...    tunnels (headends) the branch has: 1 = ACME-SH, 2 = ACME-DH, 3+ = ACME-MH. The portal's Branches page exposes and filters on it.
+    ${d}=    Nautobot Graphql    { devices(location: ["${NAUTOBOT_LOCATION}"]) { name role { name } tenant { name tenant_group { name } _custom_field_data } _custom_field_data location { name tenant { name } physical_address _custom_field_data } } }
+    ${by}=    Evaluate    {x['name']: x for x in $d['devices']}
+    FOR    ${h}    IN    @{HUBS}
+        Should Be Equal    ${by}[${h}][tenant][name]    ${PROVIDER}[name]    msg=${h} is not ACME's
+        Should Be Equal    ${by}[${h}][tenant][tenant_group][name]    ${PROVIDER}[group]
+        Should Be Equal    ${by}[${h}][location][physical_address]    ${ADDRESSES}[${h}]
+        Should Be Equal    ${by}[${h}][_custom_field_data][acme_design_pattern]    ${PATTERNS}[${h}][name]
+        Should Be Equal As Integers    ${by}[${h}][_custom_field_data][acme_pattern_tunnels]    ${PATTERNS}[${h}][tunnels]
+    END
+    FOR    ${s}    IN    @{SPOKES}
+        ${cu}=    Set Variable    ${CUSTOMERS}[${s}]
+        Should Be Equal    ${by}[${s}][tenant][name]    ${cu}[company]    msg=${s}: wrong customer tenant
+        Should Be Equal    ${by}[${s}][tenant][tenant_group][name]    Customers
+        Should Be Equal    ${by}[${s}][tenant][_custom_field_data][acme_account_id]    ${cu}[account_id]
+        Should Be Equal    ${by}[${s}][tenant][_custom_field_data][acme_industry]    ${cu}[industry]
+        Should Be Equal    ${by}[${s}][tenant][_custom_field_data][acme_service_tier]    ${cu}[service_tier]
+        Should Be Equal    ${by}[${s}][tenant][_custom_field_data][acme_contract_start]    ${cu}[contract_start]
+        Should Be Equal    ${by}[${s}][location][tenant][name]    ${cu}[company]    msg=${s}: the branch location is not the customer's
+        Should Be Equal    ${by}[${s}][location][physical_address]    ${cu}[address]
+        Should Be Equal    ${by}[${s}][_custom_field_data][acme_design_pattern]    ${PATTERNS}[${s}][name]
+        Should Be Equal    ${by}[${s}][location][_custom_field_data][acme_design_pattern]    ${PATTERNS}[${s}][name]
+        Should Be Equal As Integers    ${by}[${s}][_custom_field_data][acme_pattern_tunnels]    ${{ len($SPOKE_TUNNELS[$s]) }}    msg=${s}: the pattern's tunnel count is not the model's
+        Should Be Equal    ${PATTERNS}[${s}][code]    ${{ {1: 'ACME-SH', 2: 'ACME-DH'}.get(len($SPOKE_TUNNELS[$s]), 'ACME-MH') }}    msg=${s}: the design pattern does not follow the tunnel count
+        Should Be Equal    ${by}[${s}][_custom_field_data][acme_service_tier]    ${cu}[service_tier]
+        IF    $s in $HOST_OF
+            Should Be Equal    ${by}[${HOST_OF}[${s}]][tenant][name]    ${cu}[company]    msg=${HOST_OF}[${s}]: the LAN host is not the customer's
+        END
+    END
+    # the portal's Branches page: the same customer, address and pattern per router, and the filter dimensions
+    ${b}=    Portal Get    /api/branches
+    Should Be Equal    ${b}[provider][name]    ${PROVIDER}[name]
+    FOR    ${r}    IN    @{ROUTER_NAMES}
+        ${row}=    Evaluate    [x for x in $b['routers'] if x['name'] == $r][0]
+        Should Be Equal    ${row}[owner]    ${{ $CUSTOMERS[$r]['company'] if $r in $CUSTOMERS else $PROVIDER['name'] }}
+        Should Be Equal    ${row}[address]    ${ADDRESSES}[${r}]
+        Should Be Equal    ${row}[pattern][code]    ${PATTERNS}[${r}][code]
+    END
+    Should Be Equal    ${{ sorted(p['code'] for p in $b['patterns']) }}    ${PATTERN_CODES}
+    Length Should Be    ${b}[tiers]    3
+
 Every PSK spoke uses its own pre-shared key on all of its tunnels, each headend keys per PSK spoke and holds no key for a certificate spoke
     [Documentation]    Each spoke chooses PSK or certificate (device ike_authentication, else the lab default): a keyring exists only on
     ...    routers with a key-authenticated tunnel and lists exactly those peers (suite 08 proves the certificate side).

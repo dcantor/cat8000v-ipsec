@@ -2,7 +2,7 @@
 document (lab-intent.json in the lab root).  The document is generated from lab.conf the first time
 (`./lab.sh intent init`) and afterwards edited by the web app; lab.conf stays the truth for what libvirt built
 (VM names, console ports, management addresses, physical wiring of the p2p links)."""
-import ipaddress, json, re, secrets, string, subprocess
+import datetime, hashlib, ipaddress, json, re, secrets, string, subprocess
 from pathlib import Path
 
 LAB = Path(__file__).resolve().parents[1]
@@ -102,6 +102,10 @@ def upgrade(I):
         d.setdefault("site", f"{d['name']}-site" if d.get("role") == "hub" else f"branch-{re.sub(r'[^0-9]', '', d['name']) or i}")
         d.setdefault("site_code", (I.get("site") or {}).get("site_code", "")); d.setdefault("contact", (I.get("site") or {}).get("contact", ""))
     I.pop("psk", None)
+    I.setdefault("provider", dict(PROVIDER))
+    for d in I.get("devices", []):
+        if d.get("role") == "spoke" and not d.get("customer"): d["customer"] = fake_customer(d["name"], d.get("city"))   # every branch is a customer
+        if d.get("role") == "hub" and not d.get("address"): d["address"] = fake_address(d["name"], d.get("city"))   # ACME's regional site
     return I
 
 
@@ -111,6 +115,60 @@ def load(path=None):
 
 
 AUTHS = ("psk", "certificate")
+# ---- customers and the provider -------------------------------------------------------------------------------------------------
+# Every branch is a customer of ACME, the provider that sells the VPN service and owns the headends and their firewalls. A customer
+# (company, address, industry, account, service tier, contract start) lives on the spoke in the intent and becomes a Nautobot tenant;
+# the ACME design pattern of a branch is not stored: it follows from how many tunnels (headends) the branch has.
+PROVIDER = {"name": "ACME Networks", "group": "Service provider", "address": "1 ACME Plaza, Chicago, IL 60601",
+            "description": "sells the managed IPsec VPN service: owns the headends, their firewalls and the LAN hosts behind the headends"}
+PATTERNS = {0: {"code": "ACME-NC", "name": "Not connected", "description": "no tunnel yet"},
+            1: {"code": "ACME-SH", "name": "Single headend", "description": "one tunnel to the nearest headend; no redundancy"},
+            2: {"code": "ACME-DH", "name": "Dual headend (resilient)", "description": "two tunnels to the two nearest headends; either carries the branch"},
+            3: {"code": "ACME-MH", "name": "Multi headend (any-region)", "description": "a tunnel to three or more headends; the branch reaches every region directly"}}
+TIERS = ("Bronze", "Silver", "Gold")
+INDUSTRIES = ("Logistics", "Retail", "Healthcare", "Financial services", "Manufacturing", "Education", "Hospitality", "Legal", "Media", "Energy")
+_ADJ = ("Bluewater", "Northwind", "Summit", "Ironwood", "Harbor", "Redstone", "Silverline", "Copperfield", "Pinecrest", "Granite", "Evergreen", "Lakeside", "Meridian", "Cascade", "Beacon")
+_NOUN = {"Logistics": ("Logistics", "Freight", "Distribution"), "Retail": ("Retail Group", "Stores", "Outfitters"), "Healthcare": ("Health", "Medical Group", "Clinics"),
+         "Financial services": ("Capital", "Financial", "Trust"), "Manufacturing": ("Industries", "Manufacturing", "Works"), "Education": ("Academy", "Learning", "Schools"),
+         "Hospitality": ("Hospitality", "Hotels", "Resorts"), "Legal": ("Law Group", "Legal", "Partners"), "Media": ("Media", "Studios", "Publishing"), "Energy": ("Energy", "Power", "Utilities")}
+_SUFFIX = ("Inc.", "LLC", "Corp.", "Co.", "Ltd.")
+_STREET = ("Main St", "Oak Ave", "Market St", "Commerce Blvd", "Industrial Pkwy", "Harbor Dr", "Lakeshore Rd", "Union Ave", "Maple St", "Enterprise Way")
+
+
+def _h(*parts):
+    return int.from_bytes(hashlib.sha256("|".join(str(p) for p in parts).encode()).digest()[:8], "big")
+
+
+def fake_address(name, city):
+    """A deterministic street address in the device's city (the city carries the state)."""
+    h = _h(name, "addr"); c = city or "Springfield, IL"
+    return f"{100 + h % 9800} {_STREET[h % len(_STREET)]}, Suite {100 + (h >> 8) % 800}, {c} {10000 + (h >> 16) % 89999}"
+
+
+def fake_customer(name, city):
+    """A deterministic fake customer for a branch: company, address, industry, account id, service tier, contract start."""
+    h = _h(name, "cust"); ind = INDUSTRIES[h % len(INDUSTRIES)]
+    company = f"{_ADJ[(h >> 4) % len(_ADJ)]} {_NOUN[ind][(h >> 8) % 3]} {_SUFFIX[(h >> 12) % len(_SUFFIX)]}"
+    start = datetime.date(2023, 1, 1) + datetime.timedelta(days=(h >> 16) % 1200)
+    return {"company": company, "address": fake_address(name, city), "industry": ind, "account_id": f"ACME-{100000 + (h >> 24) % 900000}",
+            "service_tier": TIERS[(h >> 32) % len(TIERS)], "contract_start": start.isoformat()}
+
+
+def customer(I, name):
+    """The customer of a branch (stored on the spoke; generated once by upgrade()). Headends have none — they are ACME's."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("customer") if d.get("role") == "spoke" else None
+
+
+def design_pattern(I, name):
+    """The ACME design pattern of a branch: it follows from the number of tunnels (headends) the branch has (1 / 2 / 3+). A headend's
+    "pattern" is the number of branches it serves — reported, not a pattern."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    tuns = [t for t in I.get("tunnels") or [] if name in (t["hub"], t["spoke"])]
+    if d.get("role") != "spoke": return {"code": "ACME-HE", "name": "Service headend", "description": f"ACME headend serving {len(tuns)} branch tunnel(s)", "tunnels": len(tuns)}
+    return {**PATTERNS[min(len(tuns), 3)], "tunnels": len(tuns)}
+
+
 def default_auth(I): return ((I.get("profile") or {}).get("ike") or {}).get("authentication", "psk")
 def spoke_auth(I, name):
     """How a spoke authenticates IKEv2: its own choice (device ike_authentication — picked in the wizard, changeable later) or the

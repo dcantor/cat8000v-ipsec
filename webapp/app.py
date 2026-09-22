@@ -1139,7 +1139,7 @@ def branches(refresh: bool = Query(False, description="re-collect the tunnels' l
     I = intent_mod.load(); st = lab_ca.status()["devices"] or {}; vms = _vm_states(); hosts = {h["router"]: h for h in lan_hosts(False)["hosts"]}
     try: inv_d = inv().get(refresh=refresh, with_live=True)
     except Exception as e: inv_d = {"tunnels": [], "headends": [], "error": str(e)}  # noqa: BLE001
-    runs = registry.list(300); out = []
+    runs = registry.list(300); out = []; provider = I.get("provider") or intent_mod.PROVIDER
     for d in sorted(I["devices"], key=lambda x: (x["role"] != "hub", x["name"])):
         if d["role"] not in ("hub", "spoke"): continue
         tuns = [t for t in inv_d.get("tunnels", []) if d["name"] in (t.get("headend"), t.get("spoke"))]
@@ -1147,12 +1147,17 @@ def branches(refresh: bool = Query(False, description="re-collect the tunnels' l
         last = next((r for r in runs if (r.get("spoke") or {}).get("name") == d["name"] or (r.get("hub") or {}).get("name") == d["name"]), None)
         cert = st.get(d["name"]) if d["name"] in intent_mod.cert_routers(I) else None
         he = next((h for h in inv_d.get("headends", []) if h["name"] == d["name"]), None)
+        cu = intent_mod.customer(I, d["name"])
         out.append({"name": d["name"], "role": d["role"], "site": d.get("site"), "city": d.get("city"), "region": d.get("region"), "asn": d.get("asn"), "mgmt_ip": d["mgmt_ip"], "lan": d.get("lan"),
+                    "customer": cu, "owner": cu["company"] if cu else provider["name"], "address": cu["address"] if cu else d.get("address"), "pattern": intent_mod.design_pattern(I, d["name"]),
+                    "industry": cu["industry"] if cu else None, "service_tier": cu["service_tier"] if cu else None, "comments": d.get("comments", ""),
                     "state": vms.get((d["name"], d["role"]), "undefined"), "tunnels": len(tuns), "tunnels_up": sum(1 for h in health if h == "up"), "health": "up" if tuns and all(h == "up" for h in health) else ("down" if tuns and all(h == "down" for h in health) else ("degraded" if tuns else "none")),
                     "authentication": intent_mod.spoke_auth(I, d["name"]) if d["role"] == "spoke" else None, "methods": sorted(intent_mod.router_auths(I, d["name"])),
                     "cert_days": cert and cert.get("days_left"), "cert_expired": bool(cert and cert.get("expired")), "host": (hosts.get(d["name"]) or {}).get("name"), "host_state": (hosts.get(d["name"]) or {}).get("state"),
                     "free_slots": he and he.get("effective_free"), "last_run": last and {"id": last["id"], "mode": last["mode"], "status": last["status"], "started": last["started"], "user": last.get("user")}})
-    return {"generated": time.time(), "routers": out, "inventory_error": inv_d.get("error")}
+    return {"generated": time.time(), "routers": out, "inventory_error": inv_d.get("error"), "provider": provider,
+            "patterns": [{**pt, "count": sum(1 for r in out if r["pattern"]["code"] == pt["code"])} for pt in intent_mod.PATTERNS.values()], "tiers": list(intent_mod.TIERS), "regions": I["regions"],
+            "nautobot": {"tenants": f"{NAUTOBOT_PUBLIC_URL}/tenancy/tenants/?tenant_group=Customers", "devices": f"{NAUTOBOT_PUBLIC_URL}/dcim/devices/?location={I['site']['name']}"}}
 
 
 @app.get("/api/branch/{name}", tags=["inventory"], summary="One router's page: identity, authentication and certificate, tunnels with live state, firewall rules and log lines touching it, its LAN host, the runs that involved it")
@@ -1185,7 +1190,10 @@ def branch_page(name: str, refresh: bool = Query(False, description="re-collect 
     breakout = {"enabled": inet["enabled"], "preference": inet["preference"].get(name, []) if dev["role"] == "spoke" else None,
                 "breaks_out": dev["role"] == "hub" and inet["enabled"], "spokes_preferring": sorted(s for s, hs in inet["preference"].items() if hs and hs[0] == name) if dev["role"] == "hub" else None}
     runs = [r for r in registry.list(200) if (r.get("spoke") or {}).get("name") == name or (r.get("hub") or {}).get("name") == name or (r.get("mode") == "deploy" and name in (r.get("devices") or []))][:15]
-    return {"name": name, "role": dev["role"], "device": {k: v for k, v in dev.items() if k != "psk"}, "psk_set": bool(dev.get("psk")), "authentication": auth_method, "methods": methods, "default_authentication": intent_mod.default_auth(I),
+    cu = intent_mod.customer(I, name); provider = I.get("provider") or intent_mod.PROVIDER
+    owner = {"tenant": cu["company"] if cu else provider["name"], "address": cu["address"] if cu else dev.get("address"), "customer": cu, "provider": provider, "pattern": intent_mod.design_pattern(I, name),
+             "nautobot_tenant": f"{NAUTOBOT_PUBLIC_URL}/tenancy/tenants/?q={requests.utils.quote(cu['company'] if cu else provider['name'])}"}
+    return {"name": name, "role": dev["role"], "device": {k: v for k, v in dev.items() if k != "psk"}, "psk_set": bool(dev.get("psk")), "authentication": auth_method, "methods": methods, "default_authentication": intent_mod.default_auth(I), "owner": owner,
             "certificate": cert, "wan_addresses": my_wans, "tunnels": tunnels, "headend": headend, "firewalls": touching, "host": host, "runs": runs, "generated": time.time(), "internet": breakout,
             "firewall": intent_mod.firewall_of(I, name) if dev["role"] == "hub" else None}
 

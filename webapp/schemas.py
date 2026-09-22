@@ -53,6 +53,21 @@ class Profile(BaseModel):
     ios: dict[str, str] = Field(..., description="Cisco object names (ikev2_proposal, ikev2_policy, ikev2_keyring, ikev2_profile, transform_set, ipsec_profile)")
 
 
+class Customer(BaseModel):
+    """The customer a branch belongs to (every branch is a customer of ACME, the provider that owns the headends): a Nautobot tenant."""
+    company: str = Field(..., examples=["Bluewater Logistics LLC"])
+    address: str = Field("", description="street address of the branch (the Nautobot location's physical address)", examples=["1200 Harbor Dr, Suite 300, Boston, MA 02110"])
+    industry: str = Field("", examples=["Logistics"])
+    account_id: str = Field("", description="ACME account number", examples=["ACME-482913"])
+    service_tier: Literal["Bronze", "Silver", "Gold"] = "Bronze"
+    contract_start: str = Field("", description="ISO date", examples=["2024-03-01"])
+
+
+class DesignPattern(BaseModel):
+    """The ACME design pattern of a branch — it follows from the number of tunnels (headends) the branch has."""
+    code: str = Field(..., examples=["ACME-DH"]); name: str = Field(..., examples=["Dual headend (resilient)"]); description: str = ""; tunnels: int = 0
+
+
 class Device(BaseModel):
     name: str = Field(..., description="hostname / Nautobot device name", examples=["spoke1"])
     mgmt_ip: str = Field(..., description="management address (fixed by the VM's day-0 config)", examples=["10.2.0.12"])
@@ -73,6 +88,8 @@ class Device(BaseModel):
     lat: Optional[float] = None; lon: Optional[float] = None
     psk_rotated: Optional[str] = Field(None, description="when the spoke's key was last rotated")
     ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="spokes only: how this spoke authenticates IKEv2 (chosen at provisioning, changeable later); unset = the lab default profile.ike.authentication")
+    customer: Optional[Customer] = Field(None, description="spokes only: the customer this branch belongs to (a Nautobot tenant; generated when missing)")
+    address: Optional[str] = Field(None, description="headends only: the street address of ACME's regional site (the Nautobot location's physical address)")
 
 
 class Link(BaseModel):
@@ -102,6 +119,7 @@ class Intent(BaseModel):
     capacity: dict[str, int] = Field(default={"tunnels_per_headend": 50, "bandwidth_per_tunnel_mbps": 8},
                                      description="tunnels_per_headend: slots per headend; bandwidth_per_tunnel_mbps: what every tunnel commits of its headend firewall's bandwidth_mbps")
     internet: Optional[dict[str, Any]] = Field(None, description="internet breakout: {enabled: bool, uplink_port: N} — each firewall NATs the site LANs out of ethN, headends originate a default route, spokes prefer the nearest headend")
+    provider: Optional[dict[str, Any]] = Field(None, description="the provider that sells the service and owns the headends: {name, group, address, description} (ACME Networks; a Nautobot tenant)")
 
 
 class RunOptions(BaseModel):
@@ -131,6 +149,7 @@ class SpokeSpec(BaseModel):
     lat: Optional[float] = Field(None, description="site latitude (filled from the catalogue for a known city)"); lon: Optional[float] = None
     psk: str = Field(..., description="the spoke's own pre-shared key (8-64 chars; kept even when the spoke authenticates with a certificate, so it can switch back)")
     ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="how the spoke authenticates IKEv2: psk, or certificate (enrolled with the lab CA); unset = the lab default")
+    customer: Optional[Customer] = Field(None, description="the customer this branch belongs to (suggest proposes one; a Nautobot tenant is created for the company)")
     comments: str = ""; change_ticket: str = ""; ram_mib: int = 4096
     role: Literal["spoke"] = "spoke"
     links: list[SpokeLink] = Field(..., description="at least two headends", min_length=2)

@@ -139,7 +139,7 @@ The portal renews a spoke's certificate: new serial on the router, in the CA ind
     Should Be Equal    ${rc}[serial]    ${idx}[${spoke}][serial]
     ${dev}=    Nautobot Get    dcim/devices/    name=${spoke}
     Should Be Equal    ${dev}[results][0][custom_fields][cert_serial]    ${idx}[${spoke}][serial]
-    Should Be Equal    ${dev}[results][0][custom_fields][cert_renewed]    ${{ __import__('datetime').date.today().isoformat() }}
+    Should Be Equal    ${dev}[results][0][custom_fields][cert_renewed]    ${{ __import__('datetime').datetime.now(__import__('datetime').timezone.utc).date().isoformat() }}    msg=cert_renewed is the UTC date of the renewal
     FOR    ${t}    IN    @{TUNNEL_LIST}
         IF    '${t}[spoke]' != '${spoke}'    CONTINUE
         ${sa}=    Show    ${t}[hub]    show crypto ikev2 sa detail

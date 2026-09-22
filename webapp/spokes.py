@@ -79,6 +79,7 @@ def suggest(hubs=None, region=None):
     city = cities.suggest_city(region, I["regions"], {d.get("city") for d in I["devices"]}); ll = cities.lookup(city) or (None, None)
     return {**ident, "role": "spoke", "comments": "", "region": region, "site": site, "site_code": f"{region[:2].upper()}-{n}", "contact": f"noc-{region.lower()}@lab.local",
             "city": city, "lat": ll[0], "lon": ll[1], "psk": intent_mod.new_psk(), "ike_authentication": intent_mod.default_auth(I), "change_ticket": I["vpn"].get("change_ticket", ""), "ram_mib": int(f["sc"]["C8000V_RAM_MIB"] or RAM_MIB),
+            "customer": intent_mod.fake_customer(ident["name"], city),   # every branch is a customer of ACME: a proposed company (editable), its address in the city
             "links": suggest_links(I, f, ident["name"], chosen),
             "context": {"hubs": [{"name": h["name"], "region": h.get("region"), "distance": intent_mod.region_distance(I, region, h.get("region")),
                                   "tunnels": sum(1 for t in I["tunnels"] if t["hub"] == h["name"]), "capacity": f["capacity"], "edge": f["edge_of"](h["name"]),
@@ -131,6 +132,12 @@ def validate(spec):
     if not city: errs.append("city: where is the site? (pick one from the list, or give a name with lat / lon)")
     elif spec.get("lat") is None or spec.get("lon") is None: errs.append(f"city {city!r} is not in the catalogue: give its lat / lon")
     elif not (-90 <= float(spec["lat"]) <= 90 and -180 <= float(spec["lon"]) <= 180): errs.append("lat / lon out of range")
+    if spec.get("role", "spoke") == "spoke":   # the customer (a Nautobot tenant): a company name at least; the tier from the catalogue
+        cu = spec.get("customer") or {}
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 &'.,_-]{1,80}", cu.get("company") or ""): errs.append("customer company: 2-80 characters (letters, digits, space, &'.,_-)")
+        if cu.get("company") and any(d.get("role") == "spoke" and (d.get("customer") or {}).get("company", "").lower() == cu["company"].lower() for d in I["devices"]): errs.append(f"customer {cu['company']!r} already has a branch (one branch per customer)")
+        if (cu.get("service_tier") or "Bronze") not in intent_mod.TIERS: errs.append(f"customer service_tier: one of {', '.join(intent_mod.TIERS)}")
+        if cu.get("contract_start") and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", cu["contract_start"]): errs.append("customer contract_start: YYYY-MM-DD")
     avail = int(re.search(r"MemAvailable:\s+(\d+)", Path("/proc/meminfo").read_text())[1]) // 1024
     if avail < int(spec.get("ram_mib") or RAM_MIB) + 1024: errs.append(f"not enough free memory for a {spec.get('ram_mib', RAM_MIB)} MiB VM ({avail} MiB available)")
     if spec.get("role", "spoke") == "spoke":
@@ -219,7 +226,8 @@ def add_to_intent(spec):
                          "site_code": spec.get("site_code", ""), "contact": spec.get("contact", ""),
                          **({"city": spec["city"], "lat": float(spec["lat"]), "lon": float(spec["lon"])} if spec.get("city") and spec.get("lat") is not None else {}),
                          **({"psk": spec["psk"]} if spec.get("role", "spoke") == "spoke" else {}),
-                         **({"ike_authentication": spec["ike_authentication"]} if spec.get("role", "spoke") == "spoke" and spec.get("ike_authentication") else {})})
+                         **({"ike_authentication": spec["ike_authentication"]} if spec.get("role", "spoke") == "spoke" and spec.get("ike_authentication") else {}),
+                         **({"customer": {**intent_mod.fake_customer(spec["name"], spec.get("city")), **{k: v for k, v in (spec.get("customer") or {}).items() if v not in (None, "")}}} if spec.get("role", "spoke") == "spoke" else {})})
     I["devices"].sort(key=lambda d: (d["role"] != "hub", d["name"]))
     for l in spec.get("links") or []:
         I["links"].append({"a": l.get("edge") or l["hub"], "a_port": int(l["hub_port"]), "b": l["spoke"], "b_port": int(l["spoke_port"]), "prefix": l["wan_prefix"]})
@@ -347,6 +355,10 @@ def remove_from_nautobot(name, url, token, prefixes=()):
         if ci.get("id"):
             for ip in get("ipam/ip-addresses/", interfaces=ci["id"]): delete(f"ipam/ip-addresses/{ip['id']}/", f"hub WAN address {ip['address']}")
     if dev: delete(f"dcim/devices/{dev['id']}/", f"device {name} (interfaces, cable)")
+    # the customer (tenant) goes when no device of its own is left — the LAN host is deleted by the seed's host clean-up, so only then
+    tenant = (dev or {}).get("tenant") or {}
+    if tenant.get("id") and not get("dcim/devices/", tenant=tenant["id"]) and (requests.get(f"{url}/api/tenancy/tenants/{tenant['id']}/", headers=H, timeout=60).json().get("tenant_group") or {}).get("name") == "Customers":
+        delete(f"tenancy/tenants/{tenant['id']}/", f"customer tenant {tenant.get('name')}")
     # its prefixes (WAN /30, tunnel /30, LAN, loopback /32): every address inside them first, then the prefix
     for pfx in prefixes:
         for pf in get("ipam/prefixes/", prefix=pfx):
