@@ -245,6 +245,9 @@ plans, the branch pages, hosts and the ping mesh, firewalls, PKI, runs (queue, r
 - `webapp/demo/nautobot-nac-demo.gif` — where the data lives in Nautobot and how NaC consumes it.
 - **`docs/workflows.pdf`** — workflows, system-to-system data flows and decision trees, in detail
   (28 pages, 25 diagrams; source `docs/workflows.html`).
+- **`docs/requirements.pdf`** — the requirements specification of the whole service (18 pages, ~110 numbered requirements
+  with priority, acceptance criteria and the suite / code that verifies each; source `docs/requirements.html`,
+  `docs/build_pdf.py requirements.html` rebuilds it).
 - `webapp/README.md` — portal internals, run modes, resuming, platform quirks.
 
 ### Monitoring (Prometheus + Grafana on the NMS)
