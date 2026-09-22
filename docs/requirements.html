@@ -239,6 +239,7 @@
 <ul>
 <li>The iosxe provider's IKEv2 profile knows only pre-share authentication; rsa-sig, the certificate map and the trustpoint are pushed as a raw CLI template that depends on every native resource (so it always goes in the last apply stage). A CLI template's destroy does not revert lines; retiring a certificate removes the trustpoint and map, which makes IOS drop the dependent profile lines.</li>
 <li>IOS-XE shuts a VTI whose protection profile is swapped and refuses deleting an in-use profile or keyring — hence the staged apply and the post-apply verification.</li>
+<li>IOS-XE <b>appends</b> a route-map entry's <code>description</code> over RESTCONF instead of replacing it: a description whose text changes (it used to carry the internet-breakout preference rank, which a re-home changes) leaves the old line on the router and Golden Config reports drift. Rendered descriptions are therefore stable per object; the rank lives in <code>set local-preference</code>, which the provider does replace. Suite 11 asserts one description per route-map entry.</li>
 <li>Nautobot 3.2.4: a brand-new custom field drops values until it is saved a second time; the profile ↔ policy assignment endpoints 500 on POST (worked around); a location's description is limited to 255 characters.</li>
 <li>Golden Config compliance needs parseable backups: a multi-line banner breaks hier_config for that device.</li>
 <li>VyOS static routes have no description leaf; the breakout uplink uses DHCP on the libvirt NAT network.</li>

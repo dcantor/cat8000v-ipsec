@@ -59,6 +59,13 @@ Every spoke prefers the nearest headend's default route (local preference by reg
             ${hub_ip}=    Evaluate    [t['hub_ip'] for t in $TUNNEL_LIST if t['spoke'] == $s and t['hub'] == $h][0]
             Should Contain    ${run}    neighbor ${hub_ip} route-map BREAKOUT-${h} in
             Should Match Regexp    ${run}    (?s)route-map BREAKOUT-${h} permit 10.*?set local-preference ${{ 200 - 50 * $pref.index($h) }}
+            # the rank is carried by local-preference, never by the description: IOS-XE appends a route-map description over
+            # RESTCONF instead of replacing it, so a description that changed with the rank left the old line behind after a
+            # re-home (Golden Config then saw drift). One description per entry, and it must not name a preference rank.
+            ${entry}=    Get Regexp Matches    ${run}    (?s)route-map BREAKOUT-${h} permit 10 *\n(.*?)(?=route-map |\Z)    1
+            ${descs}=    Get Regexp Matches    ${entry}[0]    (?m)^ *description .*
+            Length Should Be    ${descs}    1    msg=${s}: route-map BREAKOUT-${h} permit 10 has ${{ len($descs) }} description lines: ${descs}
+            Should Not Contain    ${descs}[0]    preference #    msg=${s}: the route-map description must not carry the preference rank (it changes on a re-home; IOS-XE appends descriptions)
         END
     END
 

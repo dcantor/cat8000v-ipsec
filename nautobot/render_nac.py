@@ -183,7 +183,10 @@ def render(dev):
         if breakout and is_hub: af["default_originate"] = True
         if breakout and not is_hub and peer_dev in pref_order:
             rm = f"BREAKOUT-{peer_dev}"; af["route_maps"] = [{"direction": "in", "name": rm}]
-            route_maps.append({"name": rm, "entries": [{"seq": 10, "operation": "permit", "description": f"default route from {peer_dev}: preference #{pref_order.index(peer_dev) + 1} (nearest headend first)",
+            # the description must not carry the preference rank: re-homing a branch changes the rank, and IOS-XE *appends* a new
+            # route-map description over RESTCONF instead of replacing it — the old line stays behind and Golden Config sees drift.
+            # The rank lives in `set local-preference` (200 nearest, then 150, 100), which the provider does replace cleanly.
+            route_maps.append({"name": rm, "entries": [{"seq": 10, "operation": "permit", "description": f"default route from {peer_dev} (internet breakout; the nearest headend wins on local-preference)",
                                                         "match": {"ipv4_address_prefix_lists": ["DEFAULT-ROUTE"]}, "set": {"local_preference": 200 - 50 * pref_order.index(peer_dev)}},
                                                        {"seq": 20, "operation": "permit", "description": "everything else unchanged"}]})
         afn.append(af)

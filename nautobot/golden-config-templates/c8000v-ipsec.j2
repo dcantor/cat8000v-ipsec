@@ -64,7 +64,7 @@ ip prefix-list DEFAULT-ROUTE seq 5 permit 0.0.0.0/0
 !
 {% for h in pref %}
 route-map BREAKOUT-{{ h }} permit 10
- description default route from {{ h }}: preference #{{ loop.index }} (nearest headend first)
+ description default route from {{ h }} (internet breakout; the nearest headend wins on local-preference)
  match ip address prefix-list DEFAULT-ROUTE
  set local-preference {{ 200 - 50 * loop.index0 }}
 !

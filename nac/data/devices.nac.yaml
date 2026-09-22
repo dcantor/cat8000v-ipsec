@@ -6,6 +6,9 @@ iosxe:
   - name: mss_central-headend_tunnel4
     type: cli
     content: "interface Tunnel4\n ip tcp adjust-mss 1360\n"
+  - name: mss_central-headend_tunnel5
+    type: cli
+    content: "interface Tunnel5\n ip tcp adjust-mss 1360\n"
   - name: mss_central-headend_tunnel6
     type: cli
     content: "interface Tunnel6\n ip tcp adjust-mss 1360\n"
@@ -42,12 +45,12 @@ iosxe:
     type: cli
     content: "crypto ikev2 profile VPN-IKEV2\n match certificate LAB-CERT-MAP\n identity local dn\n authentication remote\
       \ rsa-sig\n authentication local rsa-sig\n pki trustpoint LAB-CA\n"
+  - name: mss_spoke2_tunnel5
+    type: cli
+    content: "interface Tunnel5\n ip tcp adjust-mss 1360\n"
   - name: mss_spoke2_tunnel8
     type: cli
     content: "interface Tunnel8\n ip tcp adjust-mss 1360\n"
-  - name: mss_spoke2_tunnel9
-    type: cli
-    content: "interface Tunnel9\n ip tcp adjust-mss 1360\n"
   - name: mss_spoke3_tunnel3
     type: cli
     content: "interface Tunnel3\n ip tcp adjust-mss 1360\n"
@@ -70,9 +73,6 @@ iosxe:
     type: cli
     content: "crypto ikev2 profile VPN-IKEV2\n match certificate LAB-CERT-MAP\n identity local dn\n authentication remote\
       \ rsa-sig\n authentication local rsa-sig\n pki trustpoint LAB-CA\n"
-  - name: mss_west-headend_tunnel9
-    type: cli
-    content: "interface Tunnel9\n ip tcp adjust-mss 1360\n"
   - name: mss_west-headend_tunnel10
     type: cli
     content: "interface Tunnel10\n ip tcp adjust-mss 1360\n"
@@ -91,6 +91,7 @@ iosxe:
     - IPSEC_VPN
     templates:
     - mss_central-headend_tunnel4
+    - mss_central-headend_tunnel5
     - mss_central-headend_tunnel6
     - mss_central-headend_tunnel7
     - ikev2_cert_auth_central-headend
@@ -118,6 +119,10 @@ iosxe:
           keyrings:
           - name: VPN-KEYRING
             peers:
+            - name: spoke2
+              ipv4_address: 100.65.5.2
+              ipv4_mask: 255.255.255.255
+              pre_shared_key: ${psk_spoke2}
             - name: spoke3
               ipv4_address: 100.65.6.2
               ipv4_mask: 255.255.255.255
@@ -129,6 +134,8 @@ iosxe:
             dpd_query: on-demand
           - name: VPN-IKEV2-PSK
             match_identity_remote_ipv4_addresses:
+            - address: 100.65.5.2
+              mask: 255.255.255.255
             - address: 100.65.6.2
               mask: 255.255.255.255
             authentication_local_pre_share: true
@@ -203,6 +210,16 @@ iosxe:
           tunnel_destination_ipv4: 100.65.4.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC
+        - name: '5'
+          description: IPsec VTI to spoke2
+          ipv4:
+            address: 172.17.5.1
+            address_mask: 255.255.255.252
+          ip_mtu: 1400
+          tunnel_source: GigabitEthernet2
+          tunnel_destination_ipv4: 100.65.5.2
+          tunnel_mode_ipsec_ipv4: true
+          tunnel_protection_ipsec_profile: VPN-IPSEC-PSK
         - name: '6'
           description: IPsec VTI to spoke3
           ipv4:
@@ -232,6 +249,9 @@ iosxe:
           - ip: 172.17.4.2
             remote_as: 65201
             description: eBGP spoke1 (Tunnel4)
+          - ip: 172.17.5.2
+            remote_as: 65202
+            description: eBGP spoke2 (Tunnel5)
           - ip: 172.17.6.2
             remote_as: 65203
             description: eBGP spoke3 (Tunnel6)
@@ -242,6 +262,9 @@ iosxe:
             ipv4_unicast:
               neighbors:
               - ip: 172.17.4.2
+                activate: true
+                default_originate: true
+              - ip: 172.17.5.2
                 activate: true
                 default_originate: true
               - ip: 172.17.6.2
@@ -256,6 +279,11 @@ iosxe:
               - network: 192.168.14.0
         static_routes:
         - prefix: 100.65.4.0
+          mask: 255.255.255.252
+          next_hops:
+          - ip: 100.64.2.1
+            name: via-fw-central
+        - prefix: 100.65.5.0
           mask: 255.255.255.252
           next_hops:
           - ip: 100.64.2.1
@@ -606,7 +634,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from east-headend: preference #1 (nearest headend first)'
+          description: default route from east-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -619,7 +647,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from central-headend: preference #2 (nearest headend first)'
+          description: default route from central-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -674,8 +702,8 @@ iosxe:
     device_groups:
     - IPSEC_VPN
     templates:
+    - mss_spoke2_tunnel5
     - mss_spoke2_tunnel8
-    - mss_spoke2_tunnel9
     variables:
       router_id: 10.255.1.3
       bgp_asn: 65202
@@ -704,8 +732,8 @@ iosxe:
               ipv4_address: 100.64.1.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke2}
-            - name: west-headend
-              ipv4_address: 100.64.3.2
+            - name: central-headend
+              ipv4_address: 100.64.2.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke2}
           profiles:
@@ -713,7 +741,7 @@ iosxe:
             match_identity_remote_ipv4_addresses:
             - address: 100.64.1.2
               mask: 255.255.255.255
-            - address: 100.64.3.2
+            - address: 100.64.2.2
               mask: 255.255.255.255
             authentication_local_pre_share: true
             authentication_remote_pre_share: true
@@ -742,15 +770,15 @@ iosxe:
             address_mask: 255.255.255.252
         - type: GigabitEthernet
           id: '3'
-          shutdown: true
-        - type: GigabitEthernet
-          id: '4'
-          description: WAN to fw-west eth3
+          description: WAN to fw-central eth3
           shutdown: false
           cdp: true
           ipv4:
-            address: 100.65.9.2
+            address: 100.65.5.2
             address_mask: 255.255.255.252
+        - type: GigabitEthernet
+          id: '4'
+          shutdown: true
         - type: GigabitEthernet
           id: '5'
           description: site LAN 192.168.23.0/24 (host-spoke2 eth1)
@@ -766,6 +794,16 @@ iosxe:
             address: 10.255.1.3
             address_mask: 255.255.255.255
         tunnels:
+        - name: '5'
+          description: IPsec VTI to central-headend
+          ipv4:
+            address: 172.17.5.2
+            address_mask: 255.255.255.252
+          ip_mtu: 1400
+          tunnel_source: GigabitEthernet3
+          tunnel_destination_ipv4: 100.64.2.2
+          tunnel_mode_ipsec_ipv4: true
+          tunnel_protection_ipsec_profile: VPN-IPSEC-PSK
         - name: '8'
           description: IPsec VTI to east-headend
           ipv4:
@@ -776,16 +814,6 @@ iosxe:
           tunnel_destination_ipv4: 100.64.1.2
           tunnel_mode_ipsec_ipv4: true
           tunnel_protection_ipsec_profile: VPN-IPSEC-PSK
-        - name: '9'
-          description: IPsec VTI to west-headend
-          ipv4:
-            address: 172.17.9.2
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet4
-          tunnel_destination_ipv4: 100.64.3.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC-PSK
       prefix_lists:
       - name: DEFAULT-ROUTE
         description: the default route the headends originate (internet breakout)
@@ -794,11 +822,11 @@ iosxe:
           action: permit
           prefix: 0.0.0.0/0
       route_maps:
-      - name: BREAKOUT-east-headend
+      - name: BREAKOUT-central-headend
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from east-headend: preference #1 (nearest headend first)'
+          description: default route from central-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -807,11 +835,11 @@ iosxe:
         - seq: 20
           operation: permit
           description: everything else unchanged
-      - name: BREAKOUT-west-headend
+      - name: BREAKOUT-east-headend
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from west-headend: preference #2 (nearest headend first)'
+          description: default route from east-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -826,25 +854,25 @@ iosxe:
           router_id: 10.255.1.3
           log_neighbor_changes: true
           neighbors:
+          - ip: 172.17.5.1
+            remote_as: 65204
+            description: eBGP central-headend (Tunnel5)
           - ip: 172.17.8.1
             remote_as: 65200
             description: eBGP east-headend (Tunnel8)
-          - ip: 172.17.9.1
-            remote_as: 65206
-            description: eBGP west-headend (Tunnel9)
           address_family:
             ipv4_unicast:
               neighbors:
+              - ip: 172.17.5.1
+                activate: true
+                route_maps:
+                - direction: in
+                  name: BREAKOUT-central-headend
               - ip: 172.17.8.1
                 activate: true
                 route_maps:
                 - direction: in
                   name: BREAKOUT-east-headend
-              - ip: 172.17.9.1
-                activate: true
-                route_maps:
-                - direction: in
-                  name: BREAKOUT-west-headend
               networks:
               - network: 10.255.1.3
                 mask: 255.255.255.255
@@ -855,11 +883,11 @@ iosxe:
           next_hops:
           - ip: 100.65.8.1
             name: via-fw-east
-        - prefix: 100.64.3.2
+        - prefix: 100.64.2.2
           mask: 255.255.255.255
           next_hops:
-          - ip: 100.65.9.1
-            name: via-fw-west
+          - ip: 100.65.5.1
+            name: via-fw-central
   - name: spoke3
     host: 10.2.0.14
     protocol: restconf
@@ -1012,7 +1040,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from west-headend: preference #1 (nearest headend first)'
+          description: default route from west-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1025,7 +1053,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from east-headend: preference #3 (nearest headend first)'
+          description: default route from east-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1038,7 +1066,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from central-headend: preference #2 (nearest headend first)'
+          description: default route from central-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1228,7 +1256,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from west-headend: preference #3 (nearest headend first)'
+          description: default route from west-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1241,7 +1269,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from east-headend: preference #2 (nearest headend first)'
+          description: default route from east-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1254,7 +1282,7 @@ iosxe:
         entries:
         - seq: 10
           operation: permit
-          description: 'default route from central-headend: preference #1 (nearest headend first)'
+          description: default route from central-headend (internet breakout; the nearest headend wins on local-preference)
           match:
             ipv4_address_prefix_lists:
             - DEFAULT-ROUTE
@@ -1322,7 +1350,6 @@ iosxe:
     device_groups:
     - IPSEC_VPN
     templates:
-    - mss_west-headend_tunnel9
     - mss_west-headend_tunnel10
     - mss_west-headend_tunnel11
     - ikev2_cert_auth_west-headend
@@ -1354,10 +1381,6 @@ iosxe:
               ipv4_address: 100.65.10.2
               ipv4_mask: 255.255.255.255
               pre_shared_key: ${psk_spoke3}
-            - name: spoke2
-              ipv4_address: 100.65.9.2
-              ipv4_mask: 255.255.255.255
-              pre_shared_key: ${psk_spoke2}
           profiles:
           - name: VPN-IKEV2
             dpd_interval: 20
@@ -1366,8 +1389,6 @@ iosxe:
           - name: VPN-IKEV2-PSK
             match_identity_remote_ipv4_addresses:
             - address: 100.65.10.2
-              mask: 255.255.255.255
-            - address: 100.65.9.2
               mask: 255.255.255.255
             authentication_local_pre_share: true
             authentication_remote_pre_share: true
@@ -1431,16 +1452,6 @@ iosxe:
             address: 10.255.1.7
             address_mask: 255.255.255.255
         tunnels:
-        - name: '9'
-          description: IPsec VTI to spoke2
-          ipv4:
-            address: 172.17.9.1
-            address_mask: 255.255.255.252
-          ip_mtu: 1400
-          tunnel_source: GigabitEthernet2
-          tunnel_destination_ipv4: 100.65.9.2
-          tunnel_mode_ipsec_ipv4: true
-          tunnel_protection_ipsec_profile: VPN-IPSEC-PSK
         - name: '10'
           description: IPsec VTI to spoke3
           ipv4:
@@ -1473,9 +1484,6 @@ iosxe:
           - ip: 172.17.11.2
             remote_as: 65205
             description: eBGP spoke4 (Tunnel11)
-          - ip: 172.17.9.2
-            remote_as: 65202
-            description: eBGP spoke2 (Tunnel9)
           address_family:
             ipv4_unicast:
               neighbors:
@@ -1485,19 +1493,11 @@ iosxe:
               - ip: 172.17.11.2
                 activate: true
                 default_originate: true
-              - ip: 172.17.9.2
-                activate: true
-                default_originate: true
               networks:
               - network: 10.255.1.7
                 mask: 255.255.255.255
               - network: 192.168.16.0
         static_routes:
-        - prefix: 100.65.9.0
-          mask: 255.255.255.252
-          next_hops:
-          - ip: 100.64.3.1
-            name: via-fw-west
         - prefix: 100.65.10.0
           mask: 255.255.255.252
           next_hops:
