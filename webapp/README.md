@@ -278,6 +278,12 @@ deploy then pushes the NAT / breakout rules and return routes to the firewalls (
 static default, prefix-list and per-headend route-maps to the routers (NaC). The preferred headend per branch is computed from
 the regions (`intent.internet()`), shown on the card and on each branch's page (with a link to the live default route).
 
+### Dark mode
+
+The header's **☾ dark / ☀ light** link switches the whole portal (every colour is a CSS token; `html[data-theme=dark]` redefines
+them); the choice is remembered per browser (`localStorage portal-theme`), and until one is made the portal follows the OS
+setting (`prefers-color-scheme`). The router page's code panes keep their own toggle on top. The SRv6 portal has the same.
+
 ### Branches tab and per-branch page
 
 The **Branches** tab (`GET /api/branches`) lists every branch and headend with VM state, tunnels up, IKE method, certificate days

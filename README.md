@@ -170,7 +170,8 @@ last run — and each row opens the router's page: identity, authentication and 
 the day-2 actions, its tunnels with live IKE / VTI / eBGP / ESP state, the firewall rules and log lines touching it, its LAN
 host, the runs that involved it, **live show commands**, and its **configuration** — the running config read over SSH, the
 intended config and last backup from Nautobot's Golden Config with the compliance verdict per feature, a running-vs-intended
-diff, the backup history from Gitea with per-commit diffs, and a **dark / light toggle** for the code panes.
+diff, the backup history from Gitea with per-commit diffs. The whole portal has a **dark / light** toggle in the header (it
+follows the OS setting until chosen); the code panes have their own on top.
 
 ![Branches](docs/screenshots/portal-branches.png)
 ![Router page](docs/screenshots/portal-branch.png)
@@ -190,6 +191,10 @@ change request with the spec (secrets redacted) and the run it started.
 | Sign-in | Audit trail |
 |---|---|
 | ![](docs/screenshots/portal-login.png) | ![](docs/screenshots/portal-audit.png) |
+
+The portal has a **dark mode** (☾ / ☀ in the header; follows the OS setting until chosen):
+
+![Dark mode](docs/screenshots/portal-dark.png)
 
 ### REST API
 Everything the UI does is an API call — typed and documented with Swagger at **`/docs`** (ReDoc at

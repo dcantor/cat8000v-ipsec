@@ -1,20 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script>try { const t = localStorage.getItem('portal-theme'); document.documentElement.dataset.theme = t ? t : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (e) { }</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VPN Provisioning Portal</title>
 <style>
-  :root { --bg:#f4f6f9; --card:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe4ea; --accent:#0b62d6; --ok:#1a8f4a; --bad:#c62828; --warn:#b26a00; --run:#0b62d6; }
+  :root { --bg:#f4f6f9; --card:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe4ea; --accent:#0b62d6; --ok:#1a8f4a; --bad:#c62828; --warn:#b26a00; --run:#0b62d6;
+          --surface:#f8fafc; --surface2:#f1f5f9; --input:#fff; --input-ro:#f1f3f6; --input-ro-ink:#4b5563; --pill:#e9edf3; --pill-ink:#374151; --pill2:#e2e8f0; --chip:#cbd5e1; --bar:#e5e7eb;
+          --ok-bg:#dcfce7; --ok-ink:#166534; --bad-bg:#fee2e2; --bad-ink:#991b1b; --warn-bg:#fef3c7; --hub-bg:#fde2ec; --hub-ink:#9d174d; --spoke-bg:#e0ecff; --spoke-ink:#1e40af;
+          --header:#12203a; --header-ink:#fff; --header-muted:#9fb3d1; --nav:#c7d2e3; --nav-active:#243656; --map-land:#e8eef5; --map-edge:#fff; --node-fill:#fff; --node-stroke:#94a3b8; --label:#334155;
+          --code-bg:#0f172a; --code-ink:#d1e3ff; --shadow:rgba(0,0,0,.3); }
+  html[data-theme="dark"] { --bg:#0b1220; --card:#131c2e; --ink:#e6edf7; --muted:#8fa3bf; --line:#263449; --accent:#5aa2ff; --ok:#3ddc84; --bad:#ff6b6b; --warn:#ffb454; --run:#5aa2ff;
+          --surface:#182338; --surface2:#1c2941; --input:#0f172a; --input-ro:#182338; --input-ro-ink:#9fb3d1; --pill:#243656; --pill-ink:#d1dbe8; --pill2:#243656; --chip:#3b4c66; --bar:#263449;
+          --ok-bg:#12351f; --ok-ink:#7ee2a8; --bad-bg:#3d1a1a; --bad-ink:#ff9c9c; --warn-bg:#3d2c0f; --hub-bg:#3a1a2a; --hub-ink:#ff9ccf; --spoke-bg:#172a4d; --spoke-ink:#9fc4ff;
+          --header:#070d1a; --header-ink:#e6edf7; --header-muted:#8fa3bf; --nav:#aebbd0; --nav-active:#243656; --map-land:#1c2941; --map-edge:#0b1220; --node-fill:#131c2e; --node-stroke:#3b4c66; --label:#c7d2e3;
+          --code-bg:#070d1a; --code-ink:#d1e3ff; --shadow:rgba(0,0,0,.7); }
+  html[data-theme="dark"] { color-scheme:dark }
   * { box-sizing:border-box }
   body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg) }
-  header { background:#12203a; color:#fff; padding:14px 24px; display:flex; align-items:center; gap:16px }
-  header h1 { font-size:18px; margin:0; font-weight:600 } header .sub { color:#9fb3d1; font-size:13px }
+  header { background:var(--header); color:var(--header-ink); padding:14px 24px; display:flex; align-items:center; gap:16px }
+  header h1 { font-size:18px; margin:0; font-weight:600 } header .sub { color:var(--header-muted); font-size:13px }
   header a { color:#9fd0ff }
-  header nav { display:flex; gap:4px; margin-left:24px } header nav a { color:#c7d2e3; text-decoration:none; padding:6px 12px; border-radius:6px; font-weight:500 }
-  header nav a.active { background:#243656; color:#fff }
+  header nav { display:flex; gap:4px; margin-left:24px } header nav a { color:var(--nav); text-decoration:none; padding:6px 12px; border-radius:6px; font-weight:500 }
+  header nav a.active { background:var(--nav-active); color:var(--header-ink) }
   main[hidden], section[hidden], .modal-bg[hidden] { display:none }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px } .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:12px 14px }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px } .kpi { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 14px }
   .kpi .n { font-size:26px; font-weight:600; line-height:1.1 } .kpi .l { color:var(--muted); font-size:12px }
   .kpi.warn .n { color:var(--warn) } .kpi.bad .n { color:var(--bad) } .kpi.ok .n { color:var(--ok) }
   .cap { display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--line) } .cap .bar { flex:1; margin:0; height:14px } .cap .bar > div.warn { background:var(--warn) }
@@ -22,23 +33,23 @@
   .cap.sub { padding:4px 0; border:0 } .cap-l { width:230px; padding-left:14px; color:var(--muted); font-size:13px } .cap-r { width:360px; font-size:13px }
   .cap.agg .cap-l, .cap.agg .cap-r { color:var(--ink) } .cap.agg .bar { height:16px; outline:1px solid var(--ink); outline-offset:1px }
   .cap .bar { position:relative; overflow:visible } .cap .bar > div { border-radius:4px } .bar .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--bad); opacity:.7 }
-  .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:#e2e8f0; color:var(--ink) } .pill.warn { background:#fef3c7 } .pill.fail { background:#fee2e2; color:#991b1b } .pill.ok { background:#dcfce7; color:#166534 }
-  .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:#cbd5e1 } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
-  .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:#fff }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; background:var(--pill2); color:var(--ink) } .pill.warn { background:var(--warn-bg); color:var(--warn) } .pill.fail { background:var(--bad-bg); color:var(--bad-ink) } .pill.ok { background:var(--ok-bg); color:var(--ok-ink) }
+  .health { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:var(--chip) } .health.up { background:var(--ok) } .health.degraded { background:var(--warn) } .health.down { background:var(--bad) }
+  .wide { overflow-x:auto } #devices { min-width:980px } #devices input, #devices select { min-width:70px } .wide table { min-width:1400px; font-size:12px } .wide th { position:sticky; top:0; background:var(--card) }
   .num { text-align:right; font-variant-numeric:tabular-nums }
-  .disclaimer { background:#fff7ed; border:1px solid #f59e0b; color:#7c2d12; border-radius:8px; padding:12px 16px; margin-bottom:14px; font-weight:600 } .disclaimer small { display:block; font-weight:400; color:#9a3412; margin-top:4px }
-  #tools-table td, #tools-devices td { vertical-align:top } .cred { font-family:ui-monospace,Menlo,monospace; background:#f1f5f9; padding:1px 6px; border-radius:4px }
-  .topo { font:12px system-ui,sans-serif } .topo .node rect { fill:#fff; stroke:#94a3b8; stroke-width:1.2; rx:8 } .topo .node.hub rect { stroke:#9d174d; fill:#fff5f8 } .topo .node.spoke rect { stroke:#1e40af; fill:#f5f8ff }
+  .disclaimer { background:var(--warn-bg); border:1px solid #f59e0b; color:var(--warn); border-radius:8px; padding:12px 16px; margin-bottom:14px; font-weight:600 } .disclaimer small { display:block; font-weight:400; color:#9a3412; margin-top:4px }
+  #tools-table td, #tools-devices td { vertical-align:top } .cred { font-family:ui-monospace,Menlo,monospace; background:var(--surface2); padding:1px 6px; border-radius:4px }
+  .topo { font:12px system-ui,sans-serif } .topo .node rect { fill:var(--node-fill); stroke:var(--node-stroke); stroke-width:1.2; rx:8 } .topo .node.hub rect { stroke:var(--hub-ink); fill:var(--hub-bg) } .topo .node.spoke rect { stroke:var(--spoke-ink); fill:var(--spoke-bg) }
   .topo .node text { fill:var(--ink) } .topo .node .nm { font-weight:600; font-size:13px } .topo .node .sub { fill:var(--muted); font-size:11px }
-  .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:#cbd5e1; stroke-dasharray:6 4 }
-  .topo .edge:hover { stroke-width:4 } .topo .elabel { font-size:10px; fill:#334155 } .topo .elabel rect { fill:#fff; stroke:var(--line); rx:3 }
+  .topo .edge { stroke-width:2.5; fill:none; cursor:pointer } .topo .edge.up { stroke:var(--ok) } .topo .edge.degraded { stroke:var(--warn) } .topo .edge.down { stroke:var(--bad) } .topo .edge.none { stroke:var(--chip); stroke-dasharray:6 4 }
+  .topo .edge:hover { stroke-width:4 } .topo .elabel { font-size:10px; fill:var(--label) } .topo .elabel rect { fill:var(--card); stroke:var(--line); rx:3 }
   .topo a { cursor:pointer }
-  .map { position:relative } .map svg { width:100%; height:auto; display:block; font:12px system-ui,sans-serif } .map .state { fill:#e8eef5; stroke:#fff; stroke-width:1 }
-  .map .site circle { stroke:#fff; stroke-width:2 } .map .site.hub circle { fill:#9d174d } .map .site.spoke circle { fill:#1e40af } .map .site.firewall rect { fill:#475569; stroke:#fff; stroke-width:1.5 }
-  .map .site text { fill:var(--ink); font-weight:600; font-size:12px; paint-order:stroke; stroke:#fff; stroke-width:3px; stroke-linejoin:round } .map .site .city { font-weight:400; fill:var(--muted); font-size:10.5px }
+  .map { position:relative } .map svg { width:100%; height:auto; display:block; font:12px system-ui,sans-serif } .map .state { fill:var(--map-land); stroke:var(--map-edge); stroke-width:1 }
+  .map .site circle { stroke:var(--card); stroke-width:2 } .map .site.hub circle { fill:#9d174d } .map .site.spoke circle { fill:#1e40af } .map .site.firewall rect { fill:#475569; stroke:var(--card); stroke-width:1.5 }
+  .map .site text { fill:var(--ink); font-weight:600; font-size:12px; paint-order:stroke; stroke:var(--card); stroke-width:3px; stroke-linejoin:round } .map .site .city { font-weight:400; fill:var(--muted); font-size:10.5px }
   .map .site.dim { opacity:.18 } .map .edge.dim { opacity:.12 }
   .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0 10px } .chips label { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; font-size:12px; cursor:pointer; background:#fff }
-  .chips label.off { color:var(--muted); background:#f8fafc } .chips input { width:auto; margin:0 } .chips .sep { color:var(--muted); font-size:12px; margin:0 4px } .chips button.small { padding:2px 8px; font-size:12px }
+  .chips label.off { color:var(--muted); background:var(--surface) } .chips input { width:auto; margin:0 } .chips .sep { color:var(--muted); font-size:12px; margin:0 4px } .chips button.small { padding:2px 8px; font-size:12px }
   main { display:grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap:20px; padding:20px 24px; max-width:1700px }
   main > section { min-width:0 }
   @media (max-width:1100px){ main { grid-template-columns:1fr } }
@@ -49,38 +60,38 @@
   .card h2 { font-size:15px; margin:0 0 10px; display:flex; align-items:center; justify-content:space-between }
   .card h2 small { font-weight:normal; color:var(--muted) }
   label { display:block; font-size:12px; color:var(--muted); margin-bottom:2px }
-  input, select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px; font:inherit; background:#fff }
-  input[readonly] { background:#f1f3f6; color:#4b5563 }
+  input, select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px; font:inherit; background:var(--input); color:var(--ink) }
+  input[readonly] { background:var(--input-ro); color:var(--input-ro-ink) }
   .grid { display:grid; gap:10px } .g2 { grid-template-columns:1fr 1fr } .g3 { grid-template-columns:1fr 1fr 1fr } .g4 { grid-template-columns:repeat(4,1fr) }
   table { width:100%; border-collapse:collapse; font-size:13px } th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top }
   th { color:var(--muted); font-weight:500; font-size:12px } td input, td select { padding:4px 6px }
-  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; background:#e9edf3; color:#374151 }
-  .pill.hub { background:#fde2ec; color:#9d174d } .pill.spoke { background:#e0ecff; color:#1e40af }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; background:var(--pill); color:var(--pill-ink) }
+  .pill.hub { background:var(--hub-bg); color:var(--hub-ink) } .pill.spoke { background:var(--spoke-bg); color:var(--spoke-ink) }
   .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap }
-  button { padding:8px 14px; border-radius:6px; border:1px solid var(--line); background:#fff; font:inherit; cursor:pointer }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--line); background:var(--input); color:var(--ink); font:inherit; cursor:pointer }
   button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600 }
   button:disabled { opacity:.5; cursor:not-allowed }
   .problems { color:var(--bad); white-space:pre-line; font-size:13px }
   .steps { list-style:none; padding:0; margin:0 } .steps li { display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); align-items:flex-start }
-  .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:#cbd5e1 }
-  .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:#e5e7eb }
+  .dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex:none; background:var(--chip) }
+  .dot.running { background:var(--run); animation:pulse 1s infinite } .dot.success { background:var(--ok) } .dot.failed { background:var(--bad) } .dot.skipped { background:var(--bar) }
   @keyframes pulse { 50% { opacity:.3 } }
   .steps .t { flex:1; min-width:0 } .steps .s { color:var(--muted); font-size:12px; overflow-wrap:anywhere } .steps .d { color:var(--muted); font-size:12px; white-space:nowrap; flex:none }
   .wide table.mesh, table.mesh { min-width:0; font-size:11.5px; width:100%; table-layout:fixed } table.mesh th, table.mesh td { padding:4px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } table.mesh .pill { padding:1px 6px }
   pre.code { background:var(--bg); color:var(--ink); padding:10px; border-radius:6px; overflow:auto; font-size:12px; line-height:1.35; white-space:pre; margin:0 }
   pre.code .add { color:var(--ok) } pre.code .del { color:var(--bad) } pre.code .hunk { color:var(--muted) }
-  #view-branch.dark pre.code { background:#0f172a; color:#d1e3ff } #view-branch.dark pre.code .add { color:#6ee7a0 } #view-branch.dark pre.code .del { color:#ff8a80 } #view-branch.dark pre.code .hunk { color:#8fa3bf }
-  pre.log { background:#0f172a; color:#d1e3ff; padding:10px; border-radius:6px; max-height:360px; overflow:auto; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
+  #view-branch.dark pre.code { background:var(--code-bg); color:var(--code-ink) } #view-branch.dark pre.code .add { color:#6ee7a0 } #view-branch.dark pre.code .del { color:#ff8a80 } #view-branch.dark pre.code .hunk { color:#8fa3bf }
+  pre.log { background:var(--code-bg); color:var(--code-ink); padding:10px; border-radius:6px; max-height:360px; overflow:auto; font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
   .status { font-weight:600 } .status.success { color:var(--ok) } .status.failed, .status.interrupted { color:var(--bad) } .status.running, .status.queued { color:var(--run) } .status.cancelled { color:var(--muted) }
   .test-pass { color:var(--ok); font-weight:600 } .test-fail { color:var(--bad); font-weight:600 }
   .msg { color:var(--bad); font-size:12px; white-space:pre-wrap }
-  .bar { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin:6px 0 } .bar > div { height:100%; background:var(--ok) }
+  .bar { height:8px; background:var(--bar); border-radius:4px; overflow:hidden; margin:6px 0 } .bar > div { height:100%; background:var(--ok) }
   .bar > div.fail { background:var(--bad) }
   .runs a { cursor:pointer; color:var(--accent) }
   .hint { color:var(--muted); font-size:12px }
   details summary { cursor:pointer; color:var(--muted) }
   .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.55); display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; z-index:10 }
-  .modal { background:#fff; border-radius:10px; width:min(900px, 100%); padding:20px 24px; box-shadow:0 20px 60px rgba(0,0,0,.3) }
+  .modal { background:var(--card); border-radius:10px; width:min(900px, 100%); padding:20px 24px; box-shadow:0 20px 60px var(--shadow) }
   .wiz-steps { display:flex; gap:8px; margin:0 0 16px; padding:0; list-style:none } .wiz-steps li { flex:1; padding:8px 10px; border-radius:6px; background:#f1f5f9; color:var(--muted); font-size:13px }
   .wiz-steps li.active { background:var(--accent); color:#fff } .wiz-steps li.done { background:#dcfce7; color:#166534 }
   .review { display:grid; grid-template-columns:1fr 1fr; gap:14px } .review .box { border:1px solid var(--line); border-radius:8px; padding:12px } .review h4 { margin:0 0 6px; font-size:13px }
@@ -92,7 +103,7 @@
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
   <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
-  <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span></div>
+  <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span> · <a href="#" id="theme-toggle" title="dark / light (follows the OS setting until chosen)">☾ dark</a></div>
 </header>
 <main>
 <section>
@@ -109,7 +120,7 @@
 
     <div class="card">
       <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
-      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, Lo10)</th><th id="th-auth">IKE auth</th><th id="th-psk">PSK</th><th id="th-cert">Certificate</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
+      <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, LAN port)</th><th id="th-auth">IKE auth</th><th id="th-psk">PSK</th><th id="th-cert">Certificate</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
       <div class="hint">Each spoke has its own pre-shared key (used on all of its tunnels); headends hold one keyring entry per spoke. Keys live in the intent and the NAC device group, never in Nautobot.</div>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
     </div>
@@ -406,6 +417,15 @@
 
 <script>
 const $ = id => document.getElementById(id);
+// portal theme: the chosen one (localStorage portal-theme), else the OS preference; the header link toggles it
+function applyTheme() {
+  let t = null; try { t = localStorage.getItem('portal-theme'); } catch (e) { }
+  const dark = t ? t === 'dark' : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light'; const a = $('theme-toggle'); if (a) a.textContent = dark ? '☀ light' : '☾ dark';
+}
+applyTheme();
+$('theme-toggle').onclick = e => { e.preventDefault(); try { localStorage.setItem('portal-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); } catch (x) { } applyTheme(); };
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { try { if (!localStorage.getItem('portal-theme')) applyTheme(); } catch (e) { } });
 let base = null, wiring = [], nodes = {}, current = null, pollTimer = null, logCount = 0;
 
 const get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
@@ -1134,10 +1154,10 @@ async function renderMap(d, hidden) {
     const dy = n.role === 'hub' ? 24 : -22, anchor = p.x > W * 0.8 ? 'end' : (p.x < W * 0.12 ? 'start' : 'middle');
     return `<a href="${n.url}" target="_blank"><g class="site ${n.role}" transform="translate(${p.x},${p.y})"><title>${esc(tip)}</title><circle r="${r}"></circle>
       <text text-anchor="${anchor}" y="${dy}">${esc(n.name)}</text><text class="city" text-anchor="${anchor}" y="${dy + 12}">${esc(city)}</text></g></a>`; };
-  const hiddenNote = hidden.size ? `<text x="${W - 12}" y="${H - 10}" text-anchor="end" fill="#64748b" font-size="11">${hidden.size} spoke${hidden.size > 1 ? 's' : ''} hidden by the filter</text>` : '';
+  const hiddenNote = hidden.size ? `<text x="${W - 12}" y="${H - 10}" text-anchor="end" fill="var(--muted)" font-size="11">${hidden.size} spoke${hidden.size > 1 ? 's' : ''} hidden by the filter</text>` : '';
   $('inv-topo').innerHTML = `<div class="map"><svg class="topo" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f8fafc"></rect>
     ${USA.states.map(st => `<path class="state" d="${st.d}"><title>${esc(st.name)}</title></path>`).join('')}
-    <text x="12" y="${H - 10}" fill="#64748b" font-size="11">hubs at their headend cities · spokes at their branches (Nautobot Location coordinates) · firewall = square beside its hub</text>${hiddenNote}
+    <text x="12" y="${H - 10}" fill="var(--muted)" font-size="11">hubs at their headend cities · spokes at their branches (Nautobot Location coordinates) · firewall = square beside its hub</text>${hiddenNote}
     ${edges}${hubs.map(site).join('')}${fws.map(site).join('')}${spokes.map(site).join('')}</svg></div>`;
 }
 
@@ -1150,7 +1170,7 @@ function renderTopology(d) {
   const lines = n => n.role === 'firewall' ? [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · VyOS${n.bandwidth_mbps ? ' · ' + n.bandwidth_mbps + ' Mbps' : ''}`, `in front of ${n.hub || '?'}`] : [`${n.region || '?'} / ${n.site || '-'}`, `${n.mgmt_ip || ''} · AS ${n.asn ?? '?'}`, `LAN ${n.lan || '-'}`];
   const need = n => Math.max((n.name.length * 7.8) + (n.role.length * 6.4) + 30, ...lines(n).map(l => l.length * 6.4 + 20));
   const NW = Math.ceil(Math.max(150, ...d.devices.map(need))), NH = 74, TOP = 56, MID = fws.length ? 230 : null, BOT = fws.length ? 430 : 386, H = BOT + NH + 30;
-  const REGION_COLORS = ['#fff7ed', '#eff6ff', '#f0fdf4', '#fdf4ff', '#f8fafc'];
+  const REGION_COLORS = ['rgba(245,158,11,.10)', 'rgba(59,130,246,.10)', 'rgba(34,197,94,.10)', 'rgba(168,85,247,.10)', 'rgba(148,163,184,.10)'];   // translucent: readable on both themes
   const W = Math.max(760, (NW + 36) * Math.max(hubs.length, spokes.length) + 60);
   const pos = {}; const place = (list, y) => { const gap = W / (list.length + 1); list.forEach((n, i) => { pos[n.name] = { x: gap * (i + 1) - NW / 2, y }; }); };
   place(hubs, TOP); place(spokes, BOT);
@@ -1185,12 +1205,12 @@ function renderTopology(d) {
     regions.forEach((r, ri) => {
       const members = list.filter(n => (n.region || 'unassigned') === r); if (!members.length) return;
       const xs = members.map(n => pos[n.name].x); const x0 = Math.min(...xs) - 12, x1 = Math.max(...xs) + NW + 12;
-      bands.push(`<rect x="${x0}" y="${y - 24}" width="${x1 - x0}" height="${NH + 34}" rx="10" fill="${REGION_COLORS[ri % REGION_COLORS.length]}" stroke="#e2e8f0"></rect><text x="${x0 + 8}" y="${y - 9}" fill="#64748b" font-size="11" font-weight="600">${esc(r)}</text>`);
+      bands.push(`<rect x="${x0}" y="${y - 24}" width="${x1 - x0}" height="${NH + 34}" rx="10" fill="${REGION_COLORS[ri % REGION_COLORS.length]}" stroke="var(--line)"></rect><text x="${x0 + 8}" y="${y - 9}" fill="#64748b" font-size="11" font-weight="600">${esc(r)}</text>`);
     });
   }
   $('inv-topo').innerHTML = `<svg class="topo" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <text x="12" y="${TOP - 30}" fill="#6b7684" font-size="11">headends</text><text x="12" y="${BOT - 30}" fill="#6b7684" font-size="11">spokes · grouped by region</text>
-    ${fws.length ? `<text x="12" y="${MID - 12}" fill="#6b7684" font-size="11">firewalls (VyOS) · underlay links in grey</text>` : ''}
+    <text x="12" y="${TOP - 30}" fill="var(--muted)" font-size="11">headends</text><text x="12" y="${BOT - 30}" fill="var(--muted)" font-size="11">spokes · grouped by region</text>
+    ${fws.length ? `<text x="12" y="${MID - 12}" fill="var(--muted)" font-size="11">firewalls (VyOS) · underlay links in grey</text>` : ''}
     ${bands.join('')}${wires}${edges}${hubs.map(node).join('')}${fws.map(node).join('')}${spokes.map(node).join('')}</svg>`;
 }
 
