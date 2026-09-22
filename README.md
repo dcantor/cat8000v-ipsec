@@ -184,6 +184,14 @@ for up to 30 days, from VictoriaLogs.
 
 ![Firewalls](docs/screenshots/portal-firewalls.png)
 
+### Compliance tab
+Nautobot Golden Config's verdict for every router: one row per router, one column per compliance feature (BGP, BGP policy,
+banner, tunnels, IKEv2/IPsec incl. the trustpoint, loopbacks, management ACL / interface, NTP, SNMP, static routes, syslog, VRFs,
+WAN interfaces…), green ✓ / red ✕ per cell; a cell shows the missing and extra lines and a running-vs-intended diff of that
+feature. **Run Golden Config now** starts a `golden` run (backup → intended → compliance, nothing pushed) and refreshes the report.
+
+![Compliance](docs/screenshots/portal-compliance.png)
+
 ### Sign-in and audit
 Local users or single sign-on (OpenID Connect; the lab's Gitea is the provider), three roles, and an audit trail of every login and
 change request with the spec (secrets redacted) and the run it started.
@@ -336,7 +344,7 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 56 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 57 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke

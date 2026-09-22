@@ -154,9 +154,9 @@ class RemoveSpec(BaseModel):
 
 class RunRequest(BaseModel):
     """Start a pipeline run. Which body fields matter depends on `mode`."""
-    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth"] = Field(..., description=(
+    mode: Literal["deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden"] = Field(..., description=(
         "deploy: intent → Nautobot → NAC → terraform plan+apply → Golden Config → tests · plan: dry run through terraform plan · "
-        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`) · auth: switch a deployed spoke between pre-shared key and certificate (needs `spoke.name` and `spoke.ike_authentication`)"))
+        "test: Robot suite only · spoke: provision a new spoke VM (needs `spoke`) · hub: provision a new headend (needs `hub`) · remove: decommission a spoke (needs `spoke.name`) · rotate: new pre-shared key for a spoke · rehome: a spoke onto other headends · renew: a new certificate for a router (needs `spoke.name`) · auth: switch a deployed spoke between pre-shared key and certificate (needs `spoke.name` and `spoke.ike_authentication`) · golden: Nautobot Golden Config backup / intended / compliance only"))
     intent: Optional[Intent] = Field(None, description="deploy/plan: the intent to save and deploy")
     spoke: Optional[dict[str, Any]] = Field(None, description="spoke: a SpokeSpec · remove: {\"name\": ...} · rotate: {\"name\": ..., \"psk\": optional chosen key} · rehome: {\"name\": ..., \"hubs\": [wanted headends]} · renew: {\"name\": router} · auth: {\"name\": spoke, \"ike_authentication\": psk | certificate}")
     hub: Optional[HubSpec] = None

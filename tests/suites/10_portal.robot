@@ -111,6 +111,25 @@ A router's page shows its configuration history from Gitea, the diff of a backup
     ${bad}=    Portal Request    GET    /api/branch/${r}/show/reload    user=viewer    password=viewer
     Should Be Equal As Integers    ${bad}[status]    404    msg=only allow-listed show commands may run
 
+The Compliance page reports Nautobot's Golden Config verdict for every router and feature, and a golden run refreshes it
+    ${c}=    Portal Get    /api/compliance
+    Length Should Be    ${c}[devices]    ${{ len($ROUTER_NAMES) }}
+    Should Be True    len($c['features']) >= 10
+    Should Be Equal As Integers    ${c}[summary][devices_ok]    ${c}[summary][devices]    msg=non-compliant routers: ${{ [d['name'] for d in $c['devices'] if not d['ok']] }}
+    Should Be Equal As Integers    ${c}[summary][rows_ok]    ${c}[summary][rows]
+    FOR    ${d}    IN    @{c}[devices]
+        Should Contain    ${ROUTER_NAMES}    ${d}[name]
+        Should Be Equal As Integers    ${d}[total]    ${{ len($c['features']) }}    msg=${d}[name]: a feature has no compliance row
+        Should Not Be Empty    ${d}[compliance_at]
+        Dictionary Should Contain Key    ${d}[features]    IKEv2/IPsec
+        Should Be True    ${d}[features][IKEv2/IPsec][compliant]
+    END
+    ${run}=    Portal Post    /api/runs    {"mode": "golden", "options": {}}
+    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    Should Be Equal    ${res}[status]    success    msg=golden run ${run}[id] ended ${res}[status]: ${res}[error]
+    ${after}=    Portal Get    /api/compliance    refresh=true
+    Should Be True    $after['summary']['last_compliance'] > $c['summary']['last_compliance']    msg=the compliance run did not refresh the report
+
 Single sign-on is offered and starts an authorization-code flow with PKCE at the provider
     ${o}=    Portal Get    /api/oidc
     Skip If    not $o['enabled']    OIDC is not configured on this portal (webapp/oidc.json)

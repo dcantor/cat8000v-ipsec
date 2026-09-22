@@ -214,6 +214,7 @@ class Run(RunBase):
 
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
+        if self.mode == "golden": return ["golden"]   # backup -> intended -> compliance in Nautobot, nothing pushed
         if self.mode == "spoke":
             steps = ["spoke_validate", "spoke_labconf", "spoke_vm", "spoke_bootstrap", "spoke_onboard", "spoke_intent", "nautobot", "render", "pki", "firewalls", "plan", "apply", "pki_verify"]
             if self.options.get("golden", True): steps.append("golden")
@@ -906,6 +907,43 @@ def branch_config(name: str, request: Request, refresh: bool = Query(False, desc
     return {"name": name, "generated": c["generated"], "running": redact(c["running"]), "error": c["error"], "lines": len(c["running"].splitlines()), "golden": g, "keys_shown": show}
 
 
+_compliance_cache = {}
+@app.get("/api/compliance", tags=["inventory"], summary="Nautobot Golden Config compliance for every router: one row per device, one column per feature, with the missing / extra lines and a diff")
+def compliance_report(refresh: bool = Query(False, description="read Nautobot again now (otherwise cached for 30 s)")):
+    """The compliance rows Nautobot's Golden Config app computed on its last run (the portal's golden step, a `golden` run, or
+    `./lab.sh nautobot golden`), grouped per device, plus when each device was last backed up / rendered / checked. Nothing is
+    collected from the routers here — this is the source of truth's verdict."""
+    c = _compliance_cache.get("r")
+    if refresh or not c or time.time() - c["generated"] > 30:
+        import difflib
+        I = intent_mod.load(); routers = {d["name"]: d for d in I["devices"] if d["role"] in ("hub", "spoke")}
+        tok = nautobot_token(); H = {"Authorization": f"Token {tok}"}
+        devs = requests.get(f"{NAUTOBOT_URL}/api/dcim/devices/", params={"location": I["site"]["name"], "platform": "cisco_xe", "limit": 200}, headers=H, timeout=30).json()["results"]
+        ids = {d["id"]: d["name"] for d in devs}
+        rows = []; nxt = f"{NAUTOBOT_URL}/api/plugins/golden-config/config-compliance/?depth=2&limit=500&device=" + "&device=".join(ids)
+        while nxt:
+            r = requests.get(nxt, headers=H, timeout=60).json(); rows += r["results"]; nxt = r.get("next")
+        gcs = {g["device"]["id"] if isinstance(g["device"], dict) else g["device"]: g for g in requests.get(f"{NAUTOBOT_URL}/api/plugins/golden-config/golden-config/", params={"limit": 200}, headers=H, timeout=60).json()["results"]}
+        features = sorted({r["rule"]["feature"]["name"] for r in rows})
+        per = {}
+        for r in rows:
+            dev = r["device"]["name"] if isinstance(r["device"], dict) else ids.get(r["device"], "?")
+            a, b = (r.get("actual") or "").splitlines(), (r.get("intended") or "").splitlines()
+            diff = "\n".join(difflib.unified_diff(a, b, fromfile="running", tofile="intended", lineterm="", n=2)) if a != b else ""
+            per.setdefault(dev, {})[r["rule"]["feature"]["name"]] = {"compliant": bool(r["compliance"]), "missing": r.get("missing") or "", "extra": r.get("extra") or "", "diff": diff, "ordered": bool(r.get("ordered")), "updated": (r.get("last_updated") or "")[:19].replace("T", " ")}
+        devices = []
+        for did, name in sorted(ids.items(), key=lambda x: (routers.get(x[1], {}).get("role") != "hub", x[1])):
+            g = gcs.get(did, {}); feats = per.get(name, {})
+            devices.append({"name": name, "role": routers.get(name, {}).get("role", "?"), "site": routers.get(name, {}).get("site"), "features": feats,
+                            "compliant": sum(1 for x in feats.values() if x["compliant"]), "total": len(feats), "ok": bool(feats) and all(x["compliant"] for x in feats.values()),
+                            "backup_at": (g.get("backup_last_success_date") or "")[:19].replace("T", " "), "intended_at": (g.get("intended_last_success_date") or "")[:19].replace("T", " "), "compliance_at": (g.get("compliance_last_success_date") or "")[:19].replace("T", " "),
+                            "url": f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/?device={did}"})
+        c = _compliance_cache["r"] = {"generated": time.time(), "features": features, "devices": devices, "nautobot": f"{NAUTOBOT_PUBLIC_URL}/plugins/golden-config/config-compliance/",
+                                      "summary": {"devices": len(devices), "devices_ok": sum(1 for d in devices if d["ok"]), "rows": sum(d["total"] for d in devices), "rows_ok": sum(d["compliant"] for d in devices),
+                                                  "last_compliance": max((d["compliance_at"] for d in devices), default="")}}
+    return c
+
+
 GITEA_URL = os.environ.get("GITEA_URL", "http://10.0.0.10:3000"); GITEA_PUBLIC_URL = os.environ.get("GITEA_PUBLIC_URL", "http://192.168.50.231:3000"); BACKUPS_REPO = os.environ.get("CONFIG_BACKUPS_REPO", "lab/config-backups")
 @app.get("/api/branch/{name}/history", tags=["inventory"], summary="A router's configuration history: the Golden Config backups committed to Gitea (who / when / what changed), with the diff of one commit")
 def branch_history(name: str, sha: str = Query(None, description="return this commit's diff for the router's file"), limit: int = Query(20, le=100)):
@@ -1074,7 +1112,7 @@ def start_run(body: S.RunRequest, request: Request):
     """
     body = body.model_dump(exclude_none=True)
     mode = body.get("mode", "deploy")
-    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome, renew or auth")
+    if mode not in ("deploy", "plan", "test", "spoke", "hub", "remove", "rotate", "rehome", "renew", "auth", "golden"): raise HTTPException(400, "mode must be deploy, plan, test, spoke, hub, remove, rotate, rehome, renew, auth or golden")
     spoke = None
     if mode == "auth":
         spoke = body.get("spoke") or {}; problems, _ = spokes.auth_plan(spoke.get("name", ""), spoke.get("ike_authentication"))
@@ -1106,7 +1144,7 @@ def start_run(body: S.RunRequest, request: Request):
         if problems: raise HTTPException(422, {"problems": problems})
         intent = intent_mod.load()
     else:
-        intent = body.get("intent") if mode != "test" else intent_mod.load()
+        intent = body.get("intent") if mode not in ("test", "golden") else intent_mod.load()
         problems = intent_mod.validate(intent or {})
         if problems: raise HTTPException(422, {"problems": problems})
     try: run = registry.start(Run(mode, intent, body.get("options") or {}, spoke))

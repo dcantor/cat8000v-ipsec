@@ -278,6 +278,15 @@ deploy then pushes the NAT / breakout rules and return routes to the firewalls (
 static default, prefix-list and per-headend route-maps to the routers (NaC). The preferred headend per branch is computed from
 the regions (`intent.internet()`), shown on the card and on each branch's page (with a link to the live default route).
 
+### Compliance tab
+
+`GET /api/compliance` (cached 30 s, `?refresh=true`) gathers Nautobot Golden Config's compliance rows for every IOS-XE router at
+the site — per device and feature: compliant, the missing / extra lines, a unified diff of the feature's actual vs intended
+text, when it was checked — plus each device's last backup / intended / compliance dates and a summary. The tab shows the
+device × feature grid (✓ / ✕), a KPI strip, and a detail panel for the clicked cell (non-compliant rows are listed and the
+first one opened). **Run Golden Config now** posts a `golden` run (the one `golden` step; operator) and refreshes the report when
+it finishes.
+
 ### Dark mode
 
 The header's **☾ dark / ☀ light** link switches the whole portal (every colour is a CSS token; `html[data-theme=dark]` redefines

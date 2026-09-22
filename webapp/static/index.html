@@ -102,7 +102,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#compliance" data-view="compliance">Compliance</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span> · <a href="#" id="theme-toggle" title="dark / light (follows the OS setting until chosen)">☾ dark</a></div>
 </header>
 <main>
@@ -259,6 +259,18 @@
     <pre id="br-config" class="code" style="max-height:520px">loading…</pre>
     <h3 style="font-size:13px;margin:14px 0 6px">History <span class="hint">Golden Config backups committed to Gitea (<a id="br-hist-repo" href="#" target="_blank">config-backups</a>) — click a commit for its diff</span></h3>
     <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;align-items:start"><table id="br-history"><thead><tr><th>When</th><th>By</th><th>Commit</th></tr></thead><tbody></tbody></table><pre id="br-hist-diff" class="code hint" style="max-height:360px">select a commit</pre></div>
+  </div>
+</main>
+<main id="view-compliance" hidden style="grid-template-columns:1fr">
+  <div class="card">
+    <h2>Configuration compliance <small id="cmp-note">Nautobot Golden Config: every router's running configuration (last backup) against the configuration rendered from the model, per feature</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" class="small" onclick="loadCompliance(true)">Refresh</button><button type="button" class="small" id="cmp-run" title="run the Golden Config jobs now: backup every router, render the intended configuration, compare (nothing is pushed)">Run Golden Config now</button><a id="cmp-nb" href="#" target="_blank" class="hint">open in Nautobot</a></span></h2>
+    <div class="kpis" id="cmp-kpis"></div>
+  </div>
+  <div class="card">
+    <h2>Report <small>one row per router, one column per compliance feature — click a cell for the missing / extra lines and the diff</small></h2>
+    <div class="wide"><table id="cmp-table"><thead></thead><tbody></tbody></table></div>
+    <div id="cmp-detail" style="margin-top:12px"></div>
   </div>
 </main>
 <main id="view-audit" hidden style="grid-template-columns:1fr">
@@ -825,12 +837,44 @@ $('rm-go').onclick = async () => {
 function showView() {
   const h = (location.hash || '#provision').slice(1); const v = h.startsWith('branch/') ? 'branch' : h;
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches';
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches'; $('view-compliance').hidden = v !== 'compliance';
   document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches')));
   if (v !== 'inventory' && typeof stopLive === 'function') stopLive();
-  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false);
+  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false); if (v === 'compliance') loadCompliance(false);
 }
 const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open ${esc(n)}'s page">${esc(n)}</a>`;
+
+// ---- compliance report ----------------------------------------------------------------------------------------------
+let CMP = null;
+async function loadCompliance(refresh) {
+  $('cmp-note').textContent = 'loading…';
+  const r = await fetch('/api/compliance' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('cmp-note').textContent = `HTTP ${r.status}`; return; }
+  CMP = await r.json(); const s = CMP.summary; $('cmp-nb').href = CMP.nautobot;
+  $('cmp-note').textContent = `Nautobot Golden Config · last compliance run ${s.last_compliance || 'never'} · every router's last backup against the configuration rendered from the model, per feature`;
+  $('cmp-kpis').innerHTML = [[`${s.devices_ok} / ${s.devices}`, 'routers fully compliant', s.devices_ok === s.devices ? 'ok' : 'bad'], [`${s.rows_ok} / ${s.rows}`, 'compliance rows compliant', s.rows_ok === s.rows ? 'ok' : 'bad'], [CMP.features.length, 'features under compliance', ''], [s.last_compliance ? s.last_compliance.slice(0, 16) : '-', 'last compliance run', '']]
+    .map(([v, l, c]) => `<div class="kpi"><div class="v ${c === 'ok' ? 'test-pass' : c === 'bad' ? 'test-fail' : ''}" style="font-size:22px;font-weight:600">${esc(v)}</div><div class="hint">${esc(l)}</div></div>`).join('');
+  $('cmp-table').querySelector('thead').innerHTML = `<tr><th>Router</th><th>Result</th>${CMP.features.map(f => `<th style="text-align:center;font-size:11px">${esc(f)}</th>`).join('')}<th>Backup</th><th>Compliance run</th></tr>`;
+  $('cmp-table').querySelector('tbody').innerHTML = CMP.devices.map(d => `<tr><td style="white-space:nowrap">${branchLink(d.name)} <span class="pill ${d.role}">${d.role === 'hub' ? 'headend' : 'branch'}</span></td><td style="white-space:nowrap"><span class="pill ${d.ok ? 'ok' : 'fail'}">${d.compliant} / ${d.total}</span></td>
+    ${CMP.features.map(f => { const x = d.features[f]; return `<td style="text-align:center">${x ? `<a onclick="showCompliance('${esc(d.name)}','${esc(f)}')" title="${esc(f)} on ${esc(d.name)}: ${x.compliant ? 'compliant' : 'non-compliant'}"><span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? '✓' : '✕'}</span></a>` : '<span class="hint">–</span>'}</td>`; }).join('')}
+    <td class="hint" style="white-space:nowrap">${esc(d.backup_at || '-')}</td><td class="hint" style="white-space:nowrap">${esc(d.compliance_at || '-')}</td></tr>`).join('') || '<tr><td colspan="4" class="hint">no compliance data yet — run the Golden Config jobs</td></tr>';
+  const bad = CMP.devices.flatMap(d => Object.entries(d.features).filter(([, x]) => !x.compliant).map(([f]) => [d.name, f]));
+  $('cmp-detail').innerHTML = bad.length ? `<div class="msg">${bad.length} non-compliant row${bad.length === 1 ? '' : 's'}: ${bad.map(([d, f]) => `<a onclick="showCompliance('${esc(d)}','${esc(f)}')">${esc(d)} · ${esc(f)}</a>`).join(', ')}</div>` : '<div class="hint">every feature on every router matches the model — click a cell to see what Nautobot compared</div>';
+  if (bad.length) showCompliance(bad[0][0], bad[0][1]);
+}
+function showCompliance(dev, feature) {
+  const d = CMP.devices.find(x => x.name === dev); const x = d && d.features[feature]; if (!x) return;
+  const cls = l => l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : '';
+  $('cmp-detail').innerHTML = `<h3 style="font-size:13px;margin:0 0 6px">${branchLink(dev)} · ${esc(feature)} <span class="pill ${x.compliant ? 'ok' : 'fail'}">${x.compliant ? 'compliant' : 'non-compliant'}</span> <span class="hint">checked ${esc(x.updated)}${x.ordered ? ' · order-sensitive' : ' · order ignored'} · <a href="${esc(d.url)}" target="_blank">in Nautobot</a></span></h3>
+    <div class="grid g2"><div><b style="font-size:12px">Missing on the router</b><pre class="code" style="max-height:220px;margin-top:4px">${esc(x.missing || '(nothing)')}</pre></div><div><b style="font-size:12px">Extra on the router</b><pre class="code" style="max-height:220px;margin-top:4px">${esc(x.extra || '(nothing)')}</pre></div></div>
+    ${x.diff ? `<details style="margin-top:8px" ${x.compliant ? '' : 'open'}><summary style="cursor:pointer;font-size:13px">Running vs intended (this feature's lines)</summary><pre class="code" style="max-height:360px;margin-top:4px">${x.diff.split('\n').map(l => `<span class="${cls(l)}">${esc(l)}</span>`).join('\n')}</pre></details>` : '<div class="hint" style="margin-top:6px">running and intended are identical for this feature</div>'}`;
+  $('cmp-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+$('cmp-run').onclick = async () => {
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'golden', options: {} }) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); alert(typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail)); return; }
+  const run = await r.json(); $('cmp-note').textContent = `Golden Config run ${run.id} started (${run.status}) — the report refreshes when it finishes`;
+  const wait = setInterval(async () => { const d = await (await fetch(`/api/runs/${run.id}`)).json(); if (['success', 'failed', 'cancelled', 'interrupted'].includes(d.status)) { clearInterval(wait); loadCompliance(true); } }, 5000);
+};
 
 // ---- branches list --------------------------------------------------------------------------------------------------
 async function loadBranches(refresh) {
@@ -937,7 +981,7 @@ window.fetch = async (url, opts) => {   // a 401 from the API means "not signed 
 };
 function applyRoles() {
   const op = can('operator'), ap = can('approver');
-  ['deploy', 'plan', 'testonly', 'add-spoke'].forEach(id => { const b = $(id); if (b) { b.disabled = !op; b.title = op ? '' : 'operator role required'; } });
+  ['deploy', 'plan', 'testonly', 'add-spoke', 'cmp-run'].forEach(id => { const b = $(id); if (b) { b.disabled = !op; b.title = op ? '' : 'operator role required'; } });
   const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
   document.querySelectorAll('button.rot, button.rh, button.renew, button.auth').forEach(b => { b.disabled = !op; if (!op) b.title = 'operator role required'; });
   document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
