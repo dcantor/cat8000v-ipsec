@@ -1,6 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"><title>The DCI: an acquired company inside the VPN — topology, routing, NAT, DNS and how it is tested</title>
 <style>
-  @page { size: A4; margin: 16mm 14mm }
+  @page { size: A4; margin: 16mm 14mm } @page land { size: A4 landscape; margin: 12mm 14mm }
+  .landscape { page: land; page-break-before: always } .landscape .mermaid svg { max-height: 146mm }
   body { font: 10.5pt/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c2430; margin: 0 }
   h1 { font-size: 24pt; margin: 0 0 4pt } h2 { font-size: 15.5pt; margin: 20pt 0 8pt; padding-bottom: 3pt; border-bottom: 2px solid #0b62d6; page-break-after: avoid }
   h3 { font-size: 12pt; margin: 13pt 0 5pt; page-break-after: avoid } h4 { font-size: 10.6pt; margin: 9pt 0 3pt }
@@ -36,7 +37,7 @@ document was taken from the running lab; the test results are from run <code>res
 <li>How DNS is fixed up</li>
 <li>How the test is run and validated</li>
 <li>Where every line of this comes from</li>
-<li>Appendix — the configuration behind it (host-spoke1, the DCI, the acquisition's DNS server)</li>
+<li>Appendix — the configuration behind it (host-spoke1, the DCI, the acquisition's DNS server) and the full lab topology</li>
 </ol>
 
 <h2>1. What the DCI is, and the problem it solves</h2>
@@ -585,6 +586,131 @@ router bgp 65209
 <div class="box small">IOS lists a loopback's secondary addresses first and its primary last, which is why
 <code>10.128.0.2</code> appears at the end of <code>Loopback900</code>. The Golden Config template renders the primary first (the
 order a router must be configured in) and compliance compares the two as sets, so the difference is not drift.</p></div>
+
+<div class="landscape">
+<h3>D · the whole lab</h3>
+<p class="small">Every VM and every link, generated from <code>lab.conf</code> and <code>lab-intent.json</code>: three headends, each
+behind its own VyOS firewall and with a LAN host; four branches, each with a customer LAN and its host; the ten IPsec VTIs as dotted lines (the table below
+names each one and the link it rides); the internet breakout each firewall performs; and the DCI chain this document is about,
+hanging off <code>west-headend</code> with no encryption on it. Solid lines are cabled links, labelled with the /30 they carry.</p>
+<pre class="mermaid">
+flowchart LR
+  subgraph BR["The branches — one customer each"]
+    direction TB
+    hostspoke1(["host-spoke1&lt;br/&gt;192.168.12.2"])
+    spoke1["spoke1&lt;br/&gt;AS 65201&lt;br/&gt;192.168.12.0/24"]
+    hostspoke2(["host-spoke2&lt;br/&gt;192.168.23.2"])
+    spoke2["spoke2&lt;br/&gt;AS 65202&lt;br/&gt;192.168.23.0/24"]
+    hostspoke3(["host-spoke3&lt;br/&gt;192.168.13.2"])
+    spoke3["spoke3&lt;br/&gt;AS 65203&lt;br/&gt;192.168.13.0/24"]
+    hostspoke4(["host-spoke4&lt;br/&gt;192.168.15.2"])
+    spoke4["spoke4&lt;br/&gt;AS 65205&lt;br/&gt;192.168.15.0/24"]
+  end
+  subgraph FW["The firewalls — every WAN link lands on one"]
+    direction TB
+    fweast{{"fw-east&lt;br/&gt;VyOS"}}
+    fwcentral{{"fw-central&lt;br/&gt;VyOS"}}
+    fwwest{{"fw-west&lt;br/&gt;VyOS"}}
+  end
+  INET(["internet&lt;br/&gt;libvirt NAT network"])
+  subgraph HE["The headends — ACME Networks"]
+    direction TB
+    eastheadend["east-headend&lt;br/&gt;AS 65200&lt;br/&gt;192.168.11.0/24"]
+    hosteast(["host-east&lt;br/&gt;192.168.11.2"])
+    centralheadend["central-headend&lt;br/&gt;AS 65204&lt;br/&gt;192.168.14.0/24"]
+    hostcentral(["host-central&lt;br/&gt;192.168.14.2"])
+    westheadend["west-headend&lt;br/&gt;AS 65206&lt;br/&gt;192.168.16.0/24"]
+    hostwest(["host-west&lt;br/&gt;192.168.16.2"])
+  end
+  subgraph DC["The interconnect — no IPsec on it"]
+    direction TB
+    dci["DCI&lt;br/&gt;AS 65208&lt;br/&gt;192.168.31.0/24"]
+    acmeacquisition["ACME-acquisition&lt;br/&gt;AS 65209&lt;br/&gt;192.168.30.0/24"]
+    hostacquisition(["host-acquisition&lt;br/&gt;192.168.30.2"])
+  end
+  fweast -- "100.64.1.0/30" --- eastheadend
+  fwcentral -- "100.64.2.0/30" --- centralheadend
+  fwwest -- "100.64.3.0/30" --- westheadend
+  fweast -- "100.65.1.0/30" --- spoke1
+  fweast -- "100.65.3.0/30" --- spoke3
+  fwcentral -- "100.65.4.0/30" --- spoke1
+  fwcentral -- "100.65.6.0/30" --- spoke3
+  fwcentral -- "100.65.7.0/30" --- spoke4
+  fwwest -- "100.65.10.0/30" --- spoke3
+  fwwest -- "100.65.11.0/30" --- spoke4
+  fweast -- "100.65.2.0/30" --- spoke4
+  eastheadend --- hosteast
+  centralheadend --- hostcentral
+  westheadend --- hostwest
+  spoke1 --- hostspoke1
+  spoke2 --- hostspoke2
+  spoke3 --- hostspoke3
+  spoke4 --- hostspoke4
+  westheadend -- "100.64.20.0/30" --- dci
+  dci -- "100.64.21.0/30" --- acmeacquisition
+  acmeacquisition --- hostacquisition
+  fwcentral -- "100.65.5.0/30" --- spoke2
+  fwwest -- "100.65.9.0/30" --- spoke2
+  fweast -. "breakout (NAT)" .-> INET
+  fwcentral -. "breakout (NAT)" .-> INET
+  fwwest -. "breakout (NAT)" .-> INET
+  spoke1 -.- eastheadend
+  spoke3 -.- eastheadend
+  spoke1 -.- centralheadend
+  spoke3 -.- centralheadend
+  spoke4 -.- centralheadend
+  spoke3 -.- westheadend
+  spoke4 -.- westheadend
+  spoke4 -.- eastheadend
+  spoke2 -.- centralheadend
+  spoke2 -.- westheadend
+  classDef hub fill:#eef2f7,stroke:#0b62d6
+  classDef spoke fill:#f4f7fb,stroke:#5b7fa6
+  classDef fw fill:#fdf3e7,stroke:#b26a00
+  classDef host fill:#f3f5f8,stroke:#94a3b8
+  classDef dci fill:#e8f1e8,stroke:#15803d
+  class eastheadend,centralheadend,westheadend hub
+  class spoke1,spoke2,spoke3,spoke4 spoke
+  class fweast,fwcentral,fwwest fw
+  class hosteast,hostcentral,hostwest,hostspoke1,hostspoke2,hostspoke3,hostspoke4,hostacquisition host
+  class dci,acmeacquisition dci
+</pre>
+</div>
+
+<h4>The ten IPsec VTIs</h4>
+<p class="small">Every branch terminates on at least two headends, and every tunnel is sourced from the spoke's WAN link to that
+headend's firewall — so a tunnel and the link under it always cross the same firewall.</p>
+<table>
+<tr><th style="width:12%">Tunnel</th><th style="width:17%">Headend</th><th style="width:12%">Branch</th><th style="width:16%">Tunnel /30</th><th>Rides over</th></tr>
+<tr><td><code>Tunnel1</code></td><td><code>east-headend</code></td><td><code>spoke1</code></td><td><code>172.17.1.0/30</code></td><td><code>fw-east</code> — 100.65.1.0/30 to the spoke, 100.64.1.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel2</code></td><td><code>east-headend</code></td><td><code>spoke4</code></td><td><code>172.17.2.0/30</code></td><td><code>fw-east</code> — 100.65.2.0/30 to the spoke, 100.64.1.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel3</code></td><td><code>east-headend</code></td><td><code>spoke3</code></td><td><code>172.17.3.0/30</code></td><td><code>fw-east</code> — 100.65.3.0/30 to the spoke, 100.64.1.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel4</code></td><td><code>central-headend</code></td><td><code>spoke1</code></td><td><code>172.17.4.0/30</code></td><td><code>fw-central</code> — 100.65.4.0/30 to the spoke, 100.64.2.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel5</code></td><td><code>central-headend</code></td><td><code>spoke2</code></td><td><code>172.17.5.0/30</code></td><td><code>fw-central</code> — 100.65.5.0/30 to the spoke, 100.64.2.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel6</code></td><td><code>central-headend</code></td><td><code>spoke3</code></td><td><code>172.17.6.0/30</code></td><td><code>fw-central</code> — 100.65.6.0/30 to the spoke, 100.64.2.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel7</code></td><td><code>central-headend</code></td><td><code>spoke4</code></td><td><code>172.17.7.0/30</code></td><td><code>fw-central</code> — 100.65.7.0/30 to the spoke, 100.64.2.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel9</code></td><td><code>west-headend</code></td><td><code>spoke2</code></td><td><code>172.17.9.0/30</code></td><td><code>fw-west</code> — 100.65.9.0/30 to the spoke, 100.64.3.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel10</code></td><td><code>west-headend</code></td><td><code>spoke3</code></td><td><code>172.17.10.0/30</code></td><td><code>fw-west</code> — 100.65.10.0/30 to the spoke, 100.64.3.0/30 to the headend</td></tr>
+<tr><td><code>Tunnel11</code></td><td><code>west-headend</code></td><td><code>spoke4</code></td><td><code>172.17.11.0/30</code></td><td><code>fw-west</code> — 100.65.11.0/30 to the spoke, 100.64.3.0/30 to the headend</td></tr>
+</table>
+
+<h4>The nine Catalyst 8000v routers</h4>
+<table>
+<tr><th style="width:17%">Router</th><th style="width:9%">Role</th><th style="width:8%">AS</th><th style="width:13%">Router ID</th><th style="width:16%">Site LAN</th><th style="width:13%">Management</th><th>Site</th></tr>
+<tr><td><code>east-headend</code></td><td>hub</td><td>65200</td><td><code>10.255.1.1</code></td><td><code>192.168.11.0/24</code></td><td><code>10.2.0.11</code></td><td>east-hq · New York, NY</td></tr>
+<tr><td><code>spoke1</code></td><td>spoke</td><td>65201</td><td><code>10.255.1.2</code></td><td><code>192.168.12.0/24</code></td><td><code>10.2.0.12</code></td><td>branch-1 · Boston, MA</td></tr>
+<tr><td><code>spoke2</code></td><td>spoke</td><td>65202</td><td><code>10.255.1.3</code></td><td><code>192.168.23.0/24</code></td><td><code>10.2.0.13</code></td><td>branch-2 · Dallas, TX</td></tr>
+<tr><td><code>spoke3</code></td><td>spoke</td><td>65203</td><td><code>10.255.1.4</code></td><td><code>192.168.13.0/24</code></td><td><code>10.2.0.14</code></td><td>branch-3 · Seattle, WA</td></tr>
+<tr><td><code>central-headend</code></td><td>hub</td><td>65204</td><td><code>10.255.1.5</code></td><td><code>192.168.14.0/24</code></td><td><code>10.2.0.15</code></td><td>central-hq · Chicago, IL</td></tr>
+<tr><td><code>spoke4</code></td><td>spoke</td><td>65205</td><td><code>10.255.1.6</code></td><td><code>192.168.15.0/24</code></td><td><code>10.2.0.16</code></td><td>branch-4 · Denver, CO</td></tr>
+<tr><td><code>west-headend</code></td><td>hub</td><td>65206</td><td><code>10.255.1.7</code></td><td><code>192.168.16.0/24</code></td><td><code>10.2.0.17</code></td><td>west-hq · Los Angeles, CA</td></tr>
+<tr><td><code>DCI</code></td><td>dci</td><td>65208</td><td><code>10.255.1.8</code></td><td><code>192.168.31.0/24</code></td><td><code>10.2.0.19</code></td><td>west-dci · San Jose, CA</td></tr>
+<tr><td><code>ACME-acquisition</code></td><td>partner</td><td>65209</td><td><code>10.255.1.9</code></td><td><code>192.168.30.0/24</code></td><td><code>10.2.0.20</code></td><td>acquisition-hq · Portland, OR</td></tr>
+</table>
+<p class="small">The three VyOS firewalls (<code>fw-east</code>, <code>fw-central</code>, <code>fw-west</code>) sit on
+<code>10.2.0.21</code>–<code>10.2.0.23</code>, and the nine Alpine hosts on <code>10.2.0.31</code>–<code>10.2.0.38</code>; every
+node is reachable out of band on <code>10.2.0.0/24</code>, which is in <code>Mgmt-vrf</code> on the routers and carries no lab
+traffic.</p>
 
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';

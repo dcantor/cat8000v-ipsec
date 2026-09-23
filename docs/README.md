@@ -13,7 +13,8 @@
   how suite 12 sweeps 1000 prefixes and 1000 records and what a run leaves behind. `dci.html` is the source;
   rebuild with `webapp/.venv/bin/python docs/build_pdf.py dci.html`. Every command output in it is from the live lab, and the
   appendix carries the configuration of `host-spoke1`, the `DCI` and the acquisition's DNS server (from the last run's
-  `configs/post-run/`, with the thousand generated lines collapsed).
+  `configs/post-run/`, with the thousand generated lines collapsed) and a full topology diagram of the lab — every VM,
+  every link, the ten VTIs and the DCI chain — with the tunnel and router tables, all generated from `lab.conf` and the intent.
 - `requirements.pdf` / `requirements.xlsx` — the **requirements specification** of the service: 106 numbered requirements
   (NET, SOT, INT, NAC, FW, PKI, CUST, HOST, INET, SEC, RUN, UI, CMP, API, MON, TST, LAB, DOC, NFR) with a MUST / SHOULD / MAY
   priority, acceptance criteria and the Robot suite or code that verifies each, plus the system context, roles and glossary,
