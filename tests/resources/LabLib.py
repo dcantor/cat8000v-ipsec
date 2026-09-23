@@ -237,6 +237,19 @@ class LabLib:
             raise AssertionError(f"render_vyos --check could not reach a firewall: {r.stderr.strip().splitlines()[-1][:300]}")
         return r.returncode
 
+    @keyword
+    def dns_capture(self, out_dir):
+        """Capture a DNS lookup on both sides of the DCI (tools/dns_capture.py): an Embedded Packet Capture on each of the
+        DCI's interfaces, the two buffers written as .pcap files and decoded. Returns the report; fails when the answer
+        that reached ACME is not the translated form of the one the server sent."""
+        r = subprocess.run([sys.executable, str(LAB_DIR / "tools" / "dns_capture.py"), "--out", str(out_dir)],
+                           capture_output=True, text=True, timeout=900)
+        logger.info(f"<pre>{r.stdout[-6000:]}\n{r.stderr[-1000:]}</pre>", html=True)
+        if r.returncode:
+            last = (r.stdout + r.stderr).strip().splitlines()
+            raise AssertionError(last[-1][:300] if last else "dns_capture.py failed")
+        return r.stdout
+
     # ---- host-side helpers -----------------------------------------------
     @keyword
     def host_ping(self, target, count=3):

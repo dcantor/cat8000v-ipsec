@@ -451,6 +451,13 @@ udp  100.96.0.2:53   10.128.0.2:53   172.30.12.2:50370   192.168.12.2:50370
 
 The suite resolves every one of the thousand names from the branch host and pings what came back: **resolved+reached 1000/1000**.
 
+**Proof on the wire.** `tools/dns_capture.py` puts an IOS-XE Embedded Packet Capture on **both** of the DCI's interfaces at
+once, resolves a name from a branch host, pulls the two buffers off the router as **.pcap files** and decodes them: the same
+transaction, the same question, the server's real address (`10.129.244.2`) on the inside and its translated form
+(`100.97.244.2`) on the ACME side — the A record rewritten in flight, with its TTL zeroed. The two captures are committed under
+`docs/captures/` and explained in `docs/dci.pdf`; suite 12 repeats the capture on every run and keeps the pcaps next to the
+run's results.
+
 Both halves of the flow are translated and the A records are rewritten in flight, so the host can reach what it just resolved.
 The host's resolver comes from the intent too (`dns_client` on the host; cloud-init writes it, and the instance-id now follows a
 hash of the seed so a changed resolver is actually applied on the next boot).
@@ -485,7 +492,7 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 74 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 75 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
@@ -494,7 +501,7 @@ compliant; and suite 08 — the CA pinned on every router with a certificate tun
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
 renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
 router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow);
-suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up — a thousand prefixes and a thousand records at once — Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up — a thousand prefixes and a thousand records at once, and the fix-up captured on both sides of the DCI — Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
 Each run keeps pre/post config backups and a diff under `results/`, plus **`report.pdf`** — a one-file evidence report built
 from `output.xml` (`tests/report_pdf.py`): every suite and test with its result, its duration and the numbers it measured

@@ -7,6 +7,9 @@
   the test coverage map and the file map.
 - `workflows.html` is the source (Mermaid diagrams); rebuild the PDF with
   `webapp/.venv/bin/python docs/build_pdf.py` (headless Chrome via Playwright).
+- `captures/dns-acme-side.pcap`, `captures/dns-acquisition-side.pcap` — the same DNS answer captured on both of the DCI's
+  interfaces, written by `tools/dns_capture.py` (Embedded Packet Capture on the router, decoded and saved locally). Open them
+  in Wireshark side by side: same transaction id, same question, `10.129.244.2` inside and `100.97.244.2` outside.
 - `dci.pdf` — **The DCI: an acquired company inside the VPN**: the interconnect's topology, the path a branch takes to
   the acquisition (with real traceroutes), the routes exchanged and the route filter that keeps each side's copy of an
   overlapping prefix at home, the twice-NAT address model and its configuration, the DNS fix-up in both directions, and

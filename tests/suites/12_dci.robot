@@ -288,3 +288,23 @@ DNS fix-up scales and works from either side: a host on one side resolves the ot
     ${ig}=    Evaluate    $SCALE_AGGREGATES["inside_global"].split(".")[0]
     Should Match Regexp    ${t}    (?m)^udp\\s+${ig}\\.\\d+\\.\\d+\\.\\d+:53\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:53
     ...    msg=no translated DNS flow towards the acquisition's server: ${t}
+
+The fix-up is visible on the wire: the same answer, captured on both sides of the DCI, carries different addresses
+    [Documentation]    Resolving a name and liking the answer does not prove the NAT rewrote it. This captures the flow on both of
+    ...    the DCI's interfaces at once (IOS-XE Embedded Packet Capture) while a branch host resolves a name, writes the two buffers
+    ...    as .pcap files next to the run's results, and compares the answers: the server's own address on the inside, its
+    ...    inside-global form on the ACME side, same transaction id. The capture points are removed again afterwards.
+    [Tags]    slow
+    Skip If    not $NAT_ROUTER or not $SCALE_ENTRIES    no DCI or no scale set is modelled
+    ${out}=    Dns Capture    ${OUTPUT DIR}/captures
+    Should Contain    ${out}    DNS fix-up proven on the wire    msg=the captured answer was not translated: ${out}
+    File Should Exist    ${OUTPUT DIR}/captures/dns-acme-side.pcap
+    File Should Exist    ${OUTPUT DIR}/captures/dns-acquisition-side.pcap
+    ${inside}=    Get Regexp Matches    ${out}    the server answered (\\S+) on the inside    1
+    ${outside}=    Get Regexp Matches    ${out}    ACME received (\\S+)    1
+    Should Not Be Equal    ${inside}[0]    ${outside}[0]    msg=both sides saw the same address — nothing was rewritten
+    ${e}=    Evaluate    [x for x in $SCALE_ENTRIES if x["acquisition_ip"] == "${inside}[0]"][0]
+    Should Be Equal    ${outside}[0]    ${e}[acquisition_as_acme_sees_it]
+    ...    msg=ACME received ${outside}[0]; the inside-global form of ${inside}[0] is ${e}[acquisition_as_acme_sees_it]
+    # one line for the evidence report (the capture's own output is a long block in the log)
+    Log    ${e}[prefix]: the server answered ${inside}[0] on the inside, ACME received ${outside}[0] — DNS fix-up proven on the wire

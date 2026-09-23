@@ -51,10 +51,10 @@ EVIDENCE = re.compile(r"(?i)\b("
                       r"reached \d+|fixed up \d+/\d+|\d+/\d+ (?:checks ok|tests|compliance rows|IKEv2 SAs|tunnels)|"
                       r"Total active translations:[^\n]+|Success rate is \d+ percent[^\n]*|"
                       r"\d+ packets transmitted[^\n]*|Hits: \d+[^\n]*|resolved\+reached \d+/\d+|"
-                      r"in sync|Established|(?-i:COMPLIANT))[^\n]*")     # COMPLIANT stays case-sensitive: a dict's 'compliant': True is not evidence
+                      r"in sync|Established|proven on the wire|the server answered [^\n]*|(?-i:COMPLIANT))[^\n]*")     # COMPLIANT stays case-sensitive: a dict's 'compliant': True is not evidence
 
 
-RANK = ((r"reached \d+|fixed up|resolved\+reached|checks ok|compliance rows|Total active translations|Hits:", 0),
+RANK = ((r"reached \d+|fixed up|resolved\+reached|proven on the wire|the server answered|checks ok|compliance rows|Total active translations|Hits:", 0),
         (r"IKEv2 SAs|tunnels|in sync|Established", 1))
 
 

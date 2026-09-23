@@ -17,6 +17,7 @@
   .warn { border-left-color: #b26a00; background: #fffbeb } .brk { page-break-before: always } .small { font-size: 9pt }
   .pill { display: inline-block; padding: 0 6px; border-radius: 8px; background: #e9edf3; font-size: 8.5pt }
   .ok { color: #15803d; font-weight: 600 } ol.steps li { margin: 3pt 0 }
+  pre.term.hex { white-space: pre; font-size: 7.9pt }        /* a 16-byte dump line must not wrap */
   pre.term .el { color: #b26a00; font-style: italic }
   pre.cfg { font-size: 7.6pt; page-break-inside: auto }          /* a full configuration is allowed to run over a page */
   pre.topo .mermaid svg, .topo svg { max-height: 142mm }
@@ -303,6 +304,55 @@ leave as <code>172.30.12.2</code> and the answer comes back doctored; <code>ACME
 nowhere to send it. Setting <code>"dns_fixup": false</code> in the intent renders the opposite: <code>no-payload</code> on the statics
 and <code>no ip nat service dns tcp/udp</code>.</p></div>
 
+<h3 class="brk">Proof on the wire: the same answer, captured on both sides</h3>
+<p>Resolving a name and liking the result is not proof that the NAT rewrote anything. So the lab captures the flow on
+<b>both</b> of the DCI's interfaces at once — an IOS-XE Embedded Packet Capture on <code>GigabitEthernet2</code> (ACME) and on
+<code>GigabitEthernet3</code> (the acquired company) — while a branch host resolves a name.
+<code>tools/dns_capture.py</code> sets both capture points up, triggers the lookup, pulls the two buffers off the router,
+writes them as <b>.pcap files</b> (<code>docs/captures/dns-acme-side.pcap</code> and
+<code>dns-acquisition-side.pcap</code>), decodes them and removes the capture points again:</p>
+<pre class="term">$ <b>tools/dns_capture.py</b>
+==&gt; DCI: capture on GigabitEthernet2 (ACME) and GigabitEthernet3 (acquired company)
+==&gt; host-spoke1: nslookup acq500.acquisition.local
+   Address: 100.97.244.2
+
+<b>ACME side (outside)</b> — DCI GigabitEthernet2 — dns-acme-side.pcap
+   0xeeee query     192.168.12.2 -&gt; 100.96.0.2      acq500.acquisition.local
+   0xeeee answer      100.96.0.2 -&gt; 192.168.12.2    acq500.acquisition.local  A <b>100.97.244.2</b>
+
+<b>the acquired company's side (inside)</b> — DCI GigabitEthernet3 — dns-acquisition-side.pcap
+   0xeeee query      172.30.12.2 -&gt; 10.128.0.2      acq500.acquisition.local
+   0xeeee answer      10.128.0.2 -&gt; 172.30.12.2     acq500.acquisition.local  A <b>10.129.244.2</b>
+
+acq500.acquisition.local: the server answered 10.129.244.2 on the inside, ACME received 100.97.244.2
+   — the inside-global form of it (10.129.244.0/24 -&gt; 100.97.244.0/24)
+   same transaction 0xeeee; the DCI rewrote the header (10.128.0.2 -&gt; 100.96.0.2) and the A record inside the payload
+<b>DNS fix-up proven on the wire</b></pre>
+<p>One flow, four packets, two addresses each — every one of them translated. The answer itself is the interesting part: the
+same 58 bytes of DNS payload, captured on each side of the same router.</p>
+<h4>Inside — what the server actually sent</h4>
+<pre class="term hex">0000  ee ee 85 80 00 01 00 01 00 00 00 00 06 61 63 71  .............acq
+0010  35 30 30 0b 61 63 71 75 69 73 69 74 69 6f 6e 05  500.acquisition.
+0020  6c 6f 63 61 6c 00 00 01 00 01 c0 0c 00 01 00 01  local...........
+0030  00 00 00 <b>0a</b> 00 04 <b>0a 81 f4 02</b>                    ..........</pre>
+<h4>Outside — what ACME received</h4>
+<pre class="term hex">0000  ee ee 85 80 00 01 00 01 00 00 00 00 06 61 63 71  .............acq
+0010  35 30 30 0b 61 63 71 75 69 73 69 74 69 6f 6e 05  500.acquisition.
+0020  6c 6f 63 61 6c 00 00 01 00 01 c0 0c 00 01 00 01  local...........
+0030  00 00 00 <b>00</b> 00 04 <b>64 61 f4 02</b>                    ......da..</pre>
+<p>Byte for byte identical — the transaction id <code>ee ee</code>, the flags, the question <code>acq500.acquisition.local</code>,
+the compression pointer <code>c0 0c</code>, the type and class of the answer — except for the last six bytes:</p>
+<table>
+<tr><th style="width:18%">Bytes</th><th style="width:22%">Inside (real)</th><th style="width:22%">Outside (as ACME sees it)</th><th>What happened</th></tr>
+<tr><td>the A record's address</td><td><code>0a 81 f4 02</code> = 10.129.244.2</td><td><code>64 61 f4 02</code> = 100.97.244.2</td><td>the NAT's DNS ALG rewrote the payload with the same inside-source static that translates the packets (<code>10.129.244.0 → 100.97.244.0 /24</code>)</td></tr>
+<tr><td>the record's TTL</td><td><code>00 00 00 0a</code> = 10 s</td><td><code>00 00 00 00</code> = 0 s</td><td>IOS zeroes the TTL of a doctored record, so nothing on the ACME side caches an address that only exists because of this NAT</td></tr>
+</table>
+<div class="box"><b>Why this is the proof.</b> The two captures are of one flow through one router: nothing between the branch host
+and the DCI ever saw <code>10.129.244.2</code>, and nothing between the DCI and the acquired company's server ever saw
+<code>100.97.244.2</code>. The address the client resolved is one the NAT invented for it, and the address it then reached
+(<span class="ok">ping succeeds</span>) is the one the server really holds. Suite 12 repeats this capture on every test run, so
+the evidence report carries it too.</p></div>
+
 <h2 class="brk">7. How the test is run and validated</h2>
 <p>Suite <code>tests/suites/12_dci.robot</code> — twelve tests, every expected value read from the intent or Nautobot, never from a
 constant in the test. Run it with <code>./lab.sh test</code> (or from the portal); the whole suite is 74 tests across 12 suites.</p>
@@ -320,6 +370,7 @@ constant in the test. Run it with <code>./lab.sh test</code> (or from the portal
 <tr><td>DNS is fixed up on the way through the NAT</td><td>a name whose record is an overlapping address resolves to the translated one, and the address answers</td><td>3s</td></tr>
 <tr><td><b>NAT scales</b>: a thousand prefixes, both directions, no drops</td><td>2002 static translations, zero drops, only the three aggregates in the routing table, and a branch host reaching <b>1000/1000</b> translated prefixes</td><td>10s</td></tr>
 <tr><td><b>DNS fix-up scales</b> and works from either side</td><td><b>resolved+reached 1000/1000</b> from the branch host, a sample of the reverse direction from the acquisition, and a translated DNS flow in the NAT table</td><td>16s</td></tr>
+<tr><td><b>The fix-up is visible on the wire</b></td><td>the flow captured on <b>both</b> of the DCI's interfaces at once: the same transaction carries the server's real address inside and its translated form outside; the two .pcap files are kept with the run's results</td><td>30s</td></tr>
 </table>
 
 <h3>How the two scale tests actually sweep</h3>
@@ -337,6 +388,7 @@ then <b>pings it</b> — so a name that resolves to something unreachable fails.
 <code>resolved+reached 1000/1000</code>.</li>
 <li><b>The reverse direction</b> is checked from the router, where there is no busybox: <code>ping svcN.acme.local source
 10.128.N.2</code> must both resolve to the outside-local form and succeed.</li>
+<li><b>The capture</b> is taken by the same tool the document used (<code>tools/dns_capture.py</code>): Embedded Packet Capture on both DCI interfaces, the lookup, both buffers pulled off the router into .pcap files under the run's <code>captures/</code>, and the two answers compared against the model. The capture points are removed again, so the run's configuration diff stays empty.</li>
 <li><b>The counters</b> are read independently: <code>show ip nat statistics</code> must show exactly two static translations per
 overlapping prefix and zero drops, and <code>show ip route</code> must contain the three aggregates and nothing per-prefix.</li>
 </ol>
@@ -347,6 +399,7 @@ overlapping prefix and zero drops, and <code>show ip route</code> must contain t
 <tr><td><code>results/&lt;run&gt;/report.pdf</code></td><td>the evidence report: every suite and test with its result, duration and the numbers it measured (<code>reached 1000/1000</code>, <code>resolved+reached 1000/1000</code>, <code>Total active translations: … 2002 static</code>)</td></tr>
 <tr><td><code>results/&lt;run&gt;/log.html</code>, <code>report.html</code>, <code>output.xml</code></td><td>Robot's own log and report; the PDF is generated from the XML, so it can be rebuilt for any past run</td></tr>
 <tr><td><code>results/&lt;run&gt;/configs/</code></td><td>running and startup configuration of <b>every</b> Catalyst 8000v before and after the run, and <code>pre-vs-post.diff</code></td></tr>
+<tr><td><code>results/&lt;run&gt;/captures/</code></td><td>the two .pcap files of the DNS fix-up capture, one per side of the DCI — openable in Wireshark</td></tr>
 <tr><td>Nautobot Golden Config</td><td>171/171 compliance rows compliant — the NAT and DNS are two of the compliance features, so a hand-edit anywhere in the 2002 lines or the 2000 records shows up as drift</td></tr>
 </table>
 
@@ -378,6 +431,7 @@ flowchart TB
 <tr><td><code>nautobot/render_nac.py</code></td><td>the NAT and DNS CLI templates, the loopback-secondaries block, the interface <code>ip nat inside/outside</code> flags, the prefix-list and route-map, and the 400-line chunking</td></tr>
 <tr><td><code>nautobot/golden-config-templates/c8000v-ipsec.j2</code></td><td>the intended configuration for the same lines — expanded in 32-bit arithmetic so the thousand prefixes stay correct past the third octet</td></tr>
 <tr><td><code>tests/suites/12_dci.robot</code>, <code>tests/resources/lab_vars.py</code></td><td>the twelve tests and the values they expect, derived from the intent</td></tr>
+<tr><td><code>tools/dns_capture.py</code></td><td>the packet capture on both sides of the DCI: capture points, the lookup, the buffers pulled off the router as .pcap, the two answers decoded and compared</td></tr>
 <tr><td><code>tests/report_pdf.py</code>, <code>tests/run.sh</code></td><td>the evidence PDF each run produces</td></tr>
 </table>
 
