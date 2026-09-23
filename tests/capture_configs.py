@@ -6,12 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "resources"))
 from LabLib import LabLib          # noqa: E402
-from lab_vars import ROUTERS       # noqa: E402
+from lab_vars import ALL_ROUTERS   # noqa: E402   (every Catalyst 8000v, the DCI chain included)
 
 out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 lib = LabLib(); stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 try:
-    for name, r in ROUTERS.items():
+    for name, r in ALL_ROUTERS.items():
         for cmd, suffix in (("show running-config", "running-config"), ("show startup-config", "startup-config")):
             try:
                 cfg = lib.run_command(r["host"], cmd, timeout=120)

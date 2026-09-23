@@ -7,7 +7,7 @@ side, eth2.. = spokes; eth0 = management, left alone), the forward-filter policy
 remote syslog target from the config context `firewall.management.syslog` (VictoriaLogs on the NMS).
 The managed sections are deleted and re-set inside ONE commit, so VyOS itself applies only the difference.
 Usage: NAUTOBOT_TOKEN=... render_vyos.py [--check] [--dry-run] [firewall ...]"""
-import argparse, os, sys
+import argparse, os, sys, time
 from pathlib import Path
 import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent)); import intent as intent_mod   # noqa: E402
@@ -97,10 +97,23 @@ def commands(dev):
                 f"set system syslog remote {sl['host']} facility all level {sl.get('level', 'info')}"]
     return out
 
-def push(dev, cmds):
+def connect(dev, attempts=3):
+    """A VyOS session, retried: under load (a test run hammering every device) the prompt can take longer than netmiko's default
+    patience, and a timeout here otherwise reads as configuration drift."""
     from netmiko import ConnectHandler
     host = dev["primary_ip4"]["address"].split("/")[0]
-    c = ConnectHandler(device_type="vyos", host=host, username=a.user, password=a.password)
+    last = None
+    for i in range(attempts):
+        try:
+            return ConnectHandler(device_type="vyos", host=host, username=a.user, password=a.password,
+                                  conn_timeout=30, banner_timeout=30, auth_timeout=30, fast_cli=False)
+        except Exception as e:  # noqa: BLE001
+            last = e; time.sleep(3 * (i + 1))
+    raise RuntimeError(f"{dev['name']} ({host}): no SSH session after {attempts} attempts: {last}")
+
+
+def push(dev, cmds):
+    c = connect(dev)
     try:
         out = c.send_config_set(cmds + ["commit", "save"], exit_config_mode=True, cmd_verify=False, read_timeout=120)
         bad = [l for l in out.splitlines() if "Invalid" in l or "failed" in l.lower() or "is not valid" in l or "Error" in l]
@@ -108,12 +121,15 @@ def push(dev, cmds):
         return "no changes" if "No configuration changes to commit" in out else "committed"
     finally: c.disconnect()
 
-def running(dev):
-    from netmiko import ConnectHandler
-    host = dev["primary_ip4"]["address"].split("/")[0]
-    c = ConnectHandler(device_type="vyos", host=host, username=a.user, password=a.password)
-    try: return c.send_command("show configuration commands", read_timeout=60)
-    finally: c.disconnect()
+def running(dev, attempts=2):
+    last = None
+    for i in range(attempts):
+        c = connect(dev)
+        try: return c.send_command("show configuration commands", read_timeout=120)
+        except Exception as e:  # noqa: BLE001
+            last = e; time.sleep(3)
+        finally: c.disconnect()
+    raise RuntimeError(f"{dev['name']}: could not read the running configuration: {last}")
 
 rc = 0
 for dev in fws:

@@ -1,0 +1,877 @@
+! west-headend (10.2.0.17) show startup-config captured 2026-09-22 22:00:25
+Using 22132 out of 33554432 bytes
+!
+! Last configuration change at 00:49:08 UTC Wed Sep 23 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname west-headend
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+ip host host-spoke1.acme.local 192.168.12.2
+ip host host-west.acme.local 192.168.16.2
+ip host spoke1.acme.local 192.168.12.1
+ip host svc0.acme.local 192.168.128.1
+ip host svc1.acme.local 192.168.129.1
+ip host svc10.acme.local 192.168.138.1
+ip host svc11.acme.local 192.168.139.1
+ip host svc12.acme.local 192.168.140.1
+ip host svc13.acme.local 192.168.141.1
+ip host svc14.acme.local 192.168.142.1
+ip host svc15.acme.local 192.168.143.1
+ip host svc16.acme.local 192.168.144.1
+ip host svc17.acme.local 192.168.145.1
+ip host svc18.acme.local 192.168.146.1
+ip host svc19.acme.local 192.168.147.1
+ip host svc2.acme.local 192.168.130.1
+ip host svc20.acme.local 192.168.148.1
+ip host svc21.acme.local 192.168.149.1
+ip host svc22.acme.local 192.168.150.1
+ip host svc23.acme.local 192.168.151.1
+ip host svc24.acme.local 192.168.152.1
+ip host svc25.acme.local 192.168.153.1
+ip host svc26.acme.local 192.168.154.1
+ip host svc27.acme.local 192.168.155.1
+ip host svc28.acme.local 192.168.156.1
+ip host svc29.acme.local 192.168.157.1
+ip host svc3.acme.local 192.168.131.1
+ip host svc30.acme.local 192.168.158.1
+ip host svc31.acme.local 192.168.159.1
+ip host svc32.acme.local 192.168.160.1
+ip host svc33.acme.local 192.168.161.1
+ip host svc34.acme.local 192.168.162.1
+ip host svc35.acme.local 192.168.163.1
+ip host svc36.acme.local 192.168.164.1
+ip host svc37.acme.local 192.168.165.1
+ip host svc38.acme.local 192.168.166.1
+ip host svc39.acme.local 192.168.167.1
+ip host svc4.acme.local 192.168.132.1
+ip host svc40.acme.local 192.168.168.1
+ip host svc41.acme.local 192.168.169.1
+ip host svc42.acme.local 192.168.170.1
+ip host svc43.acme.local 192.168.171.1
+ip host svc44.acme.local 192.168.172.1
+ip host svc45.acme.local 192.168.173.1
+ip host svc46.acme.local 192.168.174.1
+ip host svc47.acme.local 192.168.175.1
+ip host svc48.acme.local 192.168.176.1
+ip host svc49.acme.local 192.168.177.1
+ip host svc5.acme.local 192.168.133.1
+ip host svc50.acme.local 192.168.178.1
+ip host svc51.acme.local 192.168.179.1
+ip host svc52.acme.local 192.168.180.1
+ip host svc53.acme.local 192.168.181.1
+ip host svc54.acme.local 192.168.182.1
+ip host svc55.acme.local 192.168.183.1
+ip host svc56.acme.local 192.168.184.1
+ip host svc57.acme.local 192.168.185.1
+ip host svc58.acme.local 192.168.186.1
+ip host svc59.acme.local 192.168.187.1
+ip host svc6.acme.local 192.168.134.1
+ip host svc60.acme.local 192.168.188.1
+ip host svc61.acme.local 192.168.189.1
+ip host svc62.acme.local 192.168.190.1
+ip host svc63.acme.local 192.168.191.1
+ip host svc64.acme.local 192.168.192.1
+ip host svc65.acme.local 192.168.193.1
+ip host svc66.acme.local 192.168.194.1
+ip host svc67.acme.local 192.168.195.1
+ip host svc68.acme.local 192.168.196.1
+ip host svc69.acme.local 192.168.197.1
+ip host svc7.acme.local 192.168.135.1
+ip host svc70.acme.local 192.168.198.1
+ip host svc71.acme.local 192.168.199.1
+ip host svc72.acme.local 192.168.200.1
+ip host svc73.acme.local 192.168.201.1
+ip host svc74.acme.local 192.168.202.1
+ip host svc75.acme.local 192.168.203.1
+ip host svc76.acme.local 192.168.204.1
+ip host svc77.acme.local 192.168.205.1
+ip host svc78.acme.local 192.168.206.1
+ip host svc79.acme.local 192.168.207.1
+ip host svc8.acme.local 192.168.136.1
+ip host svc80.acme.local 192.168.208.1
+ip host svc81.acme.local 192.168.209.1
+ip host svc82.acme.local 192.168.210.1
+ip host svc83.acme.local 192.168.211.1
+ip host svc84.acme.local 192.168.212.1
+ip host svc85.acme.local 192.168.213.1
+ip host svc86.acme.local 192.168.214.1
+ip host svc87.acme.local 192.168.215.1
+ip host svc88.acme.local 192.168.216.1
+ip host svc89.acme.local 192.168.217.1
+ip host svc9.acme.local 192.168.137.1
+ip host svc90.acme.local 192.168.218.1
+ip host svc91.acme.local 192.168.219.1
+ip host svc92.acme.local 192.168.220.1
+ip host svc93.acme.local 192.168.221.1
+ip host svc94.acme.local 192.168.222.1
+ip host svc95.acme.local 192.168.223.1
+ip host svc96.acme.local 192.168.224.1
+ip host svc97.acme.local 192.168.225.1
+ip host svc98.acme.local 192.168.226.1
+ip host svc99.acme.local 192.168.227.1
+ip host west-headend.acme.local 192.168.16.1
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-1566297978
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-1566297978
+ revocation-check none
+ rsakeypair TP-self-signed-1566297978
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+crypto pki trustpoint LAB-CA
+ enrollment terminal pem
+ fqdn west-headend.lab.local
+ fingerprint 0BCEF662C033CA9A928299464752014DED4A365C
+ subject-name CN=west-headend.lab.local,O=cat8000v-ipsec
+ subject-alt-name west-headend.lab.local
+ revocation-check none
+ rsakeypair LAB-VPN
+ hash sha256
+!
+!
+!
+crypto pki certificate map LAB-CERT-MAP 10
+ issuer-name co cat8000v-ipsec lab ca
+!
+crypto pki certificate chain TP-self-signed-1566297978
+ certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01 nvram:CiscoLicensi#1CA.cer
+crypto pki certificate chain LAB-CA
+ certificate 406FBA7D8A91C53EEB82079DE917C4128031792A nvram:cat8000v-ips#792A.cer
+ certificate ca 4ED99872D79A02E90EB7C79AB8039FBABB691E61 nvram:cat8000v-ips#1E61CA.cer
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 97V0EMCQETK
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$Pafwy3hcaBFf8.$OzP5wpMZHfJvcBmtdKGkYQj7ATWjmQ4bqs8lC28AElw
+!
+username admin privilege 15 secret 9 $9$KlVjNJWoeF7aL.$9SULblSvRV7Saeut5rcm7gMfp8e1w1jYQpmfHKs9Wpo
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer spoke3
+  address 100.65.10.2
+  pre-shared-key J3YoGtnwvIxxdkZiOyxdy6Oo
+ !
+ peer spoke2
+  address 100.65.9.2
+  pre-shared-key 7Dqu11eNUIWIx5OAWpA5nPzv
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2
+ match certificate LAB-CERT-MAP
+ identity local dn 
+ authentication remote rsa-sig
+ authentication local rsa-sig
+ pki trustpoint LAB-CA
+ dpd 20 3 on-demand
+!
+crypto ikev2 profile VPN-IKEV2-PSK
+ match identity remote address 100.65.10.2 255.255.255.255 
+ match identity remote address 100.65.9.2 255.255.255.255 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2
+!
+crypto ipsec profile VPN-IPSEC-PSK
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2-PSK
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.7 255.255.255.255
+!
+interface Loopback128
+ description scale overlap 192.168.128.0/24
+ ip address 192.168.128.1 255.255.255.0
+!
+interface Loopback129
+ description scale overlap 192.168.129.0/24
+ ip address 192.168.129.1 255.255.255.0
+!
+interface Loopback130
+ description scale overlap 192.168.130.0/24
+ ip address 192.168.130.1 255.255.255.0
+!
+interface Loopback131
+ description scale overlap 192.168.131.0/24
+ ip address 192.168.131.1 255.255.255.0
+!
+interface Loopback132
+ description scale overlap 192.168.132.0/24
+ ip address 192.168.132.1 255.255.255.0
+!
+interface Loopback133
+ description scale overlap 192.168.133.0/24
+ ip address 192.168.133.1 255.255.255.0
+!
+interface Loopback134
+ description scale overlap 192.168.134.0/24
+ ip address 192.168.134.1 255.255.255.0
+!
+interface Loopback135
+ description scale overlap 192.168.135.0/24
+ ip address 192.168.135.1 255.255.255.0
+!
+interface Loopback136
+ description scale overlap 192.168.136.0/24
+ ip address 192.168.136.1 255.255.255.0
+!
+interface Loopback137
+ description scale overlap 192.168.137.0/24
+ ip address 192.168.137.1 255.255.255.0
+!
+interface Loopback138
+ description scale overlap 192.168.138.0/24
+ ip address 192.168.138.1 255.255.255.0
+!
+interface Loopback139
+ description scale overlap 192.168.139.0/24
+ ip address 192.168.139.1 255.255.255.0
+!
+interface Loopback140
+ description scale overlap 192.168.140.0/24
+ ip address 192.168.140.1 255.255.255.0
+!
+interface Loopback141
+ description scale overlap 192.168.141.0/24
+ ip address 192.168.141.1 255.255.255.0
+!
+interface Loopback142
+ description scale overlap 192.168.142.0/24
+ ip address 192.168.142.1 255.255.255.0
+!
+interface Loopback143
+ description scale overlap 192.168.143.0/24
+ ip address 192.168.143.1 255.255.255.0
+!
+interface Loopback144
+ description scale overlap 192.168.144.0/24
+ ip address 192.168.144.1 255.255.255.0
+!
+interface Loopback145
+ description scale overlap 192.168.145.0/24
+ ip address 192.168.145.1 255.255.255.0
+!
+interface Loopback146
+ description scale overlap 192.168.146.0/24
+ ip address 192.168.146.1 255.255.255.0
+!
+interface Loopback147
+ description scale overlap 192.168.147.0/24
+ ip address 192.168.147.1 255.255.255.0
+!
+interface Loopback148
+ description scale overlap 192.168.148.0/24
+ ip address 192.168.148.1 255.255.255.0
+!
+interface Loopback149
+ description scale overlap 192.168.149.0/24
+ ip address 192.168.149.1 255.255.255.0
+!
+interface Loopback150
+ description scale overlap 192.168.150.0/24
+ ip address 192.168.150.1 255.255.255.0
+!
+interface Loopback151
+ description scale overlap 192.168.151.0/24
+ ip address 192.168.151.1 255.255.255.0
+!
+interface Loopback152
+ description scale overlap 192.168.152.0/24
+ ip address 192.168.152.1 255.255.255.0
+!
+interface Loopback153
+ description scale overlap 192.168.153.0/24
+ ip address 192.168.153.1 255.255.255.0
+!
+interface Loopback154
+ description scale overlap 192.168.154.0/24
+ ip address 192.168.154.1 255.255.255.0
+!
+interface Loopback155
+ description scale overlap 192.168.155.0/24
+ ip address 192.168.155.1 255.255.255.0
+!
+interface Loopback156
+ description scale overlap 192.168.156.0/24
+ ip address 192.168.156.1 255.255.255.0
+!
+interface Loopback157
+ description scale overlap 192.168.157.0/24
+ ip address 192.168.157.1 255.255.255.0
+!
+interface Loopback158
+ description scale overlap 192.168.158.0/24
+ ip address 192.168.158.1 255.255.255.0
+!
+interface Loopback159
+ description scale overlap 192.168.159.0/24
+ ip address 192.168.159.1 255.255.255.0
+!
+interface Loopback160
+ description scale overlap 192.168.160.0/24
+ ip address 192.168.160.1 255.255.255.0
+!
+interface Loopback161
+ description scale overlap 192.168.161.0/24
+ ip address 192.168.161.1 255.255.255.0
+!
+interface Loopback162
+ description scale overlap 192.168.162.0/24
+ ip address 192.168.162.1 255.255.255.0
+!
+interface Loopback163
+ description scale overlap 192.168.163.0/24
+ ip address 192.168.163.1 255.255.255.0
+!
+interface Loopback164
+ description scale overlap 192.168.164.0/24
+ ip address 192.168.164.1 255.255.255.0
+!
+interface Loopback165
+ description scale overlap 192.168.165.0/24
+ ip address 192.168.165.1 255.255.255.0
+!
+interface Loopback166
+ description scale overlap 192.168.166.0/24
+ ip address 192.168.166.1 255.255.255.0
+!
+interface Loopback167
+ description scale overlap 192.168.167.0/24
+ ip address 192.168.167.1 255.255.255.0
+!
+interface Loopback168
+ description scale overlap 192.168.168.0/24
+ ip address 192.168.168.1 255.255.255.0
+!
+interface Loopback169
+ description scale overlap 192.168.169.0/24
+ ip address 192.168.169.1 255.255.255.0
+!
+interface Loopback170
+ description scale overlap 192.168.170.0/24
+ ip address 192.168.170.1 255.255.255.0
+!
+interface Loopback171
+ description scale overlap 192.168.171.0/24
+ ip address 192.168.171.1 255.255.255.0
+!
+interface Loopback172
+ description scale overlap 192.168.172.0/24
+ ip address 192.168.172.1 255.255.255.0
+!
+interface Loopback173
+ description scale overlap 192.168.173.0/24
+ ip address 192.168.173.1 255.255.255.0
+!
+interface Loopback174
+ description scale overlap 192.168.174.0/24
+ ip address 192.168.174.1 255.255.255.0
+!
+interface Loopback175
+ description scale overlap 192.168.175.0/24
+ ip address 192.168.175.1 255.255.255.0
+!
+interface Loopback176
+ description scale overlap 192.168.176.0/24
+ ip address 192.168.176.1 255.255.255.0
+!
+interface Loopback177
+ description scale overlap 192.168.177.0/24
+ ip address 192.168.177.1 255.255.255.0
+!
+interface Loopback178
+ description scale overlap 192.168.178.0/24
+ ip address 192.168.178.1 255.255.255.0
+!
+interface Loopback179
+ description scale overlap 192.168.179.0/24
+ ip address 192.168.179.1 255.255.255.0
+!
+interface Loopback180
+ description scale overlap 192.168.180.0/24
+ ip address 192.168.180.1 255.255.255.0
+!
+interface Loopback181
+ description scale overlap 192.168.181.0/24
+ ip address 192.168.181.1 255.255.255.0
+!
+interface Loopback182
+ description scale overlap 192.168.182.0/24
+ ip address 192.168.182.1 255.255.255.0
+!
+interface Loopback183
+ description scale overlap 192.168.183.0/24
+ ip address 192.168.183.1 255.255.255.0
+!
+interface Loopback184
+ description scale overlap 192.168.184.0/24
+ ip address 192.168.184.1 255.255.255.0
+!
+interface Loopback185
+ description scale overlap 192.168.185.0/24
+ ip address 192.168.185.1 255.255.255.0
+!
+interface Loopback186
+ description scale overlap 192.168.186.0/24
+ ip address 192.168.186.1 255.255.255.0
+!
+interface Loopback187
+ description scale overlap 192.168.187.0/24
+ ip address 192.168.187.1 255.255.255.0
+!
+interface Loopback188
+ description scale overlap 192.168.188.0/24
+ ip address 192.168.188.1 255.255.255.0
+!
+interface Loopback189
+ description scale overlap 192.168.189.0/24
+ ip address 192.168.189.1 255.255.255.0
+!
+interface Loopback190
+ description scale overlap 192.168.190.0/24
+ ip address 192.168.190.1 255.255.255.0
+!
+interface Loopback191
+ description scale overlap 192.168.191.0/24
+ ip address 192.168.191.1 255.255.255.0
+!
+interface Loopback192
+ description scale overlap 192.168.192.0/24
+ ip address 192.168.192.1 255.255.255.0
+!
+interface Loopback193
+ description scale overlap 192.168.193.0/24
+ ip address 192.168.193.1 255.255.255.0
+!
+interface Loopback194
+ description scale overlap 192.168.194.0/24
+ ip address 192.168.194.1 255.255.255.0
+!
+interface Loopback195
+ description scale overlap 192.168.195.0/24
+ ip address 192.168.195.1 255.255.255.0
+!
+interface Loopback196
+ description scale overlap 192.168.196.0/24
+ ip address 192.168.196.1 255.255.255.0
+!
+interface Loopback197
+ description scale overlap 192.168.197.0/24
+ ip address 192.168.197.1 255.255.255.0
+!
+interface Loopback198
+ description scale overlap 192.168.198.0/24
+ ip address 192.168.198.1 255.255.255.0
+!
+interface Loopback199
+ description scale overlap 192.168.199.0/24
+ ip address 192.168.199.1 255.255.255.0
+!
+interface Loopback200
+ description scale overlap 192.168.200.0/24
+ ip address 192.168.200.1 255.255.255.0
+!
+interface Loopback201
+ description scale overlap 192.168.201.0/24
+ ip address 192.168.201.1 255.255.255.0
+!
+interface Loopback202
+ description scale overlap 192.168.202.0/24
+ ip address 192.168.202.1 255.255.255.0
+!
+interface Loopback203
+ description scale overlap 192.168.203.0/24
+ ip address 192.168.203.1 255.255.255.0
+!
+interface Loopback204
+ description scale overlap 192.168.204.0/24
+ ip address 192.168.204.1 255.255.255.0
+!
+interface Loopback205
+ description scale overlap 192.168.205.0/24
+ ip address 192.168.205.1 255.255.255.0
+!
+interface Loopback206
+ description scale overlap 192.168.206.0/24
+ ip address 192.168.206.1 255.255.255.0
+!
+interface Loopback207
+ description scale overlap 192.168.207.0/24
+ ip address 192.168.207.1 255.255.255.0
+!
+interface Loopback208
+ description scale overlap 192.168.208.0/24
+ ip address 192.168.208.1 255.255.255.0
+!
+interface Loopback209
+ description scale overlap 192.168.209.0/24
+ ip address 192.168.209.1 255.255.255.0
+!
+interface Loopback210
+ description scale overlap 192.168.210.0/24
+ ip address 192.168.210.1 255.255.255.0
+!
+interface Loopback211
+ description scale overlap 192.168.211.0/24
+ ip address 192.168.211.1 255.255.255.0
+!
+interface Loopback212
+ description scale overlap 192.168.212.0/24
+ ip address 192.168.212.1 255.255.255.0
+!
+interface Loopback213
+ description scale overlap 192.168.213.0/24
+ ip address 192.168.213.1 255.255.255.0
+!
+interface Loopback214
+ description scale overlap 192.168.214.0/24
+ ip address 192.168.214.1 255.255.255.0
+!
+interface Loopback215
+ description scale overlap 192.168.215.0/24
+ ip address 192.168.215.1 255.255.255.0
+!
+interface Loopback216
+ description scale overlap 192.168.216.0/24
+ ip address 192.168.216.1 255.255.255.0
+!
+interface Loopback217
+ description scale overlap 192.168.217.0/24
+ ip address 192.168.217.1 255.255.255.0
+!
+interface Loopback218
+ description scale overlap 192.168.218.0/24
+ ip address 192.168.218.1 255.255.255.0
+!
+interface Loopback219
+ description scale overlap 192.168.219.0/24
+ ip address 192.168.219.1 255.255.255.0
+!
+interface Loopback220
+ description scale overlap 192.168.220.0/24
+ ip address 192.168.220.1 255.255.255.0
+!
+interface Loopback221
+ description scale overlap 192.168.221.0/24
+ ip address 192.168.221.1 255.255.255.0
+!
+interface Loopback222
+ description scale overlap 192.168.222.0/24
+ ip address 192.168.222.1 255.255.255.0
+!
+interface Loopback223
+ description scale overlap 192.168.223.0/24
+ ip address 192.168.223.1 255.255.255.0
+!
+interface Loopback224
+ description scale overlap 192.168.224.0/24
+ ip address 192.168.224.1 255.255.255.0
+!
+interface Loopback225
+ description scale overlap 192.168.225.0/24
+ ip address 192.168.225.1 255.255.255.0
+!
+interface Loopback226
+ description scale overlap 192.168.226.0/24
+ ip address 192.168.226.1 255.255.255.0
+!
+interface Loopback227
+ description scale overlap 192.168.227.0/24
+ ip address 192.168.227.1 255.255.255.0
+!
+interface Tunnel9
+ description IPsec VTI to spoke2
+ ip address 172.17.9.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.9.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel10
+ description IPsec VTI to spoke3
+ ip address 172.17.10.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.10.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel11
+ description IPsec VTI to spoke4
+ ip address 172.17.11.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet2
+ tunnel mode ipsec ipv4
+ tunnel destination 100.65.11.2
+ tunnel protection ipsec profile VPN-IPSEC
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.17 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to fw-west eth1
+ ip address 100.64.3.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ description WAN to DCI GigabitEthernet2
+ ip address 100.64.20.1 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet4
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet5
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet6
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet7
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet8
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet9
+ description site LAN 192.168.16.0/24 (host-west eth1)
+ ip address 192.168.16.1 255.255.255.0
+ negotiation auto
+ cdp enable
+!
+router bgp 65206
+ bgp router-id 10.255.1.7
+ bgp log-neighbor-changes
+ neighbor 100.64.20.2 remote-as 65208
+ neighbor 100.64.20.2 description eBGP DCI (100.64.20.0/30)
+ neighbor 172.17.9.2 remote-as 65202
+ neighbor 172.17.9.2 description eBGP spoke2 (Tunnel9)
+ neighbor 172.17.10.2 remote-as 65203
+ neighbor 172.17.10.2 description eBGP spoke3 (Tunnel10)
+ neighbor 172.17.11.2 remote-as 65205
+ neighbor 172.17.11.2 description eBGP spoke4 (Tunnel11)
+ !
+ address-family ipv4
+  network 10.255.1.7 mask 255.255.255.255
+  network 192.168.16.0
+  neighbor 100.64.20.2 activate
+  neighbor 100.64.20.2 default-originate
+  neighbor 172.17.9.2 activate
+  neighbor 172.17.9.2 default-originate
+  neighbor 172.17.10.2 activate
+  neighbor 172.17.10.2 default-originate
+  neighbor 172.17.11.2 activate
+  neighbor 172.17.11.2 default-originate
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip dns server
+ip route 0.0.0.0 0.0.0.0 100.64.3.1 name internet-via-fw-west
+ip route 100.65.9.0 255.255.255.252 100.64.3.1 name via-fw-west
+ip route 100.65.10.0 255.255.255.252 100.64.3.1 name via-fw-west
+ip route 100.65.11.0 255.255.255.252 100.64.3.1 name via-fw-west
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

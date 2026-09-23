@@ -1117,9 +1117,11 @@ def branch_history(name: str, sha: str = Query(None, description="return this co
 
 
 SHOW = {"ike": "show crypto ikev2 sa detail", "ipsec": "show crypto ipsec sa | include interface|current_peer|#pkts encaps|#pkts decaps|#send errors|#recv errors", "bgp": "show ip bgp summary",
-        "routes": "show ip route bgp", "default": "show ip route 0.0.0.0", "interfaces": "show ip interface brief", "pki": "show crypto pki certificates", "platform": "show platform resources", "log": "show logging | last 40"}
+        "routes": "show ip route bgp", "default": "show ip route 0.0.0.0", "interfaces": "show ip interface brief", "pki": "show crypto pki certificates", "platform": "show platform resources", "log": "show logging | last 40",
+        # the DCI's twice-NAT and the DNS that goes with it: the counters, not the thousands of rows behind them
+        "nat": "show ip nat statistics", "dns": "show hosts summary"}
 _show_cache = {}
-@app.get("/api/branch/{name}/show/{what}", tags=["inventory"], summary="A live show command on the router (an allow-list: ike, ipsec, bgp, routes, default, interfaces, pki, platform, log)")
+@app.get("/api/branch/{name}/show/{what}", tags=["inventory"], summary="A live show command on the router (an allow-list: ike, ipsec, bgp, routes, default, interfaces, pki, platform, log, nat, dns)")
 def branch_show(name: str, what: str, refresh: bool = Query(False, description="run it again now (otherwise cached for 20 s)")):
     I = intent_mod.load(); dev = next((d for d in I["devices"] if d["name"] == name and d["role"] in intent_mod.ROUTER_ROLES), None)
     if dev is None: raise HTTPException(404, "no such router")

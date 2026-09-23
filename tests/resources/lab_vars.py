@@ -138,3 +138,11 @@ DNS_ZONE = intent_mod.dns(_I, DNS_SERVER) if DNS_SERVER else {}
 DNS_CLIENT = {n: intent_mod.dns_client(_I, n) for n in ALL_ROUTERS if intent_mod.dns_client(_I, n)}
 
 INTENT_FILE = str(intent_mod.INTENT_FILE)   # the document every run round-trips through the API
+
+# the scale set: 100 prefixes that exist on both sides at once, and the zones each side answers for
+SCALE = (NAT[NAT_ROUTER] or {}).get("scale") if NAT_ROUTER else None
+SCALE_ENTRIES = intent_mod.nat_scale(NAT[NAT_ROUTER]) if NAT_ROUTER else []
+SCALE_AGGREGATES = intent_mod.nat_scale_aggregates(NAT[NAT_ROUTER]) if NAT_ROUTER else None   # what BGP carries instead of 100 routes
+DNS_ZONES = {n: intent_mod.dns(_I, n) for n in ALL_ROUTERS if intent_mod.dns(_I, n)}
+HOST_RESOLVERS = {n: h["dns_client"] for n, h in
+                  {d["name"]: d for d in _I["devices"] if d["role"] == "host" and d.get("dns_client")}.items()}

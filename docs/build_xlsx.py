@@ -21,7 +21,8 @@ AREAS = {"NET": "Network service", "SOT": "Source of truth (Nautobot)", "INT": "
          "FW": "Firewalls", "PKI": "IKE authentication / PKI", "CUST": "Customers and design patterns", "HOST": "LAN hosts",
          "INET": "Internet breakout", "SEC": "Access control and audit", "RUN": "Runs and day-2 operations", "UI": "Portal pages",
          "CMP": "Compliance and remediation", "API": "REST API", "MON": "Monitoring and alerting", "TST": "Verification (tests)",
-         "LAB": "Lab infrastructure", "DOC": "Documentation", "NFR": "Non-functional"}
+         "LAB": "Lab infrastructure", "DOC": "Documentation", "NFR": "Non-functional",
+         "DCI": "Interconnect, NAT and DNS"}
 
 
 class Doc(HTMLParser):
@@ -76,7 +77,7 @@ subtitle = ""
 section = ""; meta, context, roles, glossary, traceability, constraints, reqs = [], [], [], [], [], [], []
 for kind, payload in doc.items:
     if kind == "h2": section = payload; continue
-    if kind == "list" and section.startswith("22."): constraints += payload; continue
+    if kind == "list" and "Constraints" in section: constraints += payload; continue
     if kind != "table": continue
     head = [c.lower() for c in payload[0]]
     if not section:                                        # the metadata table under the title
@@ -89,7 +90,7 @@ for kind, payload in doc.items:
     elif section.startswith("1.") and head[0] == "component": context = payload
     elif section.startswith("2.") and head[0] == "role": roles = payload
     elif section.startswith("2.") and head[0] == "term": glossary = payload
-    elif section.startswith("23."): traceability = payload
+    elif "Traceability" in section: traceability = payload
 
 # ---- workbook -------------------------------------------------------------------------------------------------------------
 HEAD = PatternFill("solid", fgColor="EEF2F7"); BLUE = Font(bold=True, color="0B62D6")

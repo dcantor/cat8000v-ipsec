@@ -1,0 +1,790 @@
+{
+ "id": "2026-09-23_01-52-52-6ccf",
+ "mode": "remediate",
+ "status": "success",
+ "started": 1790142772.6476703,
+ "finished": 1790142849.8791735,
+ "steps": [
+  {
+   "name": "rem_validate",
+   "title": "Validate the remediation (the router's non-compliant features and Nautobot's remediation lines)",
+   "status": "success",
+   "started": 1790142772.6754339,
+   "finished": 1790142784.792566,
+   "summary": "spoke4: 1 non-compliant feature(s) \u2014 Static routes; 1 remediation line(s)"
+  },
+  {
+   "name": "rem_push",
+   "title": "Push the remediation lines to the router and save",
+   "status": "success",
+   "started": 1790142784.792877,
+   "finished": 1790142789.8215292,
+   "summary": "spoke4: 1 line(s) pushed (Static routes), configuration saved"
+  },
+  {
+   "name": "golden",
+   "title": "Golden Config backup / intended / compliance",
+   "status": "success",
+   "started": 1790142789.8270102,
+   "finished": 1790142849.8785317,
+   "summary": "171/171 compliance rows compliant"
+  }
+ ],
+ "tests": null,
+ "results_dir": null,
+ "error": null,
+ "options": {
+  "golden": true,
+  "test": true,
+  "delete_disk": true
+ },
+ "resume_of": null,
+ "site": "c8000v-ipsec-lab",
+ "vpn": "IPSEC_VPN",
+ "change_ticket": "CHG0042002",
+ "devices": [
+  "central-headend",
+  "east-headend",
+  "west-headend",
+  "spoke1",
+  "spoke2",
+  "spoke3",
+  "spoke4",
+  "DCI",
+  "ACME-acquisition",
+  "fw-central",
+  "fw-east",
+  "fw-west",
+  "host-acquisition",
+  "host-central",
+  "host-east",
+  "host-spoke1",
+  "host-spoke2",
+  "host-spoke3",
+  "host-spoke4",
+  "host-west"
+ ],
+ "spoke": {
+  "name": "spoke4",
+  "features": [
+   "Static routes"
+  ]
+ },
+ "removal": null,
+ "rehome": null,
+ "user": "operator",
+ "log": [
+  {
+   "t": 1790142784.7925494,
+   "line": "spoke4: 1 non-compliant feature(s) \u2014 Static routes; 1 remediation line(s)"
+  },
+  {
+   "t": 1790142784.7925637,
+   "line": "   [Static routes] no ip route 10.99.99.0 255.255.255.0 Null0 name robot-drift"
+  },
+  {
+   "t": 1790142789.8109753,
+   "line": "spoke4: 1 line(s) pushed, configuration saved"
+  },
+  {
+   "t": 1790142789.8274724,
+   "line": "$ ./lab.sh nautobot golden"
+  },
+  {
+   "t": 1790142837.3104672,
+   "line": "==> Backup Configurations: SUCCESS"
+  },
+  {
+   "t": 1790142837.3104715,
+   "line": "==> Generate Intended Configurations: SUCCESS"
+  },
+  {
+   "t": 1790142837.3104722,
+   "line": "==> Perform Configuration Compliance: SUCCESS"
+  },
+  {
+   "t": 1790142837.310473,
+   "line": "   compliance ACME-acquisition / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310474,
+   "line": "   compliance ACME-acquisition / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104753,
+   "line": "   compliance ACME-acquisition / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104758,
+   "line": "   compliance ACME-acquisition / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104763,
+   "line": "   compliance ACME-acquisition / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104768,
+   "line": "   compliance ACME-acquisition / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104773,
+   "line": "   compliance ACME-acquisition / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104777,
+   "line": "   compliance ACME-acquisition / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104787,
+   "line": "   compliance ACME-acquisition / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104792,
+   "line": "   compliance ACME-acquisition / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.31048,
+   "line": "   compliance ACME-acquisition / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104806,
+   "line": "   compliance ACME-acquisition / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310481,
+   "line": "   compliance ACME-acquisition / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310482,
+   "line": "   compliance ACME-acquisition / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104825,
+   "line": "   compliance ACME-acquisition / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310483,
+   "line": "   compliance ACME-acquisition / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310484,
+   "line": "   compliance ACME-acquisition / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104844,
+   "line": "   compliance ACME-acquisition / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104854,
+   "line": "   compliance ACME-acquisition / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104858,
+   "line": "   compliance DCI / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104863,
+   "line": "   compliance DCI / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104868,
+   "line": "   compliance DCI / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104877,
+   "line": "   compliance DCI / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104882,
+   "line": "   compliance DCI / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104885,
+   "line": "   compliance DCI / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104897,
+   "line": "   compliance DCI / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104906,
+   "line": "   compliance DCI / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104916,
+   "line": "   compliance DCI / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104925,
+   "line": "   compliance DCI / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.310493,
+   "line": "   compliance DCI / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104932,
+   "line": "   compliance DCI / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104937,
+   "line": "   compliance DCI / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104942,
+   "line": "   compliance DCI / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104947,
+   "line": "   compliance DCI / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104959,
+   "line": "   compliance DCI / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104966,
+   "line": "   compliance DCI / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104973,
+   "line": "   compliance DCI / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104978,
+   "line": "   compliance DCI / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104982,
+   "line": "   compliance central-headend / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104985,
+   "line": "   compliance central-headend / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3104994,
+   "line": "   compliance central-headend / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105001,
+   "line": "   compliance central-headend / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105004,
+   "line": "   compliance central-headend / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105009,
+   "line": "   compliance central-headend / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105013,
+   "line": "   compliance central-headend / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105018,
+   "line": "   compliance central-headend / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310503,
+   "line": "   compliance central-headend / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105035,
+   "line": "   compliance central-headend / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.310504,
+   "line": "   compliance central-headend / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105044,
+   "line": "   compliance central-headend / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105047,
+   "line": "   compliance central-headend / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105054,
+   "line": "   compliance central-headend / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105059,
+   "line": "   compliance central-headend / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105066,
+   "line": "   compliance central-headend / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105073,
+   "line": "   compliance central-headend / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105078,
+   "line": "   compliance central-headend / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105083,
+   "line": "   compliance central-headend / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105085,
+   "line": "   compliance east-headend / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105097,
+   "line": "   compliance east-headend / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.31051,
+   "line": "   compliance east-headend / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105104,
+   "line": "   compliance east-headend / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310511,
+   "line": "   compliance east-headend / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105116,
+   "line": "   compliance east-headend / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105118,
+   "line": "   compliance east-headend / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105123,
+   "line": "   compliance east-headend / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105125,
+   "line": "   compliance east-headend / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105133,
+   "line": "   compliance east-headend / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105142,
+   "line": "   compliance east-headend / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105145,
+   "line": "   compliance east-headend / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105154,
+   "line": "   compliance east-headend / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310517,
+   "line": "   compliance east-headend / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105175,
+   "line": "   compliance east-headend / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310518,
+   "line": "   compliance east-headend / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105185,
+   "line": "   compliance east-headend / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105187,
+   "line": "   compliance east-headend / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105192,
+   "line": "   compliance east-headend / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105197,
+   "line": "   compliance spoke1 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105206,
+   "line": "   compliance spoke1 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105218,
+   "line": "   compliance spoke1 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310523,
+   "line": "   compliance spoke1 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105237,
+   "line": "   compliance spoke1 / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105242,
+   "line": "   compliance spoke1 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310525,
+   "line": "   compliance spoke1 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105254,
+   "line": "   compliance spoke1 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310526,
+   "line": "   compliance spoke1 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105266,
+   "line": "   compliance spoke1 / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.310528,
+   "line": "   compliance spoke1 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105285,
+   "line": "   compliance spoke1 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310529,
+   "line": "   compliance spoke1 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105297,
+   "line": "   compliance spoke1 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105311,
+   "line": "   compliance spoke1 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105316,
+   "line": "   compliance spoke1 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310532,
+   "line": "   compliance spoke1 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105326,
+   "line": "   compliance spoke1 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105333,
+   "line": "   compliance spoke1 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310534,
+   "line": "   compliance spoke2 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105345,
+   "line": "   compliance spoke2 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105357,
+   "line": "   compliance spoke2 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105361,
+   "line": "   compliance spoke2 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105366,
+   "line": "   compliance spoke2 / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105376,
+   "line": "   compliance spoke2 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105388,
+   "line": "   compliance spoke2 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.31054,
+   "line": "   compliance spoke2 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310541,
+   "line": "   compliance spoke2 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105414,
+   "line": "   compliance spoke2 / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.310542,
+   "line": "   compliance spoke2 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105423,
+   "line": "   compliance spoke2 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105428,
+   "line": "   compliance spoke2 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105435,
+   "line": "   compliance spoke2 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105447,
+   "line": "   compliance spoke2 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105454,
+   "line": "   compliance spoke2 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310546,
+   "line": "   compliance spoke2 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105469,
+   "line": "   compliance spoke2 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105474,
+   "line": "   compliance spoke2 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310548,
+   "line": "   compliance spoke3 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105485,
+   "line": "   compliance spoke3 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105493,
+   "line": "   compliance spoke3 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.31055,
+   "line": "   compliance spoke3 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105516,
+   "line": "   compliance spoke3 / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105524,
+   "line": "   compliance spoke3 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310553,
+   "line": "   compliance spoke3 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310554,
+   "line": "   compliance spoke3 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105557,
+   "line": "   compliance spoke3 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105562,
+   "line": "   compliance spoke3 / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.310557,
+   "line": "   compliance spoke3 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105574,
+   "line": "   compliance spoke3 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105588,
+   "line": "   compliance spoke3 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105602,
+   "line": "   compliance spoke3 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105607,
+   "line": "   compliance spoke3 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105612,
+   "line": "   compliance spoke3 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105624,
+   "line": "   compliance spoke3 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105628,
+   "line": "   compliance spoke3 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105633,
+   "line": "   compliance spoke3 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105638,
+   "line": "   compliance spoke4 / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105645,
+   "line": "   compliance spoke4 / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105652,
+   "line": "   compliance spoke4 / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105662,
+   "line": "   compliance spoke4 / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105667,
+   "line": "   compliance spoke4 / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310584,
+   "line": "   compliance spoke4 / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105853,
+   "line": "   compliance spoke4 / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105857,
+   "line": "   compliance spoke4 / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105867,
+   "line": "   compliance spoke4 / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105874,
+   "line": "   compliance spoke4 / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105881,
+   "line": "   compliance spoke4 / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105886,
+   "line": "   compliance spoke4 / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105898,
+   "line": "   compliance spoke4 / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105903,
+   "line": "   compliance spoke4 / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310591,
+   "line": "   compliance spoke4 / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105915,
+   "line": "   compliance spoke4 / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310592,
+   "line": "   compliance spoke4 / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105924,
+   "line": "   compliance spoke4 / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105936,
+   "line": "   compliance spoke4 / cisco_xe - WAN interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310594,
+   "line": "   compliance west-headend / cisco_xe - BGP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105943,
+   "line": "   compliance west-headend / cisco_xe - BGP policy: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310595,
+   "line": "   compliance west-headend / cisco_xe - Banner: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105953,
+   "line": "   compliance west-headend / cisco_xe - DMVPN tunnel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105958,
+   "line": "   compliance west-headend / cisco_xe - DNS: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105965,
+   "line": "   compliance west-headend / cisco_xe - IKEv2/IPsec: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105967,
+   "line": "   compliance west-headend / cisco_xe - Loopbacks: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105977,
+   "line": "   compliance west-headend / cisco_xe - Management ACL: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105981,
+   "line": "   compliance west-headend / cisco_xe - Management interface: COMPLIANT"
+  },
+  {
+   "t": 1790142837.310599,
+   "line": "   compliance west-headend / cisco_xe - NAT (DCI): COMPLIANT"
+  },
+  {
+   "t": 1790142837.3105996,
+   "line": "   compliance west-headend / cisco_xe - NTP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106003,
+   "line": "   compliance west-headend / cisco_xe - Port-channel: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106008,
+   "line": "   compliance west-headend / cisco_xe - SNMP: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106012,
+   "line": "   compliance west-headend / cisco_xe - SVIs: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106022,
+   "line": "   compliance west-headend / cisco_xe - Static routes: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106027,
+   "line": "   compliance west-headend / cisco_xe - Syslog: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106034,
+   "line": "   compliance west-headend / cisco_xe - VLAN database: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106039,
+   "line": "   compliance west-headend / cisco_xe - VRF definitions: COMPLIANT"
+  },
+  {
+   "t": 1790142837.3106043,
+   "line": "   compliance west-headend / cisco_xe - WAN interface: COMPLIANT"
+  }
+ ]
+}

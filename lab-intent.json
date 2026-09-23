@@ -110,6 +110,10 @@
           "spoke1": "192.168.12.1",
           "west-headend": "192.168.16.1",
           "host-west": "192.168.16.2"
+        },
+        "scale": {
+          "name_format": "svc{n}",
+          "count": 1000
         }
       },
       "address": "6115 Harbor Dr, Suite 514, Los Angeles, CA 80823"
@@ -244,7 +248,21 @@
             "outside_local": "172.30.12.0/24",
             "description": "the acquired company reuses ACME's branch-1 LAN"
           }
-        ]
+        ],
+        "scale": {
+          "count": 1000,
+          "prefix_base": "10.128.0.0/24",
+          "inside_global_base": "100.96.0.0/24",
+          "outside_local_base": "100.100.0.0/24",
+          "aggregate_len": 14,
+          "acme_router": "west-headend",
+          "acme_host": 1,
+          "acquisition_router": "ACME-acquisition",
+          "acquisition_host": 2,
+          "loopback_base": 900,
+          "loopback_mode": "secondaries",
+          "description": "scale test: 1000 overlapping /24s, one NAT pair each"
+        }
       }
     },
     {
@@ -285,6 +303,17 @@
           "namespace": "acquisition"
         }
       ],
+      "dns": {
+        "domain": "acquisition.local",
+        "hosts": {
+          "server": "10.128.0.2"
+        },
+        "scale": {
+          "name_format": "acq{n}",
+          "count": 1000,
+          "side": "acquisition"
+        }
+      },
       "dns_client": {
         "server": "192.168.16.1",
         "source_interface": "Loopback2",
@@ -369,7 +398,11 @@
       "region": "East",
       "site": "branch-1",
       "site_code": "LAB-IPSEC",
-      "contact": "noc@lab.local"
+      "contact": "noc@lab.local",
+      "dns_client": {
+        "server": "100.96.0.2",
+        "domain": "acquisition.local"
+      }
     },
     {
       "name": "host-spoke2",

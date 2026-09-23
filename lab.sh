@@ -262,12 +262,19 @@ X
 X
 }
 
+host_resolver() {   # "<server> <domain>" from the host's dns_client in lab-intent.json, empty when it has none
+  "$LAB_DIR/tests/.venv/bin/python" -c '
+import json, sys
+I = json.load(open(sys.argv[1]))
+c = (next((d for d in I["devices"] if d["name"] == sys.argv[2]), {}) or {}).get("dns_client") or {}
+print(c.get("server", ""), c.get("domain", ""))' "$LAB_DIR/lab-intent.json" "$1"
+}
 host_seed() {      # cloud-init NoCloud seed: static addresses (network-config v2 by MAC), user lab / lab, sshd, node-exporter
-  local n="$1" d peer pn pp pfx cidr gw; d="$(node_dir "$n")"
+  local n="$1" d peer pn pp pfx cidr gw ns; d="$(node_dir "$n")"
   peer="$(link_peer "$n" 1)"; [[ -n "$peer" ]] || die "$n eth1 is not wired in LINKS"; read -r pn pp pfx _ <<<"$peer"
   cidr="$(wan_ip "$n" 1)/${pfx##*/}"; gw="$(wan_ip "$pn" "$pp")"
+  ns="$(host_resolver "$n")"   # a host may resolve through a server on the far side of the DCI (intent: the host's dns_client)
   echo "[$n] building cloud-init (NoCloud) seed ISO"
-  printf 'instance-id: %s-001\nlocal-hostname: %s\n' "$n" "$n" > "$d/meta-data"
   cat > "$d/network-config" <<U
 version: 2
 ethernets:
@@ -280,7 +287,7 @@ ethernets:
     match: { macaddress: "$(mac "$n" 1)" }
     set-name: eth1
     addresses: [$cidr]
-    routes: [{ to: 0.0.0.0/0, via: $gw }]
+    routes: [{ to: 0.0.0.0/0, via: $gw }]$([[ -n "${ns% *}" ]] && printf '\n    nameservers: { addresses: [%s], search: [%s] }' "${ns%% *}" "${ns##* }")
 U
   cat > "$d/user-data" <<U
 #cloud-config
@@ -295,13 +302,14 @@ users:
 ssh_pwauth: true
 write_files:
   - path: /etc/motd
-    content: "$n — LAN host behind $pn: eth1 $cidr (gateway $gw), OOB eth0 ${MGMT_IP[$n]}. iperf3 / tcpdump / mtr installed.\n"
-runcmd:
+    content: "$n — LAN host behind $pn: eth1 $cidr (gateway $gw), OOB eth0 ${MGMT_IP[$n]}. iperf3 / tcpdump / mtr installed.\n"$([[ -n "${ns% *}" ]] && printf '\n  - path: /etc/resolv.conf.head\n    content: "# resolver from lab-intent.json (dns_client): a server on the far side of the DCI\\nsearch %s\\nnameserver %s\\n"' "${ns##* }" "${ns%% *}")
+runcmd:$([[ -n "${ns% *}" ]] && printf '\n  - printf "search %s\\nnameserver %s\\n" > /etc/resolv.conf' "${ns##* }" "${ns%% *}")
   - rc-update add sshd default
   - rc-service sshd restart
   - rc-update add node-exporter default
   - rc-service node-exporter restart
 U
+  printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$n" "$(cat "$d/network-config" "$d/user-data" | md5sum | cut -c1-8)" "$n" > "$d/meta-data"
   genisoimage -quiet -o "$d/seed.iso.tmp" -V cidata -J -r "$d/user-data" "$d/meta-data" "$d/network-config" && mv -f "$d/seed.iso.tmp" "$d/seed.iso"
 }
 

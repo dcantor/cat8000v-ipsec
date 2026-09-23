@@ -120,12 +120,46 @@ def nat_cli(cfg, peer_ip):
     translations per overlapping prefix — the inside hosts as ACME sees them (inside global) and ACME's hosts as the inside sees them
     (outside local) — plus the DNS ALG, which rewrites the addresses inside DNS replies that cross the NAT (`dns_fixup`)."""
     out = []
-    for ov in cfg.get("overlaps", []):
+    for ov in cfg.get("overlaps", []) + intent_mod.nat_scale(cfg):
         ilocal = ipaddress.IPv4Network(ov["prefix"]); iglobal = ipaddress.IPv4Network(ov["inside_global"]); olocal = ipaddress.IPv4Network(ov["outside_local"])
         out += [f"ip nat inside source static network {ilocal.network_address} {iglobal.network_address} /{ilocal.prefixlen}",
                 f"ip nat outside source static network {ilocal.network_address} {olocal.network_address} /{ilocal.prefixlen} no-payload" if not cfg.get("dns_fixup", True)
                 else f"ip nat outside source static network {ilocal.network_address} {olocal.network_address} /{ilocal.prefixlen}"]
     out.append("ip nat service all-algs" if cfg.get("dns_fixup", True) else "no ip nat service dns tcp\nno ip nat service dns udp")
+    return "\n".join(out) + "\n"
+
+
+CLI_CHUNK = 400   # IOS-XE's CLI RPC rejects a very large payload ("bad length/size"): a template is split into chunks of this many lines
+
+
+def cli_templates(name, content, header=None, chunk=CLI_CHUNK):
+    """One CLI template per chunk of at most `chunk` lines. `header` is repeated at the top of every chunk, for lines that only
+    make sense inside a section (the addresses of an interface)."""
+    lines = [l for l in content.splitlines() if l.strip()]
+    body = [l for l in lines if l != header]
+    if len(lines) <= chunk: return [{"name": name, "type": "cli", "content": "\n".join(lines) + "\n"}]
+    out, step = [], chunk - (1 if header else 0)
+    for i in range(0, len(body), step):
+        part = ([header] if header else []) + body[i:i + step]
+        out.append({"name": f"{name}_{i // step + 1}", "type": "cli", "content": "\n".join(part) + "\n"})
+    return out
+
+
+def scale_loopbacks_cli(sc, entries, host_key, aggregate=None):
+    """The side's own address inside every scale prefix. A thousand /24s would be a thousand interfaces, so they ride on one
+    loopback as secondary addresses (one line each); `aggregate` adds the summary route the router originates for them.
+    A synthetic set, pushed as a template rather than modelled as a thousand Nautobot interfaces."""
+    lo = int(sc["loopback_base"])
+    if sc.get("loopback_mode") == "secondaries":
+        out = [f"interface Loopback{lo}", f" description scale overlap {entries[0]['prefix']} .. {entries[-1]['prefix']} ({len(entries)} prefixes)"]
+        out += [f" ip address {e[host_key]} 255.255.255.0" + ("" if i == 0 else " secondary") for i, e in enumerate(entries)]
+    else:
+        out = []
+        for e in entries:
+            out += [f"interface Loopback{lo + e['n']}", f" description scale overlap {e['prefix']}", f" ip address {e[host_key]} 255.255.255.0"]
+    if aggregate:
+        net = ipaddress.IPv4Network(aggregate)
+        out.append(f"ip route {net.network_address} {net.netmask} Null0 name scale-overlap-aggregate")
     return "\n".join(out) + "\n"
 
 
@@ -135,10 +169,11 @@ def dns_client_cli(cfg):
     return "\n".join([f"ip name-server {cfg['server']}", f"ip domain lookup source-interface {cfg['source_interface']}"]) + "\n"
 
 
-def dns_cli(cfg):
-    """ACME's own names, answered by this router (the acquired company resolves them through the DCI, whose NAT doctors the replies)."""
-    out = ["ip dns server", f"ip domain name {cfg.get('domain', 'lab.local')}"]
-    for host, addr in sorted((cfg.get("hosts") or {}).items()):
+def dns_cli(cfg, nat_cfg=None):
+    """ACME's own names, answered by this router (the acquired company resolves them through the DCI, whose NAT doctors the replies);
+    a `scale` block adds one record per overlapping prefix so the fix-up is exercised at the same scale as the NAT."""
+    out = ["ip dns server"]
+    for host, addr in sorted({**(cfg.get("hosts") or {}), **intent_mod.dns_scale(cfg, nat_cfg)}.items()):
         out.append(f"ip host {host}.{cfg.get('domain', 'lab.local')} {addr}")
     return "\n".join(out) + "\n"
 
@@ -236,21 +271,31 @@ def render(dev):
         afn.append(af)
     nat_statics = []
     if nat_cfg:
-        templates.append({"name": f"nat_{name}", "type": "cli", "content": nat_cli(nat_cfg, outside_peer)})
-        ov_prefixes = [ipaddress.IPv4Network(ov["prefix"]) for ov in nat_cfg.get("overlaps", [])]
+        templates += cli_templates(f"nat_{name}", nat_cli(nat_cfg, outside_peer))
+        agg = intent_mod.nat_scale_aggregates(nat_cfg)
+        ov_prefixes = [ipaddress.IPv4Network(ov["prefix"]) for ov in nat_cfg.get("overlaps", [])] + ([ipaddress.IPv4Network(agg["prefix"])] if agg else [])
         prefix_lists.append({"name": "OVERLAP", "description": "prefixes that exist on both sides of the DCI: translated, not advertised",
                              "seqs": [{"seq": 5 + 5 * i, "action": "permit", "prefix": str(p2)} for i, p2 in enumerate(ov_prefixes)]})
         route_maps.append({"name": "NO-OVERLAP", "entries": [{"seq": 10, "operation": "deny", "description": "the overlapping prefixes stay on their own side of the NAT",
                                                               "match": {"ipv4_address_prefix_lists": ["OVERLAP"]}},
                                                              {"seq": 20, "operation": "permit", "description": "everything else is advertised normally"}]})
-        for ov in nat_cfg.get("overlaps", []):
+        for ov in nat_cfg.get("overlaps", []) + ([{"inside_global": agg["inside_global"], "outside_local": agg["outside_local"]}] if agg else []):
             ig, ol = ipaddress.IPv4Network(ov["inside_global"]), ipaddress.IPv4Network(ov["outside_local"])
             # inside global: advertised to ACME; the packets themselves are translated before the routing lookup, so a Null0 route is enough
             nat_statics.append({"prefix": str(ig.network_address), "mask": str(ig.netmask), "next_hops": [{"interface_type": "Null", "interface_id": "0", "name": "nat-inside-global"}]})
             # outside local: a packet from the inside is routed *before* it is translated, so this one points at ACME
             if outside_peer: nat_statics.append({"prefix": str(ol.network_address), "mask": str(ol.netmask), "next_hops": [{"ip": outside_peer, "name": "nat-outside-local"}]})
             networks += [{"network": str(ig.network_address), "mask": str(ig.netmask)}, {"network": str(ol.network_address), "mask": str(ol.netmask)}]
-    if dns_cfg: templates.append({"name": f"dns_{name}", "type": "cli", "content": dns_cli(dns_cfg)})
+    scale_owner = next((c for c in (ctx.get("nat") or {}).values() if (c or {}).get("scale")), None)
+    if dns_cfg: templates += cli_templates(f"dns_{name}", dns_cli(dns_cfg, scale_owner))
+    # the scale set itself: one loopback per overlapping prefix on each side, and the aggregate that side originates
+    if scale_owner:
+        sc, ents = scale_owner["scale"], intent_mod.nat_scale(scale_owner); agg = intent_mod.nat_scale_aggregates(scale_owner)
+        if name == sc["acme_router"]:
+            templates += cli_templates(f"scale_overlap_{name}", scale_loopbacks_cli(sc, ents, "acme_ip"), header=f"interface Loopback{sc['loopback_base']}")
+        elif name == sc["acquisition_router"]:
+            templates += cli_templates(f"scale_overlap_{name}", scale_loopbacks_cli(sc, ents, "acquisition_ip", agg["prefix"]), header=f"interface Loopback{sc['loopback_base']}")
+            networks.append({"network": str(ipaddress.IPv4Network(agg["prefix"]).network_address), "mask": str(ipaddress.IPv4Network(agg["prefix"]).netmask)})
     if dnsc_cfg: templates.append({"name": f"dns_client_{name}", "type": "cli", "content": dns_client_cli(dnsc_cfg)})
     if breakout and not is_hub and pref_order: prefix_lists.append({"name": "DEFAULT-ROUTE", "description": "the default route the headends originate (internet breakout)", "seqs": [{"seq": 5, "action": "permit", "prefix": "0.0.0.0/0"}]})
     bgp = {"as_number": ri["autonomous_system"]["asn"], "router_id": ri["router_id"]["address"].split("/")[0],

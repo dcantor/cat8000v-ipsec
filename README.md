@@ -403,6 +403,32 @@ and the acquisition resolves through the DCI sourced from its overlapping addres
 through. Both the NaC renderer and the Golden Config template render all of this from one config context keyed by hostname, and two
 new compliance features (**NAT (DCI)**, **DNS**) keep it honest: 171/171 rows compliant.
 
+**At scale.** A `scale` block in the same NAT intent puts **1000 overlapping /24s** on both sides at once
+(`10.128.0.0/24` … `10.131.231.0/24`; ACME holds `.1` in each, the acquisition `.2`), each with its own pair of static
+translations — **2002 static entries** on the DCI — while BGP only carries three aggregates (`100.96.0.0/14`,
+`100.100.0.0/14`, `10.128.0.0/14`) and the filter one extra prefix-list line: the scale lands on the NAT, not on the routing
+table. A thousand interfaces would be absurd, so each side carries its thousand addresses as **secondaries on one loopback**
+(`Loopback900`), and because IOS-XE's CLI RPC rejects a payload of that size the renderer splits every template into chunks of
+400 lines. A branch host reaches all 1000 translated prefixes (**1000/1000 in about five seconds**, forty pings in parallel), the
+acquisition reaches ACME's copies the same way, and the DCI reports no drops and no allocation failures.
+
+**DNS in both directions.** Each side answers for its own zone with its own copies: west-headend serves `acme.local`
+(`svc0…svc999` → `10.128.x.1`) and **ACME-acquisition serves `acquisition.local`** (`acq0…acq999` → `10.128.x.2`) — about
+1000 `ip host` records each. A branch host, `host-spoke1`, has the acquisition's server as its resolver — at the address ACME
+sees it on, `100.96.0.2` — so its queries *and* the answers cross the NAT:
+
+```
+host-spoke1 # nslookup acq7.acquisition.local     ->  100.96.7.2      (the record says 10.128.7.2)
+DCI # show ip nat translations | include :53
+udp  100.96.0.2:53   10.128.0.2:53   172.30.12.2:50370   192.168.12.2:50370
+```
+
+The suite resolves every one of the thousand names from the branch host and pings what came back: **resolved+reached 1000/1000**.
+
+Both halves of the flow are translated and the A records are rewritten in flight, so the host can reach what it just resolved.
+The host's resolver comes from the intent too (`dns_client` on the host; cloud-init writes it, and the instance-id now follows a
+hash of the seed so a changed resolver is actually applied on the next boot).
+
 ![Topology with the DCI chain](docs/screenshots/portal-topology-schematic.png)
 ![Branches with the DCI chain](docs/screenshots/portal-branches.png)
 
@@ -433,7 +459,7 @@ core session per headend; the end-to-end proof lives in the SRv6 lab's suite `12
 
 ## Tests
 
-`./lab.sh test` (or the portal) runs 57 Robot tests: management plane; underlay links and CDP; VTIs,
+`./lab.sh test` (or the portal) runs 74 Robot tests: management plane; underlay links and CDP; VTIs,
 IKEv2 SAs (with the modelled authentication) and real encryption; eBGP sessions, prefixes and spoke↔spoke paths via a headend; **no
 Terraform drift**; the firewalls (modelled, in sync with Nautobot, actually filtering, their log in VictoriaLogs); the Nautobot model — devices and serials, cables, VPN objects (every router's
 tunnel destination equals the far endpoint's source address), the location hierarchy, **per-spoke
@@ -442,9 +468,11 @@ compliant; and suite 08 — the CA pinned on every router with a certificate tun
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
 renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
 router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow);
-suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up, Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up — a thousand prefixes and a thousand records at once — Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
-Each run keeps pre/post config backups and a diff under `results/`.
+Each run keeps pre/post config backups and a diff under `results/`, plus **`report.pdf`** — a one-file evidence report built
+from `output.xml` (`tests/report_pdf.py`): every suite and test with its result, its duration and the numbers it measured
+(the NAT and DNS sweeps, the compliance rows, the IKEv2 SAs), so a run can be read without opening `log.html`.
 
 ## What is where
 

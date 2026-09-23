@@ -25,7 +25,7 @@ Runs queue behind the one executing and a queued run can be cancelled; the execu
     Should Be Equal As Integers    ${again}[status]    409    msg=cancelling twice must be refused
     ${running}=    Portal Get    /api/runs/${a}[json][id]
     Should Be True    $running['status'] in ('running', 'queued', 'success')
-    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${a}[json][id]
+    ${res}=    Wait Until Keyword Succeeds    12 min    10s    Run Finished    ${a}[json][id]
     Should Be Equal    ${res}[status]    success    msg=the plan run ended ${res}[status]: ${res}[error]
     ${audit}=    Portal Get    /api/audit    action=run.cancel    limit=5
     Should Be Equal    ${audit}[0][user]    operator
@@ -129,7 +129,7 @@ The Compliance page reports Nautobot's Golden Config verdict for every router an
         Should Be True    ${d}[features][IKEv2/IPsec][compliant]
     END
     ${run}=    Portal Post    /api/runs    {"mode": "golden", "options": {}}
-    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    12 min    10s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    success    msg=golden run ${run}[id] ended ${res}[status]: ${res}[error]
     ${after}=    Portal Get    /api/compliance    refresh=true
     Should Be True    $after['summary']['last_compliance'] > $c['summary']['last_compliance']    msg=the compliance run did not refresh the report
@@ -177,7 +177,7 @@ Drift on a router is detected by the Golden Config run, remediated from the port
     ${host}=    Set Variable    ${ROUTERS}[${spoke}][host]
     Configure Router    ${host}    ip route 10.99.99.0 255.255.255.0 Null0 name robot-drift
     ${run}=    Portal Post    /api/runs    {"mode": "golden", "options": {}}
-    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    12 min    10s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    failed    msg=the golden run should fail on the drifted router (${res}[status])
     Should Contain    ${res}[error]    ${spoke}
     ${c}=    Portal Get    /api/compliance    refresh=true
@@ -195,7 +195,7 @@ Drift on a router is detected by the Golden Config run, remediated from the port
     ${run}=    Portal Post    /api/runs    {"mode": "remediate", "spoke": {"name": "${spoke}", "features": ["Static routes"]}, "options": {}}
     Should Be Equal    ${run}[mode]    remediate
     Should Be Equal    ${{ [s['name'] for s in $run['steps']] }}    ${{ ['rem_validate', 'rem_push', 'golden'] }}
-    ${res}=    Wait Until Keyword Succeeds    8 min    10s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    12 min    10s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    success    msg=remediate run ${run}[id] ended ${res}[status]: ${res}[error]
     Should Contain    ${res}[steps][1][summary]    1 line(s) pushed
     ${out}=    Run Command    ${host}    show running-config | include 10.99.99.0
@@ -205,10 +205,11 @@ Drift on a router is detected by the Golden Config run, remediated from the port
     ${c}=    Portal Get    /api/compliance    refresh=true
     Should Be True    ${{ [d for d in $c['devices'] if d['name'] == $spoke][0]['ok'] }}    msg=${spoke} still non-compliant after the remediation
     Should Be Equal As Integers    ${c}[summary][devices_ok]    ${c}[summary][devices]
-    ${h}=    Portal Get    /api/compliance/history    device=${spoke}
-    Should Not Be True    ${h}[runs][-2][ok]
-    Should Contain    ${h}[runs][-2][drifted]    Static routes
-    Should Be True    ${h}[runs][-1][ok]
+    # the history entry of the run that repaired it lands a moment after the run reports success, and a scheduled golden run
+    # can slip in between — so wait for the newest entry to be the compliant one, then look for the drift behind it
+    ${h}=    Wait Until Keyword Succeeds    3 min    10s    Drift History Ends Compliant    ${spoke}
+    Should Contain    ${{ [f for r in $h['runs'][:-1] if not r['ok'] for f in r['drifted']] }}    Static routes
+    ...    msg=the drift on ${spoke} is not in the history: ${h}[runs]
     ${m}=    Portal Get Text    /metrics
     Should Match Regexp    ${m}    lab_config_compliance_ok\\{[^}]*device="${spoke}"[^}]*\\} 1
     # a second remediation has nothing to do
@@ -228,7 +229,7 @@ Re-apply from the model restores a modelled attribute that was changed by hand, 
     Configure Router    ${host}    interface Loopback0    description robot-drift
     ${run}=    Portal Post    /api/runs    {"mode": "reapply", "spoke": {"name": "${spoke}"}, "options": {}}
     Should Be Equal    ${{ [s['name'] for s in $run['steps']] }}    ${{ ['render', 'reapply_plan', 'reapply_apply', 'golden'] }}
-    ${res}=    Wait Until Keyword Succeeds    10 min    10s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    15 min    10s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    success    msg=reapply run ${run}[id] ended ${res}[status]: ${res}[error]
     Should Contain    ${res}[steps][1][summary]    1 to update in place    msg=the targeted plan should see exactly the loopback: ${res}[steps][1][summary]
     Should Contain    ${res}[steps][2][summary]    1 changed
@@ -256,6 +257,14 @@ Single sign-on is offered and starts an authorization-code flow with PKCE at the
     Should Contain    ${bad}[headers][location]    login_error    msg=a callback without the flow cookie must be rejected
 
 *** Keywords ***
+Drift History Ends Compliant
+    [Documentation]    The newest drift-history entry for a router, once it says the router is compliant again.
+    [Arguments]    ${spoke}
+    ${h}=    Portal Get    /api/compliance/history    device=${spoke}
+    Should Be True    ${h}[runs][-1][ok]    msg=the newest drift-history entry for ${spoke} is still not compliant: ${h}[runs][-1]
+    RETURN    ${h}
+
+
 Run Finished
     [Arguments]    ${id}
     ${r}=    Portal Get    /api/runs/${id}

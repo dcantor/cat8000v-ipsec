@@ -1,7 +1,11 @@
 {#- Intended configuration for the C8000v IPsec VTI routers, rendered from Nautobot (query golden-config-lab).
     Features under compliance: management ACL, static routes, loopbacks, wan-interface, tunnel, crypto (incl. the PKI trustpoint and
     certificate map when IKE authenticates with certificates), BGP, banner. -#}
-{%- set masks = {'24': '255.255.255.0', '30': '255.255.255.252', '32': '255.255.255.255'} -%}
+{%- set masks = {'17': '255.255.128.0', '24': '255.255.255.0', '30': '255.255.255.252', '32': '255.255.255.255'} -%}
+{#- a thousand overlapping prefixes walk past the third octet, so the scale set is expanded in 32-bit arithmetic:
+    `ipint` turns a prefix into its integer, `q` turns an integer back into a dotted quad -#}
+{%- macro q(v) -%}{{ v // 16777216 % 256 }}.{{ v // 65536 % 256 }}.{{ v // 256 % 256 }}.{{ v % 256 }}{%- endmacro -%}
+{%- macro ipint(a) -%}{%- set x = a.split('/')[0].split('.') | map('int') | list -%}{{ x[0] * 16777216 + x[1] * 65536 + x[2] * 256 + x[3] }}{%- endmacro -%}
 {#- crypto suite from the VPN profile of this router's tunnel endpoints (core vpn app); Cisco names in extra_options.ios -#}
 {%- set ns = namespace(prof=none) -%}
 {%- for i in interfaces if i.vpn_tunnel_endpoints_tunnel %}{% set ns.prof = i.vpn_tunnel_endpoints_tunnel.vpn_profile %}{% endfor -%}
@@ -50,8 +54,26 @@ ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.
 {%- set nat = (config_context.nat or {}).get(hostname) %}
 {%- set dns = (config_context.dns or {}).get(hostname) %}
 {%- set dnsc = (config_context.dns_client or {}).get(hostname) %}
+{%- set scale_owner = ((config_context.nat or {}).values() | selectattr('scale', 'defined') | list | first) if config_context.nat else none %}
+{%- set sc = scale_owner.scale if scale_owner else none %}
+{%- set step = (2 ** (32 - (sc.prefix_base.split('/')[1] | int))) if sc else 0 %}
+{%- set aggstep = (2 ** (32 - (sc.aggregate_len | int))) if sc else 0 %}
+{%- set pb = (ipint(sc.prefix_base) | int) if sc else 0 %}
+{%- set gb = (ipint(sc.inside_global_base) | int) if sc else 0 %}
+{%- set lb = (ipint(sc.outside_local_base) | int) if sc else 0 %}
+{%- set aggmask = q(4294967296 - aggstep) if sc else '' %}
+{%- set pagg = q(pb // aggstep * aggstep) if sc else '' %}
+{%- set gagg = q(gb // aggstep * aggstep) if sc else '' %}
+{%- set lagg = q(lb // aggstep * aggstep) if sc else '' %}
+{%- set scmask = q(4294967296 - step) if sc else '' %}
 {%- set inet = config_context.internet or {} %}
 {%- set is_hub = device_role.name == 'vpn-hub' if device_role else False %}
+{%- if nat and sc %}
+{%-   set _ = routes.append('ip route ' ~ gagg ~ ' ' ~ aggmask ~ ' Null0 name nat-inside-global') %}
+{%-   for i in interfaces if i.name == nat.outside_interface and i.connected_interface and i.connected_interface.ip_addresses %}
+{%-     set _ = routes.append('ip route ' ~ lagg ~ ' ' ~ aggmask ~ ' ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name nat-outside-local') %}
+{%-   endfor %}
+{%- endif %}
 {%- for ov in (nat.overlaps if nat else []) %}
 {%-   set ig = ov.inside_global | ipaddress_network('network_address') ~ ' ' ~ masks[ov.inside_global.split('/')[1]] %}
 {%-   set ol = ov.outside_local | ipaddress_network('network_address') ~ ' ' ~ masks[ov.outside_local.split('/')[1]] %}
@@ -60,6 +82,9 @@ ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.
 {%-     set _ = routes.append('ip route ' ~ ol ~ ' ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name nat-outside-local') %}
 {%-   endfor %}
 {%- endfor %}
+{%- if sc and hostname == sc.acquisition_router %}
+{%-   set _ = routes.append('ip route ' ~ pagg ~ ' ' ~ aggmask ~ ' Null0 name scale-overlap-aggregate') %}
+{%- endif %}
 {%- if inet.enabled and is_hub %}
 {%-   for i in interfaces if i.connected_interface and i.connected_interface.device.role.name == 'vpn-firewall' and i.connected_interface.ip_addresses %}
 {%-     if loop.first %}{% set _ = routes.append('ip route 0.0.0.0 0.0.0.0 ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name internet-via-' ~ i.connected_interface.device.name) %}{% endif %}
@@ -96,6 +121,25 @@ interface {{ i.name }}
  ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
 !
 {% endfor %}
+{% if sc and hostname in (sc.acme_router, sc.acquisition_router) %}
+{% set host = sc.acme_host if hostname == sc.acme_router else sc.acquisition_host %}
+{% set plen = sc.prefix_base.split('/')[1] %}
+{% if sc.loopback_mode | default('interfaces') == 'secondaries' %}
+interface Loopback{{ sc.loopback_base }}
+ description scale overlap {{ q(pb) }}/{{ plen }} .. {{ q(pb + (sc.count - 1) * step) }}/{{ plen }} ({{ sc.count }} prefixes)
+{% for i in range(sc.count) %}
+ ip address {{ q(pb + i * step + host) }} {{ scmask }}{{ '' if loop.first else ' secondary' }}
+{% endfor %}
+!
+{% else %}
+{% for i in range(sc.count) %}
+interface Loopback{{ sc.loopback_base + i }}
+ description scale overlap {{ q(pb + i * step) }}/{{ plen }}
+ ip address {{ q(pb + i * step + host) }} {{ scmask }}
+!
+{% endfor %}
+{% endif %}
+{% endif %}
 {% for i in interfaces | sort(attribute='name') if i.name.startswith('GigabitEthernet') and i.name != 'GigabitEthernet1' %}
 interface {{ i.name }}
 {% if i.enabled and i.ip_addresses %}
@@ -197,11 +241,20 @@ crypto ipsec profile {{ pios.ipsec_profile }}
 ip nat inside source static network {{ ov.prefix | ipaddress_network('network_address') }} {{ ov.inside_global | ipaddress_network('network_address') }} /{{ ov.prefix.split('/')[1] }}
 ip nat outside source static network {{ ov.prefix | ipaddress_network('network_address') }} {{ ov.outside_local | ipaddress_network('network_address') }} /{{ ov.prefix.split('/')[1] }}
 {% endfor %}
+{% if sc %}
+{% for i in range(sc.count) %}
+ip nat inside source static network {{ q(pb + i * step) }} {{ q(gb + i * step) }} /{{ sc.prefix_base.split('/')[1] }}
+ip nat outside source static network {{ q(pb + i * step) }} {{ q(lb + i * step) }} /{{ sc.prefix_base.split('/')[1] }}
+{% endfor %}
+{% endif %}
 !
 ip prefix-list OVERLAP description prefixes that exist on both sides of the DCI: translated, not advertised
 {% for ov in nat.overlaps %}
 ip prefix-list OVERLAP seq {{ 5 + 5 * loop.index0 }} permit {{ ov.prefix }}
 {% endfor %}
+{% if sc %}
+ip prefix-list OVERLAP seq {{ 5 + 5 * (nat.overlaps | length) }} permit {{ pagg }}/{{ sc.aggregate_len }}
+{% endif %}
 !
 route-map NO-OVERLAP deny 10
  description the overlapping prefixes stay on their own side of the NAT
@@ -213,7 +266,12 @@ route-map NO-OVERLAP permit 20
 {% endif %}
 {% if dns %}
 ip dns server
-{% for h, a in (dns.hosts or {}) | dictsort %}
+{% set records = namespace(d=dict(dns.hosts or {})) %}
+{% if sc and dns.scale %}
+{% set zone_host = sc.acquisition_host if dns.scale.side | default('acme') == 'acquisition' else sc.acme_host %}
+{% for i in range(dns.scale.count) %}{% set _ = records.d.update({dns.scale.name_format.format(n=i): q(pb + i * step + zone_host) | string}) %}{% endfor %}
+{% endif %}
+{% for h, a in records.d | dictsort %}
 ip host {{ h }}.{{ dns.domain }} {{ a }}
 {% endfor %}
 !
@@ -239,11 +297,13 @@ router bgp {{ ri.autonomous_system.asn }}
 {% for p in own %}{% if p.endswith('/32') %}{% set _ = lo.append(p) %}{% else %}{% set _ = nets.append(p) %}{% endif %}{% endfor %}
 {% set natnets = [] %}
 {% for ov in (nat.overlaps if nat else []) %}{% set _ = natnets.append(ov.inside_global) %}{% set _ = natnets.append(ov.outside_local) %}{% endfor %}
+{% if nat and sc %}{% set _ = natnets.append(gagg ~ '/' ~ sc.aggregate_len) %}{% set _ = natnets.append(lagg ~ '/' ~ sc.aggregate_len) %}{% endif %}
+{% if sc and hostname == sc.acquisition_router %}{% set _ = natnets.append(pagg ~ '/' ~ sc.aggregate_len) %}{% endif %}
 {% for p in lo + ((nets + natnets) | sort) %}
 {% if p.endswith('/24') and p.startswith('192.') %}
   network {{ p.split('/')[0] }}
 {% else %}
-  network {{ p.split('/')[0] }} mask {{ masks[p.split('/')[1]] }}
+  network {{ p.split('/')[0] }} mask {{ q(4294967296 - 2 ** (32 - (p.split('/')[1] | int))) }}
 {% endif %}
 {% endfor %}
 {% for ep in ri.endpoints | sort(attribute='peer.source_ip.address') if ep.enabled and ep.peer %}

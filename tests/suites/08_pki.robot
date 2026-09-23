@@ -130,7 +130,7 @@ The portal renews a spoke's certificate: new serial on the router, in the CA ind
     ${spoke}=    Evaluate    [s for s in $SPOKES if $SPOKE_AUTH[s] == 'certificate'][0]
     ${before}=    Evaluate    json.load(open($INDEX))[$spoke]['serial']    modules=json
     ${run}=    Portal Post    /api/runs    {"mode": "renew", "spoke": {"name": "${spoke}"}, "options": {"test": false}}
-    ${res}=    Wait Until Keyword Succeeds    6 min    10s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    12 min    10s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    success    msg=renew run ${run}[id] ended ${res}[status]: ${res}[steps]
     ${idx}=    Evaluate    json.load(open($INDEX))    modules=json
     Should Not Be Equal    ${idx}[${spoke}][serial]    ${before}    msg=the CA index still shows the old serial
@@ -152,7 +152,7 @@ The portal renews a spoke's certificate: new serial on the router, in the CA ind
 The portal switches a spoke between certificate and pre-shared key and back: profiles, keyring, trustpoint, SAs and Nautobot follow
     [Documentation]    A certificate spoke goes to its pre-shared key through the portal's auth run (its trustpoint retired, its headends
     ...    keying for it on their PSK profile, SAs on PSK) and back again (enrolled anew, keyring gone, SAs on RSA) — two runs, about
-    ...    ten minutes.
+    ...    twenty-five minutes (each run renders, plans and applies the whole model, including the DCI's scale set).
     [Tags]    slow
     Skip If Started From A Portal Run    this test drives a portal run
     ${spoke}=    Evaluate    [s for s in $SPOKES if $SPOKE_AUTH[s] == 'certificate'][0]
@@ -164,7 +164,7 @@ The portal switches a spoke between certificate and pre-shared key and back: pro
 Switch And Verify
     [Arguments]    ${spoke}    ${method}    ${hubs}
     ${run}=    Portal Post    /api/runs    {"mode": "auth", "spoke": {"name": "${spoke}", "ike_authentication": "${method}"}, "options": {"golden": false, "test": false}}
-    ${res}=    Wait Until Keyword Succeeds    10 min    15s    Run Finished    ${run}[id]
+    ${res}=    Wait Until Keyword Succeeds    20 min    15s    Run Finished    ${run}[id]
     Should Be Equal    ${res}[status]    success    msg=auth run ${run}[id] (${spoke} -> ${method}) ended ${res}[status]: ${res}[steps]
     ${p}=    Portal Get    /api/pki
     Should Be Equal    ${p}[spokes][${spoke}]    ${method}

@@ -214,6 +214,45 @@ def dns(I, name):
     return d.get("dns")
 
 
+def nat_scale(cfg):
+    """Expand a NAT `scale` block into its entries: (prefix, inside_global, outside_local, loopback, acme_ip, acquisition_ip) per
+    overlapping prefix. The lab keeps one aligned aggregate per range, so the route filter and the advertised ranges stay small
+    while the NAT itself carries two static translations per prefix."""
+    sc = (cfg or {}).get("scale")
+    if not sc: return []
+    pfx, ig, ol = (ipaddress.IPv4Network(sc[k]) for k in ("prefix_base", "inside_global_base", "outside_local_base"))
+    step = pfx.num_addresses
+    out = []
+    for i in range(int(sc["count"])):
+        p2 = ipaddress.IPv4Network((int(pfx.network_address) + i * step, pfx.prefixlen))
+        g2 = ipaddress.IPv4Network((int(ig.network_address) + i * step, ig.prefixlen))
+        l2 = ipaddress.IPv4Network((int(ol.network_address) + i * step, ol.prefixlen))
+        out.append({"n": i, "prefix": str(p2), "inside_global": str(g2), "outside_local": str(l2),
+                    "loopback": int(sc["loopback_base"]) + i,
+                    "acme_ip": str(p2[int(sc["acme_host"])]), "acquisition_ip": str(p2[int(sc["acquisition_host"])]),
+                    "acme_as_acquisition_sees_it": str(l2[int(sc["acme_host"])]), "acquisition_as_acme_sees_it": str(g2[int(sc["acquisition_host"])])})
+    return out
+
+
+def nat_scale_aggregates(cfg):
+    """The three aggregates a scale block folds into: the overlapping prefixes, and the two translated ranges."""
+    sc = (cfg or {}).get("scale")
+    if not sc: return None
+    n = int(sc["aggregate_len"])
+    agg = lambda k: str(ipaddress.IPv4Network(f"{ipaddress.IPv4Network(sc[k]).network_address}/{n}", strict=False))
+    return {"prefix": agg("prefix_base"), "inside_global": agg("inside_global_base"), "outside_local": agg("outside_local_base")}
+
+
+def dns_scale(cfg, nat_cfg):
+    """One DNS record per scale prefix, pointing at that side's own address inside it: ACME's zone answers with ACME's copies and
+    the acquired company's zone with its own, so a resolver on the far side of the DCI always gets an address the NAT must rewrite."""
+    sc = (cfg or {}).get("scale")
+    if not sc: return {}
+    key = "acquisition_ip" if sc.get("side") == "acquisition" else "acme_ip"
+    ents = nat_scale(nat_cfg)[: int(sc["count"])]
+    return {sc["name_format"].format(n=e["n"]): e[key] for e in ents}
+
+
 def dns_client(I, name):
     """Where this router sends its DNS queries and which interface it sources them from (the acquired company asks ACME's server
     through the DCI, so the NAT can rewrite the addresses in the replies)."""

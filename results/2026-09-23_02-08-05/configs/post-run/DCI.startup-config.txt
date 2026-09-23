@@ -1,0 +1,2273 @@
+! DCI (10.2.0.19) show startup-config captured 2026-09-23 03:00:29
+Using 137326 out of 33554432 bytes
+!
+! Last configuration change at 02:59:50 UTC Wed Sep 23 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname DCI
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-1176549135
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-1176549135
+ revocation-check none
+ rsakeypair TP-self-signed-1176549135
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+!
+crypto pki certificate chain TP-self-signed-1176549135
+ certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01 nvram:CiscoLicensi#1CA.cer
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 9NAL72FR9KH
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$ZH5KDAlcUKjP2.$IIleTgI/6E/KOLZF7i63r0//70Yk2ZW55.YdZIWCpy.
+!
+username admin privilege 15 secret 9 $9$EaCdsS/Ofs8n/.$fIjB1T61cR2hGflFyNeyHlySn.h822Z2asobBz56KsQ
+!
+redundancy
+!
+!
+!
+!
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.8 255.255.255.255
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.19 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ description WAN to west-headend GigabitEthernet3
+ ip address 100.64.20.2 255.255.255.252
+ ip nat outside
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet3
+ description WAN to ACME-acquisition GigabitEthernet2
+ ip address 100.64.21.1 255.255.255.252
+ ip nat inside
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet4
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet5
+ description site LAN 192.168.31.0/24 (no host)
+ ip address 192.168.31.1 255.255.255.0
+ negotiation auto
+ cdp enable
+!
+router bgp 65208
+ bgp router-id 10.255.1.8
+ bgp log-neighbor-changes
+ neighbor 100.64.20.1 remote-as 65206
+ neighbor 100.64.20.1 description eBGP west-headend (100.64.20.0/30)
+ neighbor 100.64.21.2 remote-as 65209
+ neighbor 100.64.21.2 description eBGP ACME-acquisition (100.64.21.0/30)
+ !
+ address-family ipv4
+  network 10.255.1.8 mask 255.255.255.255
+  network 100.96.0.0 mask 255.252.0.0
+  network 100.100.0.0 mask 255.252.0.0
+  network 172.30.12.0 mask 255.255.255.0
+  network 172.31.12.0 mask 255.255.255.0
+  network 192.168.31.0
+  neighbor 100.64.20.1 activate
+  neighbor 100.64.20.1 route-map NO-OVERLAP in
+  neighbor 100.64.20.1 route-map NO-OVERLAP out
+  neighbor 100.64.21.2 activate
+  neighbor 100.64.21.2 route-map NO-OVERLAP out
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route 100.96.0.0 255.252.0.0 Null0 name nat-inside-global
+ip route 100.100.0.0 255.252.0.0 100.64.20.1 name nat-outside-local
+ip route 172.30.12.0 255.255.255.0 100.64.20.1 name nat-outside-local
+ip route 172.31.12.0 255.255.255.0 Null0 name nat-inside-global
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip nat inside source static network 10.128.0.0 100.96.0.0 /24
+ip nat inside source static network 10.128.1.0 100.96.1.0 /24
+ip nat inside source static network 10.128.2.0 100.96.2.0 /24
+ip nat inside source static network 10.128.3.0 100.96.3.0 /24
+ip nat inside source static network 10.128.4.0 100.96.4.0 /24
+ip nat inside source static network 10.128.5.0 100.96.5.0 /24
+ip nat inside source static network 10.128.6.0 100.96.6.0 /24
+ip nat inside source static network 10.128.7.0 100.96.7.0 /24
+ip nat inside source static network 10.128.8.0 100.96.8.0 /24
+ip nat inside source static network 10.128.9.0 100.96.9.0 /24
+ip nat inside source static network 10.128.10.0 100.96.10.0 /24
+ip nat inside source static network 10.128.11.0 100.96.11.0 /24
+ip nat inside source static network 10.128.12.0 100.96.12.0 /24
+ip nat inside source static network 10.128.13.0 100.96.13.0 /24
+ip nat inside source static network 10.128.14.0 100.96.14.0 /24
+ip nat inside source static network 10.128.15.0 100.96.15.0 /24
+ip nat inside source static network 10.128.16.0 100.96.16.0 /24
+ip nat inside source static network 10.128.17.0 100.96.17.0 /24
+ip nat inside source static network 10.128.18.0 100.96.18.0 /24
+ip nat inside source static network 10.128.19.0 100.96.19.0 /24
+ip nat inside source static network 10.128.20.0 100.96.20.0 /24
+ip nat inside source static network 10.128.21.0 100.96.21.0 /24
+ip nat inside source static network 10.128.22.0 100.96.22.0 /24
+ip nat inside source static network 10.128.23.0 100.96.23.0 /24
+ip nat inside source static network 10.128.24.0 100.96.24.0 /24
+ip nat inside source static network 10.128.25.0 100.96.25.0 /24
+ip nat inside source static network 10.128.26.0 100.96.26.0 /24
+ip nat inside source static network 10.128.27.0 100.96.27.0 /24
+ip nat inside source static network 10.128.28.0 100.96.28.0 /24
+ip nat inside source static network 10.128.29.0 100.96.29.0 /24
+ip nat inside source static network 10.128.30.0 100.96.30.0 /24
+ip nat inside source static network 10.128.31.0 100.96.31.0 /24
+ip nat inside source static network 10.128.32.0 100.96.32.0 /24
+ip nat inside source static network 10.128.33.0 100.96.33.0 /24
+ip nat inside source static network 10.128.34.0 100.96.34.0 /24
+ip nat inside source static network 10.128.35.0 100.96.35.0 /24
+ip nat inside source static network 10.128.36.0 100.96.36.0 /24
+ip nat inside source static network 10.128.37.0 100.96.37.0 /24
+ip nat inside source static network 10.128.38.0 100.96.38.0 /24
+ip nat inside source static network 10.128.39.0 100.96.39.0 /24
+ip nat inside source static network 10.128.40.0 100.96.40.0 /24
+ip nat inside source static network 10.128.41.0 100.96.41.0 /24
+ip nat inside source static network 10.128.42.0 100.96.42.0 /24
+ip nat inside source static network 10.128.43.0 100.96.43.0 /24
+ip nat inside source static network 10.128.44.0 100.96.44.0 /24
+ip nat inside source static network 10.128.45.0 100.96.45.0 /24
+ip nat inside source static network 10.128.46.0 100.96.46.0 /24
+ip nat inside source static network 10.128.47.0 100.96.47.0 /24
+ip nat inside source static network 10.128.48.0 100.96.48.0 /24
+ip nat inside source static network 10.128.49.0 100.96.49.0 /24
+ip nat inside source static network 10.128.50.0 100.96.50.0 /24
+ip nat inside source static network 10.128.51.0 100.96.51.0 /24
+ip nat inside source static network 10.128.52.0 100.96.52.0 /24
+ip nat inside source static network 10.128.53.0 100.96.53.0 /24
+ip nat inside source static network 10.128.54.0 100.96.54.0 /24
+ip nat inside source static network 10.128.55.0 100.96.55.0 /24
+ip nat inside source static network 10.128.56.0 100.96.56.0 /24
+ip nat inside source static network 10.128.57.0 100.96.57.0 /24
+ip nat inside source static network 10.128.58.0 100.96.58.0 /24
+ip nat inside source static network 10.128.59.0 100.96.59.0 /24
+ip nat inside source static network 10.128.60.0 100.96.60.0 /24
+ip nat inside source static network 10.128.61.0 100.96.61.0 /24
+ip nat inside source static network 10.128.62.0 100.96.62.0 /24
+ip nat inside source static network 10.128.63.0 100.96.63.0 /24
+ip nat inside source static network 10.128.64.0 100.96.64.0 /24
+ip nat inside source static network 10.128.65.0 100.96.65.0 /24
+ip nat inside source static network 10.128.66.0 100.96.66.0 /24
+ip nat inside source static network 10.128.67.0 100.96.67.0 /24
+ip nat inside source static network 10.128.68.0 100.96.68.0 /24
+ip nat inside source static network 10.128.69.0 100.96.69.0 /24
+ip nat inside source static network 10.128.70.0 100.96.70.0 /24
+ip nat inside source static network 10.128.71.0 100.96.71.0 /24
+ip nat inside source static network 10.128.72.0 100.96.72.0 /24
+ip nat inside source static network 10.128.73.0 100.96.73.0 /24
+ip nat inside source static network 10.128.74.0 100.96.74.0 /24
+ip nat inside source static network 10.128.75.0 100.96.75.0 /24
+ip nat inside source static network 10.128.76.0 100.96.76.0 /24
+ip nat inside source static network 10.128.77.0 100.96.77.0 /24
+ip nat inside source static network 10.128.78.0 100.96.78.0 /24
+ip nat inside source static network 10.128.79.0 100.96.79.0 /24
+ip nat inside source static network 10.128.80.0 100.96.80.0 /24
+ip nat inside source static network 10.128.81.0 100.96.81.0 /24
+ip nat inside source static network 10.128.82.0 100.96.82.0 /24
+ip nat inside source static network 10.128.83.0 100.96.83.0 /24
+ip nat inside source static network 10.128.84.0 100.96.84.0 /24
+ip nat inside source static network 10.128.85.0 100.96.85.0 /24
+ip nat inside source static network 10.128.86.0 100.96.86.0 /24
+ip nat inside source static network 10.128.87.0 100.96.87.0 /24
+ip nat inside source static network 10.128.88.0 100.96.88.0 /24
+ip nat inside source static network 10.128.89.0 100.96.89.0 /24
+ip nat inside source static network 10.128.90.0 100.96.90.0 /24
+ip nat inside source static network 10.128.91.0 100.96.91.0 /24
+ip nat inside source static network 10.128.92.0 100.96.92.0 /24
+ip nat inside source static network 10.128.93.0 100.96.93.0 /24
+ip nat inside source static network 10.128.94.0 100.96.94.0 /24
+ip nat inside source static network 10.128.95.0 100.96.95.0 /24
+ip nat inside source static network 10.128.96.0 100.96.96.0 /24
+ip nat inside source static network 10.128.97.0 100.96.97.0 /24
+ip nat inside source static network 10.128.98.0 100.96.98.0 /24
+ip nat inside source static network 10.128.99.0 100.96.99.0 /24
+ip nat inside source static network 10.128.100.0 100.96.100.0 /24
+ip nat inside source static network 10.128.101.0 100.96.101.0 /24
+ip nat inside source static network 10.128.102.0 100.96.102.0 /24
+ip nat inside source static network 10.128.103.0 100.96.103.0 /24
+ip nat inside source static network 10.128.104.0 100.96.104.0 /24
+ip nat inside source static network 10.128.105.0 100.96.105.0 /24
+ip nat inside source static network 10.128.106.0 100.96.106.0 /24
+ip nat inside source static network 10.128.107.0 100.96.107.0 /24
+ip nat inside source static network 10.128.108.0 100.96.108.0 /24
+ip nat inside source static network 10.128.109.0 100.96.109.0 /24
+ip nat inside source static network 10.128.110.0 100.96.110.0 /24
+ip nat inside source static network 10.128.111.0 100.96.111.0 /24
+ip nat inside source static network 10.128.112.0 100.96.112.0 /24
+ip nat inside source static network 10.128.113.0 100.96.113.0 /24
+ip nat inside source static network 10.128.114.0 100.96.114.0 /24
+ip nat inside source static network 10.128.115.0 100.96.115.0 /24
+ip nat inside source static network 10.128.116.0 100.96.116.0 /24
+ip nat inside source static network 10.128.117.0 100.96.117.0 /24
+ip nat inside source static network 10.128.118.0 100.96.118.0 /24
+ip nat inside source static network 10.128.119.0 100.96.119.0 /24
+ip nat inside source static network 10.128.120.0 100.96.120.0 /24
+ip nat inside source static network 10.128.121.0 100.96.121.0 /24
+ip nat inside source static network 10.128.122.0 100.96.122.0 /24
+ip nat inside source static network 10.128.123.0 100.96.123.0 /24
+ip nat inside source static network 10.128.124.0 100.96.124.0 /24
+ip nat inside source static network 10.128.125.0 100.96.125.0 /24
+ip nat inside source static network 10.128.126.0 100.96.126.0 /24
+ip nat inside source static network 10.128.127.0 100.96.127.0 /24
+ip nat inside source static network 10.128.128.0 100.96.128.0 /24
+ip nat inside source static network 10.128.129.0 100.96.129.0 /24
+ip nat inside source static network 10.128.130.0 100.96.130.0 /24
+ip nat inside source static network 10.128.131.0 100.96.131.0 /24
+ip nat inside source static network 10.128.132.0 100.96.132.0 /24
+ip nat inside source static network 10.128.133.0 100.96.133.0 /24
+ip nat inside source static network 10.128.134.0 100.96.134.0 /24
+ip nat inside source static network 10.128.135.0 100.96.135.0 /24
+ip nat inside source static network 10.128.136.0 100.96.136.0 /24
+ip nat inside source static network 10.128.137.0 100.96.137.0 /24
+ip nat inside source static network 10.128.138.0 100.96.138.0 /24
+ip nat inside source static network 10.128.139.0 100.96.139.0 /24
+ip nat inside source static network 10.128.140.0 100.96.140.0 /24
+ip nat inside source static network 10.128.141.0 100.96.141.0 /24
+ip nat inside source static network 10.128.142.0 100.96.142.0 /24
+ip nat inside source static network 10.128.143.0 100.96.143.0 /24
+ip nat inside source static network 10.128.144.0 100.96.144.0 /24
+ip nat inside source static network 10.128.145.0 100.96.145.0 /24
+ip nat inside source static network 10.128.146.0 100.96.146.0 /24
+ip nat inside source static network 10.128.147.0 100.96.147.0 /24
+ip nat inside source static network 10.128.148.0 100.96.148.0 /24
+ip nat inside source static network 10.128.149.0 100.96.149.0 /24
+ip nat inside source static network 10.128.150.0 100.96.150.0 /24
+ip nat inside source static network 10.128.151.0 100.96.151.0 /24
+ip nat inside source static network 10.128.152.0 100.96.152.0 /24
+ip nat inside source static network 10.128.153.0 100.96.153.0 /24
+ip nat inside source static network 10.128.154.0 100.96.154.0 /24
+ip nat inside source static network 10.128.155.0 100.96.155.0 /24
+ip nat inside source static network 10.128.156.0 100.96.156.0 /24
+ip nat inside source static network 10.128.157.0 100.96.157.0 /24
+ip nat inside source static network 10.128.158.0 100.96.158.0 /24
+ip nat inside source static network 10.128.159.0 100.96.159.0 /24
+ip nat inside source static network 10.128.160.0 100.96.160.0 /24
+ip nat inside source static network 10.128.161.0 100.96.161.0 /24
+ip nat inside source static network 10.128.162.0 100.96.162.0 /24
+ip nat inside source static network 10.128.163.0 100.96.163.0 /24
+ip nat inside source static network 10.128.164.0 100.96.164.0 /24
+ip nat inside source static network 10.128.165.0 100.96.165.0 /24
+ip nat inside source static network 10.128.166.0 100.96.166.0 /24
+ip nat inside source static network 10.128.167.0 100.96.167.0 /24
+ip nat inside source static network 10.128.168.0 100.96.168.0 /24
+ip nat inside source static network 10.128.169.0 100.96.169.0 /24
+ip nat inside source static network 10.128.170.0 100.96.170.0 /24
+ip nat inside source static network 10.128.171.0 100.96.171.0 /24
+ip nat inside source static network 10.128.172.0 100.96.172.0 /24
+ip nat inside source static network 10.128.173.0 100.96.173.0 /24
+ip nat inside source static network 10.128.174.0 100.96.174.0 /24
+ip nat inside source static network 10.128.175.0 100.96.175.0 /24
+ip nat inside source static network 10.128.176.0 100.96.176.0 /24
+ip nat inside source static network 10.128.177.0 100.96.177.0 /24
+ip nat inside source static network 10.128.178.0 100.96.178.0 /24
+ip nat inside source static network 10.128.179.0 100.96.179.0 /24
+ip nat inside source static network 10.128.180.0 100.96.180.0 /24
+ip nat inside source static network 10.128.181.0 100.96.181.0 /24
+ip nat inside source static network 10.128.182.0 100.96.182.0 /24
+ip nat inside source static network 10.128.183.0 100.96.183.0 /24
+ip nat inside source static network 10.128.184.0 100.96.184.0 /24
+ip nat inside source static network 10.128.185.0 100.96.185.0 /24
+ip nat inside source static network 10.128.186.0 100.96.186.0 /24
+ip nat inside source static network 10.128.187.0 100.96.187.0 /24
+ip nat inside source static network 10.128.188.0 100.96.188.0 /24
+ip nat inside source static network 10.128.189.0 100.96.189.0 /24
+ip nat inside source static network 10.128.190.0 100.96.190.0 /24
+ip nat inside source static network 10.128.191.0 100.96.191.0 /24
+ip nat inside source static network 10.128.192.0 100.96.192.0 /24
+ip nat inside source static network 10.128.193.0 100.96.193.0 /24
+ip nat inside source static network 10.128.194.0 100.96.194.0 /24
+ip nat inside source static network 10.128.195.0 100.96.195.0 /24
+ip nat inside source static network 10.128.196.0 100.96.196.0 /24
+ip nat inside source static network 10.128.197.0 100.96.197.0 /24
+ip nat inside source static network 10.128.198.0 100.96.198.0 /24
+ip nat inside source static network 10.128.199.0 100.96.199.0 /24
+ip nat inside source static network 10.128.200.0 100.96.200.0 /24
+ip nat inside source static network 10.128.201.0 100.96.201.0 /24
+ip nat inside source static network 10.128.202.0 100.96.202.0 /24
+ip nat inside source static network 10.128.203.0 100.96.203.0 /24
+ip nat inside source static network 10.128.204.0 100.96.204.0 /24
+ip nat inside source static network 10.128.205.0 100.96.205.0 /24
+ip nat inside source static network 10.128.206.0 100.96.206.0 /24
+ip nat inside source static network 10.128.207.0 100.96.207.0 /24
+ip nat inside source static network 10.128.208.0 100.96.208.0 /24
+ip nat inside source static network 10.128.209.0 100.96.209.0 /24
+ip nat inside source static network 10.128.210.0 100.96.210.0 /24
+ip nat inside source static network 10.128.211.0 100.96.211.0 /24
+ip nat inside source static network 10.128.212.0 100.96.212.0 /24
+ip nat inside source static network 10.128.213.0 100.96.213.0 /24
+ip nat inside source static network 10.128.214.0 100.96.214.0 /24
+ip nat inside source static network 10.128.215.0 100.96.215.0 /24
+ip nat inside source static network 10.128.216.0 100.96.216.0 /24
+ip nat inside source static network 10.128.217.0 100.96.217.0 /24
+ip nat inside source static network 10.128.218.0 100.96.218.0 /24
+ip nat inside source static network 10.128.219.0 100.96.219.0 /24
+ip nat inside source static network 10.128.220.0 100.96.220.0 /24
+ip nat inside source static network 10.128.221.0 100.96.221.0 /24
+ip nat inside source static network 10.128.222.0 100.96.222.0 /24
+ip nat inside source static network 10.128.223.0 100.96.223.0 /24
+ip nat inside source static network 10.128.224.0 100.96.224.0 /24
+ip nat inside source static network 10.128.225.0 100.96.225.0 /24
+ip nat inside source static network 10.128.226.0 100.96.226.0 /24
+ip nat inside source static network 10.128.227.0 100.96.227.0 /24
+ip nat inside source static network 10.128.228.0 100.96.228.0 /24
+ip nat inside source static network 10.128.229.0 100.96.229.0 /24
+ip nat inside source static network 10.128.230.0 100.96.230.0 /24
+ip nat inside source static network 10.128.231.0 100.96.231.0 /24
+ip nat inside source static network 10.128.232.0 100.96.232.0 /24
+ip nat inside source static network 10.128.233.0 100.96.233.0 /24
+ip nat inside source static network 10.128.234.0 100.96.234.0 /24
+ip nat inside source static network 10.128.235.0 100.96.235.0 /24
+ip nat inside source static network 10.128.236.0 100.96.236.0 /24
+ip nat inside source static network 10.128.237.0 100.96.237.0 /24
+ip nat inside source static network 10.128.238.0 100.96.238.0 /24
+ip nat inside source static network 10.128.239.0 100.96.239.0 /24
+ip nat inside source static network 10.128.240.0 100.96.240.0 /24
+ip nat inside source static network 10.128.241.0 100.96.241.0 /24
+ip nat inside source static network 10.128.242.0 100.96.242.0 /24
+ip nat inside source static network 10.128.243.0 100.96.243.0 /24
+ip nat inside source static network 10.128.244.0 100.96.244.0 /24
+ip nat inside source static network 10.128.245.0 100.96.245.0 /24
+ip nat inside source static network 10.128.246.0 100.96.246.0 /24
+ip nat inside source static network 10.128.247.0 100.96.247.0 /24
+ip nat inside source static network 10.128.248.0 100.96.248.0 /24
+ip nat inside source static network 10.128.249.0 100.96.249.0 /24
+ip nat inside source static network 10.128.250.0 100.96.250.0 /24
+ip nat inside source static network 10.128.251.0 100.96.251.0 /24
+ip nat inside source static network 10.128.252.0 100.96.252.0 /24
+ip nat inside source static network 10.128.253.0 100.96.253.0 /24
+ip nat inside source static network 10.128.254.0 100.96.254.0 /24
+ip nat inside source static network 10.128.255.0 100.96.255.0 /24
+ip nat inside source static network 10.129.0.0 100.97.0.0 /24
+ip nat inside source static network 10.129.1.0 100.97.1.0 /24
+ip nat inside source static network 10.129.2.0 100.97.2.0 /24
+ip nat inside source static network 10.129.3.0 100.97.3.0 /24
+ip nat inside source static network 10.129.4.0 100.97.4.0 /24
+ip nat inside source static network 10.129.5.0 100.97.5.0 /24
+ip nat inside source static network 10.129.6.0 100.97.6.0 /24
+ip nat inside source static network 10.129.7.0 100.97.7.0 /24
+ip nat inside source static network 10.129.8.0 100.97.8.0 /24
+ip nat inside source static network 10.129.9.0 100.97.9.0 /24
+ip nat inside source static network 10.129.10.0 100.97.10.0 /24
+ip nat inside source static network 10.129.11.0 100.97.11.0 /24
+ip nat inside source static network 10.129.12.0 100.97.12.0 /24
+ip nat inside source static network 10.129.13.0 100.97.13.0 /24
+ip nat inside source static network 10.129.14.0 100.97.14.0 /24
+ip nat inside source static network 10.129.15.0 100.97.15.0 /24
+ip nat inside source static network 10.129.16.0 100.97.16.0 /24
+ip nat inside source static network 10.129.17.0 100.97.17.0 /24
+ip nat inside source static network 10.129.18.0 100.97.18.0 /24
+ip nat inside source static network 10.129.19.0 100.97.19.0 /24
+ip nat inside source static network 10.129.20.0 100.97.20.0 /24
+ip nat inside source static network 10.129.21.0 100.97.21.0 /24
+ip nat inside source static network 10.129.22.0 100.97.22.0 /24
+ip nat inside source static network 10.129.23.0 100.97.23.0 /24
+ip nat inside source static network 10.129.24.0 100.97.24.0 /24
+ip nat inside source static network 10.129.25.0 100.97.25.0 /24
+ip nat inside source static network 10.129.26.0 100.97.26.0 /24
+ip nat inside source static network 10.129.27.0 100.97.27.0 /24
+ip nat inside source static network 10.129.28.0 100.97.28.0 /24
+ip nat inside source static network 10.129.29.0 100.97.29.0 /24
+ip nat inside source static network 10.129.30.0 100.97.30.0 /24
+ip nat inside source static network 10.129.31.0 100.97.31.0 /24
+ip nat inside source static network 10.129.32.0 100.97.32.0 /24
+ip nat inside source static network 10.129.33.0 100.97.33.0 /24
+ip nat inside source static network 10.129.34.0 100.97.34.0 /24
+ip nat inside source static network 10.129.35.0 100.97.35.0 /24
+ip nat inside source static network 10.129.36.0 100.97.36.0 /24
+ip nat inside source static network 10.129.37.0 100.97.37.0 /24
+ip nat inside source static network 10.129.38.0 100.97.38.0 /24
+ip nat inside source static network 10.129.39.0 100.97.39.0 /24
+ip nat inside source static network 10.129.40.0 100.97.40.0 /24
+ip nat inside source static network 10.129.41.0 100.97.41.0 /24
+ip nat inside source static network 10.129.42.0 100.97.42.0 /24
+ip nat inside source static network 10.129.43.0 100.97.43.0 /24
+ip nat inside source static network 10.129.44.0 100.97.44.0 /24
+ip nat inside source static network 10.129.45.0 100.97.45.0 /24
+ip nat inside source static network 10.129.46.0 100.97.46.0 /24
+ip nat inside source static network 10.129.47.0 100.97.47.0 /24
+ip nat inside source static network 10.129.48.0 100.97.48.0 /24
+ip nat inside source static network 10.129.49.0 100.97.49.0 /24
+ip nat inside source static network 10.129.50.0 100.97.50.0 /24
+ip nat inside source static network 10.129.51.0 100.97.51.0 /24
+ip nat inside source static network 10.129.52.0 100.97.52.0 /24
+ip nat inside source static network 10.129.53.0 100.97.53.0 /24
+ip nat inside source static network 10.129.54.0 100.97.54.0 /24
+ip nat inside source static network 10.129.55.0 100.97.55.0 /24
+ip nat inside source static network 10.129.56.0 100.97.56.0 /24
+ip nat inside source static network 10.129.57.0 100.97.57.0 /24
+ip nat inside source static network 10.129.58.0 100.97.58.0 /24
+ip nat inside source static network 10.129.59.0 100.97.59.0 /24
+ip nat inside source static network 10.129.60.0 100.97.60.0 /24
+ip nat inside source static network 10.129.61.0 100.97.61.0 /24
+ip nat inside source static network 10.129.62.0 100.97.62.0 /24
+ip nat inside source static network 10.129.63.0 100.97.63.0 /24
+ip nat inside source static network 10.129.64.0 100.97.64.0 /24
+ip nat inside source static network 10.129.65.0 100.97.65.0 /24
+ip nat inside source static network 10.129.66.0 100.97.66.0 /24
+ip nat inside source static network 10.129.67.0 100.97.67.0 /24
+ip nat inside source static network 10.129.68.0 100.97.68.0 /24
+ip nat inside source static network 10.129.69.0 100.97.69.0 /24
+ip nat inside source static network 10.129.70.0 100.97.70.0 /24
+ip nat inside source static network 10.129.71.0 100.97.71.0 /24
+ip nat inside source static network 10.129.72.0 100.97.72.0 /24
+ip nat inside source static network 10.129.73.0 100.97.73.0 /24
+ip nat inside source static network 10.129.74.0 100.97.74.0 /24
+ip nat inside source static network 10.129.75.0 100.97.75.0 /24
+ip nat inside source static network 10.129.76.0 100.97.76.0 /24
+ip nat inside source static network 10.129.77.0 100.97.77.0 /24
+ip nat inside source static network 10.129.78.0 100.97.78.0 /24
+ip nat inside source static network 10.129.79.0 100.97.79.0 /24
+ip nat inside source static network 10.129.80.0 100.97.80.0 /24
+ip nat inside source static network 10.129.81.0 100.97.81.0 /24
+ip nat inside source static network 10.129.82.0 100.97.82.0 /24
+ip nat inside source static network 10.129.83.0 100.97.83.0 /24
+ip nat inside source static network 10.129.84.0 100.97.84.0 /24
+ip nat inside source static network 10.129.85.0 100.97.85.0 /24
+ip nat inside source static network 10.129.86.0 100.97.86.0 /24
+ip nat inside source static network 10.129.87.0 100.97.87.0 /24
+ip nat inside source static network 10.129.88.0 100.97.88.0 /24
+ip nat inside source static network 10.129.89.0 100.97.89.0 /24
+ip nat inside source static network 10.129.90.0 100.97.90.0 /24
+ip nat inside source static network 10.129.91.0 100.97.91.0 /24
+ip nat inside source static network 10.129.92.0 100.97.92.0 /24
+ip nat inside source static network 10.129.93.0 100.97.93.0 /24
+ip nat inside source static network 10.129.94.0 100.97.94.0 /24
+ip nat inside source static network 10.129.95.0 100.97.95.0 /24
+ip nat inside source static network 10.129.96.0 100.97.96.0 /24
+ip nat inside source static network 10.129.97.0 100.97.97.0 /24
+ip nat inside source static network 10.129.98.0 100.97.98.0 /24
+ip nat inside source static network 10.129.99.0 100.97.99.0 /24
+ip nat inside source static network 10.129.100.0 100.97.100.0 /24
+ip nat inside source static network 10.129.101.0 100.97.101.0 /24
+ip nat inside source static network 10.129.102.0 100.97.102.0 /24
+ip nat inside source static network 10.129.103.0 100.97.103.0 /24
+ip nat inside source static network 10.129.104.0 100.97.104.0 /24
+ip nat inside source static network 10.129.105.0 100.97.105.0 /24
+ip nat inside source static network 10.129.106.0 100.97.106.0 /24
+ip nat inside source static network 10.129.107.0 100.97.107.0 /24
+ip nat inside source static network 10.129.108.0 100.97.108.0 /24
+ip nat inside source static network 10.129.109.0 100.97.109.0 /24
+ip nat inside source static network 10.129.110.0 100.97.110.0 /24
+ip nat inside source static network 10.129.111.0 100.97.111.0 /24
+ip nat inside source static network 10.129.112.0 100.97.112.0 /24
+ip nat inside source static network 10.129.113.0 100.97.113.0 /24
+ip nat inside source static network 10.129.114.0 100.97.114.0 /24
+ip nat inside source static network 10.129.115.0 100.97.115.0 /24
+ip nat inside source static network 10.129.116.0 100.97.116.0 /24
+ip nat inside source static network 10.129.117.0 100.97.117.0 /24
+ip nat inside source static network 10.129.118.0 100.97.118.0 /24
+ip nat inside source static network 10.129.119.0 100.97.119.0 /24
+ip nat inside source static network 10.129.120.0 100.97.120.0 /24
+ip nat inside source static network 10.129.121.0 100.97.121.0 /24
+ip nat inside source static network 10.129.122.0 100.97.122.0 /24
+ip nat inside source static network 10.129.123.0 100.97.123.0 /24
+ip nat inside source static network 10.129.124.0 100.97.124.0 /24
+ip nat inside source static network 10.129.125.0 100.97.125.0 /24
+ip nat inside source static network 10.129.126.0 100.97.126.0 /24
+ip nat inside source static network 10.129.127.0 100.97.127.0 /24
+ip nat inside source static network 10.129.128.0 100.97.128.0 /24
+ip nat inside source static network 10.129.129.0 100.97.129.0 /24
+ip nat inside source static network 10.129.130.0 100.97.130.0 /24
+ip nat inside source static network 10.129.131.0 100.97.131.0 /24
+ip nat inside source static network 10.129.132.0 100.97.132.0 /24
+ip nat inside source static network 10.129.133.0 100.97.133.0 /24
+ip nat inside source static network 10.129.134.0 100.97.134.0 /24
+ip nat inside source static network 10.129.135.0 100.97.135.0 /24
+ip nat inside source static network 10.129.136.0 100.97.136.0 /24
+ip nat inside source static network 10.129.137.0 100.97.137.0 /24
+ip nat inside source static network 10.129.138.0 100.97.138.0 /24
+ip nat inside source static network 10.129.139.0 100.97.139.0 /24
+ip nat inside source static network 10.129.140.0 100.97.140.0 /24
+ip nat inside source static network 10.129.141.0 100.97.141.0 /24
+ip nat inside source static network 10.129.142.0 100.97.142.0 /24
+ip nat inside source static network 10.129.143.0 100.97.143.0 /24
+ip nat inside source static network 10.129.144.0 100.97.144.0 /24
+ip nat inside source static network 10.129.145.0 100.97.145.0 /24
+ip nat inside source static network 10.129.146.0 100.97.146.0 /24
+ip nat inside source static network 10.129.147.0 100.97.147.0 /24
+ip nat inside source static network 10.129.148.0 100.97.148.0 /24
+ip nat inside source static network 10.129.149.0 100.97.149.0 /24
+ip nat inside source static network 10.129.150.0 100.97.150.0 /24
+ip nat inside source static network 10.129.151.0 100.97.151.0 /24
+ip nat inside source static network 10.129.152.0 100.97.152.0 /24
+ip nat inside source static network 10.129.153.0 100.97.153.0 /24
+ip nat inside source static network 10.129.154.0 100.97.154.0 /24
+ip nat inside source static network 10.129.155.0 100.97.155.0 /24
+ip nat inside source static network 10.129.156.0 100.97.156.0 /24
+ip nat inside source static network 10.129.157.0 100.97.157.0 /24
+ip nat inside source static network 10.129.158.0 100.97.158.0 /24
+ip nat inside source static network 10.129.159.0 100.97.159.0 /24
+ip nat inside source static network 10.129.160.0 100.97.160.0 /24
+ip nat inside source static network 10.129.161.0 100.97.161.0 /24
+ip nat inside source static network 10.129.162.0 100.97.162.0 /24
+ip nat inside source static network 10.129.163.0 100.97.163.0 /24
+ip nat inside source static network 10.129.164.0 100.97.164.0 /24
+ip nat inside source static network 10.129.165.0 100.97.165.0 /24
+ip nat inside source static network 10.129.166.0 100.97.166.0 /24
+ip nat inside source static network 10.129.167.0 100.97.167.0 /24
+ip nat inside source static network 10.129.168.0 100.97.168.0 /24
+ip nat inside source static network 10.129.169.0 100.97.169.0 /24
+ip nat inside source static network 10.129.170.0 100.97.170.0 /24
+ip nat inside source static network 10.129.171.0 100.97.171.0 /24
+ip nat inside source static network 10.129.172.0 100.97.172.0 /24
+ip nat inside source static network 10.129.173.0 100.97.173.0 /24
+ip nat inside source static network 10.129.174.0 100.97.174.0 /24
+ip nat inside source static network 10.129.175.0 100.97.175.0 /24
+ip nat inside source static network 10.129.176.0 100.97.176.0 /24
+ip nat inside source static network 10.129.177.0 100.97.177.0 /24
+ip nat inside source static network 10.129.178.0 100.97.178.0 /24
+ip nat inside source static network 10.129.179.0 100.97.179.0 /24
+ip nat inside source static network 10.129.180.0 100.97.180.0 /24
+ip nat inside source static network 10.129.181.0 100.97.181.0 /24
+ip nat inside source static network 10.129.182.0 100.97.182.0 /24
+ip nat inside source static network 10.129.183.0 100.97.183.0 /24
+ip nat inside source static network 10.129.184.0 100.97.184.0 /24
+ip nat inside source static network 10.129.185.0 100.97.185.0 /24
+ip nat inside source static network 10.129.186.0 100.97.186.0 /24
+ip nat inside source static network 10.129.187.0 100.97.187.0 /24
+ip nat inside source static network 10.129.188.0 100.97.188.0 /24
+ip nat inside source static network 10.129.189.0 100.97.189.0 /24
+ip nat inside source static network 10.129.190.0 100.97.190.0 /24
+ip nat inside source static network 10.129.191.0 100.97.191.0 /24
+ip nat inside source static network 10.129.192.0 100.97.192.0 /24
+ip nat inside source static network 10.129.193.0 100.97.193.0 /24
+ip nat inside source static network 10.129.194.0 100.97.194.0 /24
+ip nat inside source static network 10.129.195.0 100.97.195.0 /24
+ip nat inside source static network 10.129.196.0 100.97.196.0 /24
+ip nat inside source static network 10.129.197.0 100.97.197.0 /24
+ip nat inside source static network 10.129.198.0 100.97.198.0 /24
+ip nat inside source static network 10.129.199.0 100.97.199.0 /24
+ip nat inside source static network 10.129.200.0 100.97.200.0 /24
+ip nat inside source static network 10.129.201.0 100.97.201.0 /24
+ip nat inside source static network 10.129.202.0 100.97.202.0 /24
+ip nat inside source static network 10.129.203.0 100.97.203.0 /24
+ip nat inside source static network 10.129.204.0 100.97.204.0 /24
+ip nat inside source static network 10.129.205.0 100.97.205.0 /24
+ip nat inside source static network 10.129.206.0 100.97.206.0 /24
+ip nat inside source static network 10.129.207.0 100.97.207.0 /24
+ip nat inside source static network 10.129.208.0 100.97.208.0 /24
+ip nat inside source static network 10.129.209.0 100.97.209.0 /24
+ip nat inside source static network 10.129.210.0 100.97.210.0 /24
+ip nat inside source static network 10.129.211.0 100.97.211.0 /24
+ip nat inside source static network 10.129.212.0 100.97.212.0 /24
+ip nat inside source static network 10.129.213.0 100.97.213.0 /24
+ip nat inside source static network 10.129.214.0 100.97.214.0 /24
+ip nat inside source static network 10.129.215.0 100.97.215.0 /24
+ip nat inside source static network 10.129.216.0 100.97.216.0 /24
+ip nat inside source static network 10.129.217.0 100.97.217.0 /24
+ip nat inside source static network 10.129.218.0 100.97.218.0 /24
+ip nat inside source static network 10.129.219.0 100.97.219.0 /24
+ip nat inside source static network 10.129.220.0 100.97.220.0 /24
+ip nat inside source static network 10.129.221.0 100.97.221.0 /24
+ip nat inside source static network 10.129.222.0 100.97.222.0 /24
+ip nat inside source static network 10.129.223.0 100.97.223.0 /24
+ip nat inside source static network 10.129.224.0 100.97.224.0 /24
+ip nat inside source static network 10.129.225.0 100.97.225.0 /24
+ip nat inside source static network 10.129.226.0 100.97.226.0 /24
+ip nat inside source static network 10.129.227.0 100.97.227.0 /24
+ip nat inside source static network 10.129.228.0 100.97.228.0 /24
+ip nat inside source static network 10.129.229.0 100.97.229.0 /24
+ip nat inside source static network 10.129.230.0 100.97.230.0 /24
+ip nat inside source static network 10.129.231.0 100.97.231.0 /24
+ip nat inside source static network 10.129.232.0 100.97.232.0 /24
+ip nat inside source static network 10.129.233.0 100.97.233.0 /24
+ip nat inside source static network 10.129.234.0 100.97.234.0 /24
+ip nat inside source static network 10.129.235.0 100.97.235.0 /24
+ip nat inside source static network 10.129.236.0 100.97.236.0 /24
+ip nat inside source static network 10.129.237.0 100.97.237.0 /24
+ip nat inside source static network 10.129.238.0 100.97.238.0 /24
+ip nat inside source static network 10.129.239.0 100.97.239.0 /24
+ip nat inside source static network 10.129.240.0 100.97.240.0 /24
+ip nat inside source static network 10.129.241.0 100.97.241.0 /24
+ip nat inside source static network 10.129.242.0 100.97.242.0 /24
+ip nat inside source static network 10.129.243.0 100.97.243.0 /24
+ip nat inside source static network 10.129.244.0 100.97.244.0 /24
+ip nat inside source static network 10.129.245.0 100.97.245.0 /24
+ip nat inside source static network 10.129.246.0 100.97.246.0 /24
+ip nat inside source static network 10.129.247.0 100.97.247.0 /24
+ip nat inside source static network 10.129.248.0 100.97.248.0 /24
+ip nat inside source static network 10.129.249.0 100.97.249.0 /24
+ip nat inside source static network 10.129.250.0 100.97.250.0 /24
+ip nat inside source static network 10.129.251.0 100.97.251.0 /24
+ip nat inside source static network 10.129.252.0 100.97.252.0 /24
+ip nat inside source static network 10.129.253.0 100.97.253.0 /24
+ip nat inside source static network 10.129.254.0 100.97.254.0 /24
+ip nat inside source static network 10.129.255.0 100.97.255.0 /24
+ip nat inside source static network 10.130.0.0 100.98.0.0 /24
+ip nat inside source static network 10.130.1.0 100.98.1.0 /24
+ip nat inside source static network 10.130.2.0 100.98.2.0 /24
+ip nat inside source static network 10.130.3.0 100.98.3.0 /24
+ip nat inside source static network 10.130.4.0 100.98.4.0 /24
+ip nat inside source static network 10.130.5.0 100.98.5.0 /24
+ip nat inside source static network 10.130.6.0 100.98.6.0 /24
+ip nat inside source static network 10.130.7.0 100.98.7.0 /24
+ip nat inside source static network 10.130.8.0 100.98.8.0 /24
+ip nat inside source static network 10.130.9.0 100.98.9.0 /24
+ip nat inside source static network 10.130.10.0 100.98.10.0 /24
+ip nat inside source static network 10.130.11.0 100.98.11.0 /24
+ip nat inside source static network 10.130.12.0 100.98.12.0 /24
+ip nat inside source static network 10.130.13.0 100.98.13.0 /24
+ip nat inside source static network 10.130.14.0 100.98.14.0 /24
+ip nat inside source static network 10.130.15.0 100.98.15.0 /24
+ip nat inside source static network 10.130.16.0 100.98.16.0 /24
+ip nat inside source static network 10.130.17.0 100.98.17.0 /24
+ip nat inside source static network 10.130.18.0 100.98.18.0 /24
+ip nat inside source static network 10.130.19.0 100.98.19.0 /24
+ip nat inside source static network 10.130.20.0 100.98.20.0 /24
+ip nat inside source static network 10.130.21.0 100.98.21.0 /24
+ip nat inside source static network 10.130.22.0 100.98.22.0 /24
+ip nat inside source static network 10.130.23.0 100.98.23.0 /24
+ip nat inside source static network 10.130.24.0 100.98.24.0 /24
+ip nat inside source static network 10.130.25.0 100.98.25.0 /24
+ip nat inside source static network 10.130.26.0 100.98.26.0 /24
+ip nat inside source static network 10.130.27.0 100.98.27.0 /24
+ip nat inside source static network 10.130.28.0 100.98.28.0 /24
+ip nat inside source static network 10.130.29.0 100.98.29.0 /24
+ip nat inside source static network 10.130.30.0 100.98.30.0 /24
+ip nat inside source static network 10.130.31.0 100.98.31.0 /24
+ip nat inside source static network 10.130.32.0 100.98.32.0 /24
+ip nat inside source static network 10.130.33.0 100.98.33.0 /24
+ip nat inside source static network 10.130.34.0 100.98.34.0 /24
+ip nat inside source static network 10.130.35.0 100.98.35.0 /24
+ip nat inside source static network 10.130.36.0 100.98.36.0 /24
+ip nat inside source static network 10.130.37.0 100.98.37.0 /24
+ip nat inside source static network 10.130.38.0 100.98.38.0 /24
+ip nat inside source static network 10.130.39.0 100.98.39.0 /24
+ip nat inside source static network 10.130.40.0 100.98.40.0 /24
+ip nat inside source static network 10.130.41.0 100.98.41.0 /24
+ip nat inside source static network 10.130.42.0 100.98.42.0 /24
+ip nat inside source static network 10.130.43.0 100.98.43.0 /24
+ip nat inside source static network 10.130.44.0 100.98.44.0 /24
+ip nat inside source static network 10.130.45.0 100.98.45.0 /24
+ip nat inside source static network 10.130.46.0 100.98.46.0 /24
+ip nat inside source static network 10.130.47.0 100.98.47.0 /24
+ip nat inside source static network 10.130.48.0 100.98.48.0 /24
+ip nat inside source static network 10.130.49.0 100.98.49.0 /24
+ip nat inside source static network 10.130.50.0 100.98.50.0 /24
+ip nat inside source static network 10.130.51.0 100.98.51.0 /24
+ip nat inside source static network 10.130.52.0 100.98.52.0 /24
+ip nat inside source static network 10.130.53.0 100.98.53.0 /24
+ip nat inside source static network 10.130.54.0 100.98.54.0 /24
+ip nat inside source static network 10.130.55.0 100.98.55.0 /24
+ip nat inside source static network 10.130.56.0 100.98.56.0 /24
+ip nat inside source static network 10.130.57.0 100.98.57.0 /24
+ip nat inside source static network 10.130.58.0 100.98.58.0 /24
+ip nat inside source static network 10.130.59.0 100.98.59.0 /24
+ip nat inside source static network 10.130.60.0 100.98.60.0 /24
+ip nat inside source static network 10.130.61.0 100.98.61.0 /24
+ip nat inside source static network 10.130.62.0 100.98.62.0 /24
+ip nat inside source static network 10.130.63.0 100.98.63.0 /24
+ip nat inside source static network 10.130.64.0 100.98.64.0 /24
+ip nat inside source static network 10.130.65.0 100.98.65.0 /24
+ip nat inside source static network 10.130.66.0 100.98.66.0 /24
+ip nat inside source static network 10.130.67.0 100.98.67.0 /24
+ip nat inside source static network 10.130.68.0 100.98.68.0 /24
+ip nat inside source static network 10.130.69.0 100.98.69.0 /24
+ip nat inside source static network 10.130.70.0 100.98.70.0 /24
+ip nat inside source static network 10.130.71.0 100.98.71.0 /24
+ip nat inside source static network 10.130.72.0 100.98.72.0 /24
+ip nat inside source static network 10.130.73.0 100.98.73.0 /24
+ip nat inside source static network 10.130.74.0 100.98.74.0 /24
+ip nat inside source static network 10.130.75.0 100.98.75.0 /24
+ip nat inside source static network 10.130.76.0 100.98.76.0 /24
+ip nat inside source static network 10.130.77.0 100.98.77.0 /24
+ip nat inside source static network 10.130.78.0 100.98.78.0 /24
+ip nat inside source static network 10.130.79.0 100.98.79.0 /24
+ip nat inside source static network 10.130.80.0 100.98.80.0 /24
+ip nat inside source static network 10.130.81.0 100.98.81.0 /24
+ip nat inside source static network 10.130.82.0 100.98.82.0 /24
+ip nat inside source static network 10.130.83.0 100.98.83.0 /24
+ip nat inside source static network 10.130.84.0 100.98.84.0 /24
+ip nat inside source static network 10.130.85.0 100.98.85.0 /24
+ip nat inside source static network 10.130.86.0 100.98.86.0 /24
+ip nat inside source static network 10.130.87.0 100.98.87.0 /24
+ip nat inside source static network 10.130.88.0 100.98.88.0 /24
+ip nat inside source static network 10.130.89.0 100.98.89.0 /24
+ip nat inside source static network 10.130.90.0 100.98.90.0 /24
+ip nat inside source static network 10.130.91.0 100.98.91.0 /24
+ip nat inside source static network 10.130.92.0 100.98.92.0 /24
+ip nat inside source static network 10.130.93.0 100.98.93.0 /24
+ip nat inside source static network 10.130.94.0 100.98.94.0 /24
+ip nat inside source static network 10.130.95.0 100.98.95.0 /24
+ip nat inside source static network 10.130.96.0 100.98.96.0 /24
+ip nat inside source static network 10.130.97.0 100.98.97.0 /24
+ip nat inside source static network 10.130.98.0 100.98.98.0 /24
+ip nat inside source static network 10.130.99.0 100.98.99.0 /24
+ip nat inside source static network 10.130.100.0 100.98.100.0 /24
+ip nat inside source static network 10.130.101.0 100.98.101.0 /24
+ip nat inside source static network 10.130.102.0 100.98.102.0 /24
+ip nat inside source static network 10.130.103.0 100.98.103.0 /24
+ip nat inside source static network 10.130.104.0 100.98.104.0 /24
+ip nat inside source static network 10.130.105.0 100.98.105.0 /24
+ip nat inside source static network 10.130.106.0 100.98.106.0 /24
+ip nat inside source static network 10.130.107.0 100.98.107.0 /24
+ip nat inside source static network 10.130.108.0 100.98.108.0 /24
+ip nat inside source static network 10.130.109.0 100.98.109.0 /24
+ip nat inside source static network 10.130.110.0 100.98.110.0 /24
+ip nat inside source static network 10.130.111.0 100.98.111.0 /24
+ip nat inside source static network 10.130.112.0 100.98.112.0 /24
+ip nat inside source static network 10.130.113.0 100.98.113.0 /24
+ip nat inside source static network 10.130.114.0 100.98.114.0 /24
+ip nat inside source static network 10.130.115.0 100.98.115.0 /24
+ip nat inside source static network 10.130.116.0 100.98.116.0 /24
+ip nat inside source static network 10.130.117.0 100.98.117.0 /24
+ip nat inside source static network 10.130.118.0 100.98.118.0 /24
+ip nat inside source static network 10.130.119.0 100.98.119.0 /24
+ip nat inside source static network 10.130.120.0 100.98.120.0 /24
+ip nat inside source static network 10.130.121.0 100.98.121.0 /24
+ip nat inside source static network 10.130.122.0 100.98.122.0 /24
+ip nat inside source static network 10.130.123.0 100.98.123.0 /24
+ip nat inside source static network 10.130.124.0 100.98.124.0 /24
+ip nat inside source static network 10.130.125.0 100.98.125.0 /24
+ip nat inside source static network 10.130.126.0 100.98.126.0 /24
+ip nat inside source static network 10.130.127.0 100.98.127.0 /24
+ip nat inside source static network 10.130.128.0 100.98.128.0 /24
+ip nat inside source static network 10.130.129.0 100.98.129.0 /24
+ip nat inside source static network 10.130.130.0 100.98.130.0 /24
+ip nat inside source static network 10.130.131.0 100.98.131.0 /24
+ip nat inside source static network 10.130.132.0 100.98.132.0 /24
+ip nat inside source static network 10.130.133.0 100.98.133.0 /24
+ip nat inside source static network 10.130.134.0 100.98.134.0 /24
+ip nat inside source static network 10.130.135.0 100.98.135.0 /24
+ip nat inside source static network 10.130.136.0 100.98.136.0 /24
+ip nat inside source static network 10.130.137.0 100.98.137.0 /24
+ip nat inside source static network 10.130.138.0 100.98.138.0 /24
+ip nat inside source static network 10.130.139.0 100.98.139.0 /24
+ip nat inside source static network 10.130.140.0 100.98.140.0 /24
+ip nat inside source static network 10.130.141.0 100.98.141.0 /24
+ip nat inside source static network 10.130.142.0 100.98.142.0 /24
+ip nat inside source static network 10.130.143.0 100.98.143.0 /24
+ip nat inside source static network 10.130.144.0 100.98.144.0 /24
+ip nat inside source static network 10.130.145.0 100.98.145.0 /24
+ip nat inside source static network 10.130.146.0 100.98.146.0 /24
+ip nat inside source static network 10.130.147.0 100.98.147.0 /24
+ip nat inside source static network 10.130.148.0 100.98.148.0 /24
+ip nat inside source static network 10.130.149.0 100.98.149.0 /24
+ip nat inside source static network 10.130.150.0 100.98.150.0 /24
+ip nat inside source static network 10.130.151.0 100.98.151.0 /24
+ip nat inside source static network 10.130.152.0 100.98.152.0 /24
+ip nat inside source static network 10.130.153.0 100.98.153.0 /24
+ip nat inside source static network 10.130.154.0 100.98.154.0 /24
+ip nat inside source static network 10.130.155.0 100.98.155.0 /24
+ip nat inside source static network 10.130.156.0 100.98.156.0 /24
+ip nat inside source static network 10.130.157.0 100.98.157.0 /24
+ip nat inside source static network 10.130.158.0 100.98.158.0 /24
+ip nat inside source static network 10.130.159.0 100.98.159.0 /24
+ip nat inside source static network 10.130.160.0 100.98.160.0 /24
+ip nat inside source static network 10.130.161.0 100.98.161.0 /24
+ip nat inside source static network 10.130.162.0 100.98.162.0 /24
+ip nat inside source static network 10.130.163.0 100.98.163.0 /24
+ip nat inside source static network 10.130.164.0 100.98.164.0 /24
+ip nat inside source static network 10.130.165.0 100.98.165.0 /24
+ip nat inside source static network 10.130.166.0 100.98.166.0 /24
+ip nat inside source static network 10.130.167.0 100.98.167.0 /24
+ip nat inside source static network 10.130.168.0 100.98.168.0 /24
+ip nat inside source static network 10.130.169.0 100.98.169.0 /24
+ip nat inside source static network 10.130.170.0 100.98.170.0 /24
+ip nat inside source static network 10.130.171.0 100.98.171.0 /24
+ip nat inside source static network 10.130.172.0 100.98.172.0 /24
+ip nat inside source static network 10.130.173.0 100.98.173.0 /24
+ip nat inside source static network 10.130.174.0 100.98.174.0 /24
+ip nat inside source static network 10.130.175.0 100.98.175.0 /24
+ip nat inside source static network 10.130.176.0 100.98.176.0 /24
+ip nat inside source static network 10.130.177.0 100.98.177.0 /24
+ip nat inside source static network 10.130.178.0 100.98.178.0 /24
+ip nat inside source static network 10.130.179.0 100.98.179.0 /24
+ip nat inside source static network 10.130.180.0 100.98.180.0 /24
+ip nat inside source static network 10.130.181.0 100.98.181.0 /24
+ip nat inside source static network 10.130.182.0 100.98.182.0 /24
+ip nat inside source static network 10.130.183.0 100.98.183.0 /24
+ip nat inside source static network 10.130.184.0 100.98.184.0 /24
+ip nat inside source static network 10.130.185.0 100.98.185.0 /24
+ip nat inside source static network 10.130.186.0 100.98.186.0 /24
+ip nat inside source static network 10.130.187.0 100.98.187.0 /24
+ip nat inside source static network 10.130.188.0 100.98.188.0 /24
+ip nat inside source static network 10.130.189.0 100.98.189.0 /24
+ip nat inside source static network 10.130.190.0 100.98.190.0 /24
+ip nat inside source static network 10.130.191.0 100.98.191.0 /24
+ip nat inside source static network 10.130.192.0 100.98.192.0 /24
+ip nat inside source static network 10.130.193.0 100.98.193.0 /24
+ip nat inside source static network 10.130.194.0 100.98.194.0 /24
+ip nat inside source static network 10.130.195.0 100.98.195.0 /24
+ip nat inside source static network 10.130.196.0 100.98.196.0 /24
+ip nat inside source static network 10.130.197.0 100.98.197.0 /24
+ip nat inside source static network 10.130.198.0 100.98.198.0 /24
+ip nat inside source static network 10.130.199.0 100.98.199.0 /24
+ip nat inside source static network 10.130.200.0 100.98.200.0 /24
+ip nat inside source static network 10.130.201.0 100.98.201.0 /24
+ip nat inside source static network 10.130.202.0 100.98.202.0 /24
+ip nat inside source static network 10.130.203.0 100.98.203.0 /24
+ip nat inside source static network 10.130.204.0 100.98.204.0 /24
+ip nat inside source static network 10.130.205.0 100.98.205.0 /24
+ip nat inside source static network 10.130.206.0 100.98.206.0 /24
+ip nat inside source static network 10.130.207.0 100.98.207.0 /24
+ip nat inside source static network 10.130.208.0 100.98.208.0 /24
+ip nat inside source static network 10.130.209.0 100.98.209.0 /24
+ip nat inside source static network 10.130.210.0 100.98.210.0 /24
+ip nat inside source static network 10.130.211.0 100.98.211.0 /24
+ip nat inside source static network 10.130.212.0 100.98.212.0 /24
+ip nat inside source static network 10.130.213.0 100.98.213.0 /24
+ip nat inside source static network 10.130.214.0 100.98.214.0 /24
+ip nat inside source static network 10.130.215.0 100.98.215.0 /24
+ip nat inside source static network 10.130.216.0 100.98.216.0 /24
+ip nat inside source static network 10.130.217.0 100.98.217.0 /24
+ip nat inside source static network 10.130.218.0 100.98.218.0 /24
+ip nat inside source static network 10.130.219.0 100.98.219.0 /24
+ip nat inside source static network 10.130.220.0 100.98.220.0 /24
+ip nat inside source static network 10.130.221.0 100.98.221.0 /24
+ip nat inside source static network 10.130.222.0 100.98.222.0 /24
+ip nat inside source static network 10.130.223.0 100.98.223.0 /24
+ip nat inside source static network 10.130.224.0 100.98.224.0 /24
+ip nat inside source static network 10.130.225.0 100.98.225.0 /24
+ip nat inside source static network 10.130.226.0 100.98.226.0 /24
+ip nat inside source static network 10.130.227.0 100.98.227.0 /24
+ip nat inside source static network 10.130.228.0 100.98.228.0 /24
+ip nat inside source static network 10.130.229.0 100.98.229.0 /24
+ip nat inside source static network 10.130.230.0 100.98.230.0 /24
+ip nat inside source static network 10.130.231.0 100.98.231.0 /24
+ip nat inside source static network 10.130.232.0 100.98.232.0 /24
+ip nat inside source static network 10.130.233.0 100.98.233.0 /24
+ip nat inside source static network 10.130.234.0 100.98.234.0 /24
+ip nat inside source static network 10.130.235.0 100.98.235.0 /24
+ip nat inside source static network 10.130.236.0 100.98.236.0 /24
+ip nat inside source static network 10.130.237.0 100.98.237.0 /24
+ip nat inside source static network 10.130.238.0 100.98.238.0 /24
+ip nat inside source static network 10.130.239.0 100.98.239.0 /24
+ip nat inside source static network 10.130.240.0 100.98.240.0 /24
+ip nat inside source static network 10.130.241.0 100.98.241.0 /24
+ip nat inside source static network 10.130.242.0 100.98.242.0 /24
+ip nat inside source static network 10.130.243.0 100.98.243.0 /24
+ip nat inside source static network 10.130.244.0 100.98.244.0 /24
+ip nat inside source static network 10.130.245.0 100.98.245.0 /24
+ip nat inside source static network 10.130.246.0 100.98.246.0 /24
+ip nat inside source static network 10.130.247.0 100.98.247.0 /24
+ip nat inside source static network 10.130.248.0 100.98.248.0 /24
+ip nat inside source static network 10.130.249.0 100.98.249.0 /24
+ip nat inside source static network 10.130.250.0 100.98.250.0 /24
+ip nat inside source static network 10.130.251.0 100.98.251.0 /24
+ip nat inside source static network 10.130.252.0 100.98.252.0 /24
+ip nat inside source static network 10.130.253.0 100.98.253.0 /24
+ip nat inside source static network 10.130.254.0 100.98.254.0 /24
+ip nat inside source static network 10.130.255.0 100.98.255.0 /24
+ip nat inside source static network 10.131.0.0 100.99.0.0 /24
+ip nat inside source static network 10.131.1.0 100.99.1.0 /24
+ip nat inside source static network 10.131.2.0 100.99.2.0 /24
+ip nat inside source static network 10.131.3.0 100.99.3.0 /24
+ip nat inside source static network 10.131.4.0 100.99.4.0 /24
+ip nat inside source static network 10.131.5.0 100.99.5.0 /24
+ip nat inside source static network 10.131.6.0 100.99.6.0 /24
+ip nat inside source static network 10.131.7.0 100.99.7.0 /24
+ip nat inside source static network 10.131.8.0 100.99.8.0 /24
+ip nat inside source static network 10.131.9.0 100.99.9.0 /24
+ip nat inside source static network 10.131.10.0 100.99.10.0 /24
+ip nat inside source static network 10.131.11.0 100.99.11.0 /24
+ip nat inside source static network 10.131.12.0 100.99.12.0 /24
+ip nat inside source static network 10.131.13.0 100.99.13.0 /24
+ip nat inside source static network 10.131.14.0 100.99.14.0 /24
+ip nat inside source static network 10.131.15.0 100.99.15.0 /24
+ip nat inside source static network 10.131.16.0 100.99.16.0 /24
+ip nat inside source static network 10.131.17.0 100.99.17.0 /24
+ip nat inside source static network 10.131.18.0 100.99.18.0 /24
+ip nat inside source static network 10.131.19.0 100.99.19.0 /24
+ip nat inside source static network 10.131.20.0 100.99.20.0 /24
+ip nat inside source static network 10.131.21.0 100.99.21.0 /24
+ip nat inside source static network 10.131.22.0 100.99.22.0 /24
+ip nat inside source static network 10.131.23.0 100.99.23.0 /24
+ip nat inside source static network 10.131.24.0 100.99.24.0 /24
+ip nat inside source static network 10.131.25.0 100.99.25.0 /24
+ip nat inside source static network 10.131.26.0 100.99.26.0 /24
+ip nat inside source static network 10.131.27.0 100.99.27.0 /24
+ip nat inside source static network 10.131.28.0 100.99.28.0 /24
+ip nat inside source static network 10.131.29.0 100.99.29.0 /24
+ip nat inside source static network 10.131.30.0 100.99.30.0 /24
+ip nat inside source static network 10.131.31.0 100.99.31.0 /24
+ip nat inside source static network 10.131.32.0 100.99.32.0 /24
+ip nat inside source static network 10.131.33.0 100.99.33.0 /24
+ip nat inside source static network 10.131.34.0 100.99.34.0 /24
+ip nat inside source static network 10.131.35.0 100.99.35.0 /24
+ip nat inside source static network 10.131.36.0 100.99.36.0 /24
+ip nat inside source static network 10.131.37.0 100.99.37.0 /24
+ip nat inside source static network 10.131.38.0 100.99.38.0 /24
+ip nat inside source static network 10.131.39.0 100.99.39.0 /24
+ip nat inside source static network 10.131.40.0 100.99.40.0 /24
+ip nat inside source static network 10.131.41.0 100.99.41.0 /24
+ip nat inside source static network 10.131.42.0 100.99.42.0 /24
+ip nat inside source static network 10.131.43.0 100.99.43.0 /24
+ip nat inside source static network 10.131.44.0 100.99.44.0 /24
+ip nat inside source static network 10.131.45.0 100.99.45.0 /24
+ip nat inside source static network 10.131.46.0 100.99.46.0 /24
+ip nat inside source static network 10.131.47.0 100.99.47.0 /24
+ip nat inside source static network 10.131.48.0 100.99.48.0 /24
+ip nat inside source static network 10.131.49.0 100.99.49.0 /24
+ip nat inside source static network 10.131.50.0 100.99.50.0 /24
+ip nat inside source static network 10.131.51.0 100.99.51.0 /24
+ip nat inside source static network 10.131.52.0 100.99.52.0 /24
+ip nat inside source static network 10.131.53.0 100.99.53.0 /24
+ip nat inside source static network 10.131.54.0 100.99.54.0 /24
+ip nat inside source static network 10.131.55.0 100.99.55.0 /24
+ip nat inside source static network 10.131.56.0 100.99.56.0 /24
+ip nat inside source static network 10.131.57.0 100.99.57.0 /24
+ip nat inside source static network 10.131.58.0 100.99.58.0 /24
+ip nat inside source static network 10.131.59.0 100.99.59.0 /24
+ip nat inside source static network 10.131.60.0 100.99.60.0 /24
+ip nat inside source static network 10.131.61.0 100.99.61.0 /24
+ip nat inside source static network 10.131.62.0 100.99.62.0 /24
+ip nat inside source static network 10.131.63.0 100.99.63.0 /24
+ip nat inside source static network 10.131.64.0 100.99.64.0 /24
+ip nat inside source static network 10.131.65.0 100.99.65.0 /24
+ip nat inside source static network 10.131.66.0 100.99.66.0 /24
+ip nat inside source static network 10.131.67.0 100.99.67.0 /24
+ip nat inside source static network 10.131.68.0 100.99.68.0 /24
+ip nat inside source static network 10.131.69.0 100.99.69.0 /24
+ip nat inside source static network 10.131.70.0 100.99.70.0 /24
+ip nat inside source static network 10.131.71.0 100.99.71.0 /24
+ip nat inside source static network 10.131.72.0 100.99.72.0 /24
+ip nat inside source static network 10.131.73.0 100.99.73.0 /24
+ip nat inside source static network 10.131.74.0 100.99.74.0 /24
+ip nat inside source static network 10.131.75.0 100.99.75.0 /24
+ip nat inside source static network 10.131.76.0 100.99.76.0 /24
+ip nat inside source static network 10.131.77.0 100.99.77.0 /24
+ip nat inside source static network 10.131.78.0 100.99.78.0 /24
+ip nat inside source static network 10.131.79.0 100.99.79.0 /24
+ip nat inside source static network 10.131.80.0 100.99.80.0 /24
+ip nat inside source static network 10.131.81.0 100.99.81.0 /24
+ip nat inside source static network 10.131.82.0 100.99.82.0 /24
+ip nat inside source static network 10.131.83.0 100.99.83.0 /24
+ip nat inside source static network 10.131.84.0 100.99.84.0 /24
+ip nat inside source static network 10.131.85.0 100.99.85.0 /24
+ip nat inside source static network 10.131.86.0 100.99.86.0 /24
+ip nat inside source static network 10.131.87.0 100.99.87.0 /24
+ip nat inside source static network 10.131.88.0 100.99.88.0 /24
+ip nat inside source static network 10.131.89.0 100.99.89.0 /24
+ip nat inside source static network 10.131.90.0 100.99.90.0 /24
+ip nat inside source static network 10.131.91.0 100.99.91.0 /24
+ip nat inside source static network 10.131.92.0 100.99.92.0 /24
+ip nat inside source static network 10.131.93.0 100.99.93.0 /24
+ip nat inside source static network 10.131.94.0 100.99.94.0 /24
+ip nat inside source static network 10.131.95.0 100.99.95.0 /24
+ip nat inside source static network 10.131.96.0 100.99.96.0 /24
+ip nat inside source static network 10.131.97.0 100.99.97.0 /24
+ip nat inside source static network 10.131.98.0 100.99.98.0 /24
+ip nat inside source static network 10.131.99.0 100.99.99.0 /24
+ip nat inside source static network 10.131.100.0 100.99.100.0 /24
+ip nat inside source static network 10.131.101.0 100.99.101.0 /24
+ip nat inside source static network 10.131.102.0 100.99.102.0 /24
+ip nat inside source static network 10.131.103.0 100.99.103.0 /24
+ip nat inside source static network 10.131.104.0 100.99.104.0 /24
+ip nat inside source static network 10.131.105.0 100.99.105.0 /24
+ip nat inside source static network 10.131.106.0 100.99.106.0 /24
+ip nat inside source static network 10.131.107.0 100.99.107.0 /24
+ip nat inside source static network 10.131.108.0 100.99.108.0 /24
+ip nat inside source static network 10.131.109.0 100.99.109.0 /24
+ip nat inside source static network 10.131.110.0 100.99.110.0 /24
+ip nat inside source static network 10.131.111.0 100.99.111.0 /24
+ip nat inside source static network 10.131.112.0 100.99.112.0 /24
+ip nat inside source static network 10.131.113.0 100.99.113.0 /24
+ip nat inside source static network 10.131.114.0 100.99.114.0 /24
+ip nat inside source static network 10.131.115.0 100.99.115.0 /24
+ip nat inside source static network 10.131.116.0 100.99.116.0 /24
+ip nat inside source static network 10.131.117.0 100.99.117.0 /24
+ip nat inside source static network 10.131.118.0 100.99.118.0 /24
+ip nat inside source static network 10.131.119.0 100.99.119.0 /24
+ip nat inside source static network 10.131.120.0 100.99.120.0 /24
+ip nat inside source static network 10.131.121.0 100.99.121.0 /24
+ip nat inside source static network 10.131.122.0 100.99.122.0 /24
+ip nat inside source static network 10.131.123.0 100.99.123.0 /24
+ip nat inside source static network 10.131.124.0 100.99.124.0 /24
+ip nat inside source static network 10.131.125.0 100.99.125.0 /24
+ip nat inside source static network 10.131.126.0 100.99.126.0 /24
+ip nat inside source static network 10.131.127.0 100.99.127.0 /24
+ip nat inside source static network 10.131.128.0 100.99.128.0 /24
+ip nat inside source static network 10.131.129.0 100.99.129.0 /24
+ip nat inside source static network 10.131.130.0 100.99.130.0 /24
+ip nat inside source static network 10.131.131.0 100.99.131.0 /24
+ip nat inside source static network 10.131.132.0 100.99.132.0 /24
+ip nat inside source static network 10.131.133.0 100.99.133.0 /24
+ip nat inside source static network 10.131.134.0 100.99.134.0 /24
+ip nat inside source static network 10.131.135.0 100.99.135.0 /24
+ip nat inside source static network 10.131.136.0 100.99.136.0 /24
+ip nat inside source static network 10.131.137.0 100.99.137.0 /24
+ip nat inside source static network 10.131.138.0 100.99.138.0 /24
+ip nat inside source static network 10.131.139.0 100.99.139.0 /24
+ip nat inside source static network 10.131.140.0 100.99.140.0 /24
+ip nat inside source static network 10.131.141.0 100.99.141.0 /24
+ip nat inside source static network 10.131.142.0 100.99.142.0 /24
+ip nat inside source static network 10.131.143.0 100.99.143.0 /24
+ip nat inside source static network 10.131.144.0 100.99.144.0 /24
+ip nat inside source static network 10.131.145.0 100.99.145.0 /24
+ip nat inside source static network 10.131.146.0 100.99.146.0 /24
+ip nat inside source static network 10.131.147.0 100.99.147.0 /24
+ip nat inside source static network 10.131.148.0 100.99.148.0 /24
+ip nat inside source static network 10.131.149.0 100.99.149.0 /24
+ip nat inside source static network 10.131.150.0 100.99.150.0 /24
+ip nat inside source static network 10.131.151.0 100.99.151.0 /24
+ip nat inside source static network 10.131.152.0 100.99.152.0 /24
+ip nat inside source static network 10.131.153.0 100.99.153.0 /24
+ip nat inside source static network 10.131.154.0 100.99.154.0 /24
+ip nat inside source static network 10.131.155.0 100.99.155.0 /24
+ip nat inside source static network 10.131.156.0 100.99.156.0 /24
+ip nat inside source static network 10.131.157.0 100.99.157.0 /24
+ip nat inside source static network 10.131.158.0 100.99.158.0 /24
+ip nat inside source static network 10.131.159.0 100.99.159.0 /24
+ip nat inside source static network 10.131.160.0 100.99.160.0 /24
+ip nat inside source static network 10.131.161.0 100.99.161.0 /24
+ip nat inside source static network 10.131.162.0 100.99.162.0 /24
+ip nat inside source static network 10.131.163.0 100.99.163.0 /24
+ip nat inside source static network 10.131.164.0 100.99.164.0 /24
+ip nat inside source static network 10.131.165.0 100.99.165.0 /24
+ip nat inside source static network 10.131.166.0 100.99.166.0 /24
+ip nat inside source static network 10.131.167.0 100.99.167.0 /24
+ip nat inside source static network 10.131.168.0 100.99.168.0 /24
+ip nat inside source static network 10.131.169.0 100.99.169.0 /24
+ip nat inside source static network 10.131.170.0 100.99.170.0 /24
+ip nat inside source static network 10.131.171.0 100.99.171.0 /24
+ip nat inside source static network 10.131.172.0 100.99.172.0 /24
+ip nat inside source static network 10.131.173.0 100.99.173.0 /24
+ip nat inside source static network 10.131.174.0 100.99.174.0 /24
+ip nat inside source static network 10.131.175.0 100.99.175.0 /24
+ip nat inside source static network 10.131.176.0 100.99.176.0 /24
+ip nat inside source static network 10.131.177.0 100.99.177.0 /24
+ip nat inside source static network 10.131.178.0 100.99.178.0 /24
+ip nat inside source static network 10.131.179.0 100.99.179.0 /24
+ip nat inside source static network 10.131.180.0 100.99.180.0 /24
+ip nat inside source static network 10.131.181.0 100.99.181.0 /24
+ip nat inside source static network 10.131.182.0 100.99.182.0 /24
+ip nat inside source static network 10.131.183.0 100.99.183.0 /24
+ip nat inside source static network 10.131.184.0 100.99.184.0 /24
+ip nat inside source static network 10.131.185.0 100.99.185.0 /24
+ip nat inside source static network 10.131.186.0 100.99.186.0 /24
+ip nat inside source static network 10.131.187.0 100.99.187.0 /24
+ip nat inside source static network 10.131.188.0 100.99.188.0 /24
+ip nat inside source static network 10.131.189.0 100.99.189.0 /24
+ip nat inside source static network 10.131.190.0 100.99.190.0 /24
+ip nat inside source static network 10.131.191.0 100.99.191.0 /24
+ip nat inside source static network 10.131.192.0 100.99.192.0 /24
+ip nat inside source static network 10.131.193.0 100.99.193.0 /24
+ip nat inside source static network 10.131.194.0 100.99.194.0 /24
+ip nat inside source static network 10.131.195.0 100.99.195.0 /24
+ip nat inside source static network 10.131.196.0 100.99.196.0 /24
+ip nat inside source static network 10.131.197.0 100.99.197.0 /24
+ip nat inside source static network 10.131.198.0 100.99.198.0 /24
+ip nat inside source static network 10.131.199.0 100.99.199.0 /24
+ip nat inside source static network 10.131.200.0 100.99.200.0 /24
+ip nat inside source static network 10.131.201.0 100.99.201.0 /24
+ip nat inside source static network 10.131.202.0 100.99.202.0 /24
+ip nat inside source static network 10.131.203.0 100.99.203.0 /24
+ip nat inside source static network 10.131.204.0 100.99.204.0 /24
+ip nat inside source static network 10.131.205.0 100.99.205.0 /24
+ip nat inside source static network 10.131.206.0 100.99.206.0 /24
+ip nat inside source static network 10.131.207.0 100.99.207.0 /24
+ip nat inside source static network 10.131.208.0 100.99.208.0 /24
+ip nat inside source static network 10.131.209.0 100.99.209.0 /24
+ip nat inside source static network 10.131.210.0 100.99.210.0 /24
+ip nat inside source static network 10.131.211.0 100.99.211.0 /24
+ip nat inside source static network 10.131.212.0 100.99.212.0 /24
+ip nat inside source static network 10.131.213.0 100.99.213.0 /24
+ip nat inside source static network 10.131.214.0 100.99.214.0 /24
+ip nat inside source static network 10.131.215.0 100.99.215.0 /24
+ip nat inside source static network 10.131.216.0 100.99.216.0 /24
+ip nat inside source static network 10.131.217.0 100.99.217.0 /24
+ip nat inside source static network 10.131.218.0 100.99.218.0 /24
+ip nat inside source static network 10.131.219.0 100.99.219.0 /24
+ip nat inside source static network 10.131.220.0 100.99.220.0 /24
+ip nat inside source static network 10.131.221.0 100.99.221.0 /24
+ip nat inside source static network 10.131.222.0 100.99.222.0 /24
+ip nat inside source static network 10.131.223.0 100.99.223.0 /24
+ip nat inside source static network 10.131.224.0 100.99.224.0 /24
+ip nat inside source static network 10.131.225.0 100.99.225.0 /24
+ip nat inside source static network 10.131.226.0 100.99.226.0 /24
+ip nat inside source static network 10.131.227.0 100.99.227.0 /24
+ip nat inside source static network 10.131.228.0 100.99.228.0 /24
+ip nat inside source static network 10.131.229.0 100.99.229.0 /24
+ip nat inside source static network 10.131.230.0 100.99.230.0 /24
+ip nat inside source static network 10.131.231.0 100.99.231.0 /24
+ip nat inside source static network 192.168.12.0 172.31.12.0 /24
+ip nat outside source static network 10.128.0.0 100.100.0.0 /24
+ip nat outside source static network 10.128.1.0 100.100.1.0 /24
+ip nat outside source static network 10.128.2.0 100.100.2.0 /24
+ip nat outside source static network 10.128.3.0 100.100.3.0 /24
+ip nat outside source static network 10.128.4.0 100.100.4.0 /24
+ip nat outside source static network 10.128.5.0 100.100.5.0 /24
+ip nat outside source static network 10.128.6.0 100.100.6.0 /24
+ip nat outside source static network 10.128.7.0 100.100.7.0 /24
+ip nat outside source static network 10.128.8.0 100.100.8.0 /24
+ip nat outside source static network 10.128.9.0 100.100.9.0 /24
+ip nat outside source static network 10.128.10.0 100.100.10.0 /24
+ip nat outside source static network 10.128.11.0 100.100.11.0 /24
+ip nat outside source static network 10.128.12.0 100.100.12.0 /24
+ip nat outside source static network 10.128.13.0 100.100.13.0 /24
+ip nat outside source static network 10.128.14.0 100.100.14.0 /24
+ip nat outside source static network 10.128.15.0 100.100.15.0 /24
+ip nat outside source static network 10.128.16.0 100.100.16.0 /24
+ip nat outside source static network 10.128.17.0 100.100.17.0 /24
+ip nat outside source static network 10.128.18.0 100.100.18.0 /24
+ip nat outside source static network 10.128.19.0 100.100.19.0 /24
+ip nat outside source static network 10.128.20.0 100.100.20.0 /24
+ip nat outside source static network 10.128.21.0 100.100.21.0 /24
+ip nat outside source static network 10.128.22.0 100.100.22.0 /24
+ip nat outside source static network 10.128.23.0 100.100.23.0 /24
+ip nat outside source static network 10.128.24.0 100.100.24.0 /24
+ip nat outside source static network 10.128.25.0 100.100.25.0 /24
+ip nat outside source static network 10.128.26.0 100.100.26.0 /24
+ip nat outside source static network 10.128.27.0 100.100.27.0 /24
+ip nat outside source static network 10.128.28.0 100.100.28.0 /24
+ip nat outside source static network 10.128.29.0 100.100.29.0 /24
+ip nat outside source static network 10.128.30.0 100.100.30.0 /24
+ip nat outside source static network 10.128.31.0 100.100.31.0 /24
+ip nat outside source static network 10.128.32.0 100.100.32.0 /24
+ip nat outside source static network 10.128.33.0 100.100.33.0 /24
+ip nat outside source static network 10.128.34.0 100.100.34.0 /24
+ip nat outside source static network 10.128.35.0 100.100.35.0 /24
+ip nat outside source static network 10.128.36.0 100.100.36.0 /24
+ip nat outside source static network 10.128.37.0 100.100.37.0 /24
+ip nat outside source static network 10.128.38.0 100.100.38.0 /24
+ip nat outside source static network 10.128.39.0 100.100.39.0 /24
+ip nat outside source static network 10.128.40.0 100.100.40.0 /24
+ip nat outside source static network 10.128.41.0 100.100.41.0 /24
+ip nat outside source static network 10.128.42.0 100.100.42.0 /24
+ip nat outside source static network 10.128.43.0 100.100.43.0 /24
+ip nat outside source static network 10.128.44.0 100.100.44.0 /24
+ip nat outside source static network 10.128.45.0 100.100.45.0 /24
+ip nat outside source static network 10.128.46.0 100.100.46.0 /24
+ip nat outside source static network 10.128.47.0 100.100.47.0 /24
+ip nat outside source static network 10.128.48.0 100.100.48.0 /24
+ip nat outside source static network 10.128.49.0 100.100.49.0 /24
+ip nat outside source static network 10.128.50.0 100.100.50.0 /24
+ip nat outside source static network 10.128.51.0 100.100.51.0 /24
+ip nat outside source static network 10.128.52.0 100.100.52.0 /24
+ip nat outside source static network 10.128.53.0 100.100.53.0 /24
+ip nat outside source static network 10.128.54.0 100.100.54.0 /24
+ip nat outside source static network 10.128.55.0 100.100.55.0 /24
+ip nat outside source static network 10.128.56.0 100.100.56.0 /24
+ip nat outside source static network 10.128.57.0 100.100.57.0 /24
+ip nat outside source static network 10.128.58.0 100.100.58.0 /24
+ip nat outside source static network 10.128.59.0 100.100.59.0 /24
+ip nat outside source static network 10.128.60.0 100.100.60.0 /24
+ip nat outside source static network 10.128.61.0 100.100.61.0 /24
+ip nat outside source static network 10.128.62.0 100.100.62.0 /24
+ip nat outside source static network 10.128.63.0 100.100.63.0 /24
+ip nat outside source static network 10.128.64.0 100.100.64.0 /24
+ip nat outside source static network 10.128.65.0 100.100.65.0 /24
+ip nat outside source static network 10.128.66.0 100.100.66.0 /24
+ip nat outside source static network 10.128.67.0 100.100.67.0 /24
+ip nat outside source static network 10.128.68.0 100.100.68.0 /24
+ip nat outside source static network 10.128.69.0 100.100.69.0 /24
+ip nat outside source static network 10.128.70.0 100.100.70.0 /24
+ip nat outside source static network 10.128.71.0 100.100.71.0 /24
+ip nat outside source static network 10.128.72.0 100.100.72.0 /24
+ip nat outside source static network 10.128.73.0 100.100.73.0 /24
+ip nat outside source static network 10.128.74.0 100.100.74.0 /24
+ip nat outside source static network 10.128.75.0 100.100.75.0 /24
+ip nat outside source static network 10.128.76.0 100.100.76.0 /24
+ip nat outside source static network 10.128.77.0 100.100.77.0 /24
+ip nat outside source static network 10.128.78.0 100.100.78.0 /24
+ip nat outside source static network 10.128.79.0 100.100.79.0 /24
+ip nat outside source static network 10.128.80.0 100.100.80.0 /24
+ip nat outside source static network 10.128.81.0 100.100.81.0 /24
+ip nat outside source static network 10.128.82.0 100.100.82.0 /24
+ip nat outside source static network 10.128.83.0 100.100.83.0 /24
+ip nat outside source static network 10.128.84.0 100.100.84.0 /24
+ip nat outside source static network 10.128.85.0 100.100.85.0 /24
+ip nat outside source static network 10.128.86.0 100.100.86.0 /24
+ip nat outside source static network 10.128.87.0 100.100.87.0 /24
+ip nat outside source static network 10.128.88.0 100.100.88.0 /24
+ip nat outside source static network 10.128.89.0 100.100.89.0 /24
+ip nat outside source static network 10.128.90.0 100.100.90.0 /24
+ip nat outside source static network 10.128.91.0 100.100.91.0 /24
+ip nat outside source static network 10.128.92.0 100.100.92.0 /24
+ip nat outside source static network 10.128.93.0 100.100.93.0 /24
+ip nat outside source static network 10.128.94.0 100.100.94.0 /24
+ip nat outside source static network 10.128.95.0 100.100.95.0 /24
+ip nat outside source static network 10.128.96.0 100.100.96.0 /24
+ip nat outside source static network 10.128.97.0 100.100.97.0 /24
+ip nat outside source static network 10.128.98.0 100.100.98.0 /24
+ip nat outside source static network 10.128.99.0 100.100.99.0 /24
+ip nat outside source static network 10.128.100.0 100.100.100.0 /24
+ip nat outside source static network 10.128.101.0 100.100.101.0 /24
+ip nat outside source static network 10.128.102.0 100.100.102.0 /24
+ip nat outside source static network 10.128.103.0 100.100.103.0 /24
+ip nat outside source static network 10.128.104.0 100.100.104.0 /24
+ip nat outside source static network 10.128.105.0 100.100.105.0 /24
+ip nat outside source static network 10.128.106.0 100.100.106.0 /24
+ip nat outside source static network 10.128.107.0 100.100.107.0 /24
+ip nat outside source static network 10.128.108.0 100.100.108.0 /24
+ip nat outside source static network 10.128.109.0 100.100.109.0 /24
+ip nat outside source static network 10.128.110.0 100.100.110.0 /24
+ip nat outside source static network 10.128.111.0 100.100.111.0 /24
+ip nat outside source static network 10.128.112.0 100.100.112.0 /24
+ip nat outside source static network 10.128.113.0 100.100.113.0 /24
+ip nat outside source static network 10.128.114.0 100.100.114.0 /24
+ip nat outside source static network 10.128.115.0 100.100.115.0 /24
+ip nat outside source static network 10.128.116.0 100.100.116.0 /24
+ip nat outside source static network 10.128.117.0 100.100.117.0 /24
+ip nat outside source static network 10.128.118.0 100.100.118.0 /24
+ip nat outside source static network 10.128.119.0 100.100.119.0 /24
+ip nat outside source static network 10.128.120.0 100.100.120.0 /24
+ip nat outside source static network 10.128.121.0 100.100.121.0 /24
+ip nat outside source static network 10.128.122.0 100.100.122.0 /24
+ip nat outside source static network 10.128.123.0 100.100.123.0 /24
+ip nat outside source static network 10.128.124.0 100.100.124.0 /24
+ip nat outside source static network 10.128.125.0 100.100.125.0 /24
+ip nat outside source static network 10.128.126.0 100.100.126.0 /24
+ip nat outside source static network 10.128.127.0 100.100.127.0 /24
+ip nat outside source static network 10.128.128.0 100.100.128.0 /24
+ip nat outside source static network 10.128.129.0 100.100.129.0 /24
+ip nat outside source static network 10.128.130.0 100.100.130.0 /24
+ip nat outside source static network 10.128.131.0 100.100.131.0 /24
+ip nat outside source static network 10.128.132.0 100.100.132.0 /24
+ip nat outside source static network 10.128.133.0 100.100.133.0 /24
+ip nat outside source static network 10.128.134.0 100.100.134.0 /24
+ip nat outside source static network 10.128.135.0 100.100.135.0 /24
+ip nat outside source static network 10.128.136.0 100.100.136.0 /24
+ip nat outside source static network 10.128.137.0 100.100.137.0 /24
+ip nat outside source static network 10.128.138.0 100.100.138.0 /24
+ip nat outside source static network 10.128.139.0 100.100.139.0 /24
+ip nat outside source static network 10.128.140.0 100.100.140.0 /24
+ip nat outside source static network 10.128.141.0 100.100.141.0 /24
+ip nat outside source static network 10.128.142.0 100.100.142.0 /24
+ip nat outside source static network 10.128.143.0 100.100.143.0 /24
+ip nat outside source static network 10.128.144.0 100.100.144.0 /24
+ip nat outside source static network 10.128.145.0 100.100.145.0 /24
+ip nat outside source static network 10.128.146.0 100.100.146.0 /24
+ip nat outside source static network 10.128.147.0 100.100.147.0 /24
+ip nat outside source static network 10.128.148.0 100.100.148.0 /24
+ip nat outside source static network 10.128.149.0 100.100.149.0 /24
+ip nat outside source static network 10.128.150.0 100.100.150.0 /24
+ip nat outside source static network 10.128.151.0 100.100.151.0 /24
+ip nat outside source static network 10.128.152.0 100.100.152.0 /24
+ip nat outside source static network 10.128.153.0 100.100.153.0 /24
+ip nat outside source static network 10.128.154.0 100.100.154.0 /24
+ip nat outside source static network 10.128.155.0 100.100.155.0 /24
+ip nat outside source static network 10.128.156.0 100.100.156.0 /24
+ip nat outside source static network 10.128.157.0 100.100.157.0 /24
+ip nat outside source static network 10.128.158.0 100.100.158.0 /24
+ip nat outside source static network 10.128.159.0 100.100.159.0 /24
+ip nat outside source static network 10.128.160.0 100.100.160.0 /24
+ip nat outside source static network 10.128.161.0 100.100.161.0 /24
+ip nat outside source static network 10.128.162.0 100.100.162.0 /24
+ip nat outside source static network 10.128.163.0 100.100.163.0 /24
+ip nat outside source static network 10.128.164.0 100.100.164.0 /24
+ip nat outside source static network 10.128.165.0 100.100.165.0 /24
+ip nat outside source static network 10.128.166.0 100.100.166.0 /24
+ip nat outside source static network 10.128.167.0 100.100.167.0 /24
+ip nat outside source static network 10.128.168.0 100.100.168.0 /24
+ip nat outside source static network 10.128.169.0 100.100.169.0 /24
+ip nat outside source static network 10.128.170.0 100.100.170.0 /24
+ip nat outside source static network 10.128.171.0 100.100.171.0 /24
+ip nat outside source static network 10.128.172.0 100.100.172.0 /24
+ip nat outside source static network 10.128.173.0 100.100.173.0 /24
+ip nat outside source static network 10.128.174.0 100.100.174.0 /24
+ip nat outside source static network 10.128.175.0 100.100.175.0 /24
+ip nat outside source static network 10.128.176.0 100.100.176.0 /24
+ip nat outside source static network 10.128.177.0 100.100.177.0 /24
+ip nat outside source static network 10.128.178.0 100.100.178.0 /24
+ip nat outside source static network 10.128.179.0 100.100.179.0 /24
+ip nat outside source static network 10.128.180.0 100.100.180.0 /24
+ip nat outside source static network 10.128.181.0 100.100.181.0 /24
+ip nat outside source static network 10.128.182.0 100.100.182.0 /24
+ip nat outside source static network 10.128.183.0 100.100.183.0 /24
+ip nat outside source static network 10.128.184.0 100.100.184.0 /24
+ip nat outside source static network 10.128.185.0 100.100.185.0 /24
+ip nat outside source static network 10.128.186.0 100.100.186.0 /24
+ip nat outside source static network 10.128.187.0 100.100.187.0 /24
+ip nat outside source static network 10.128.188.0 100.100.188.0 /24
+ip nat outside source static network 10.128.189.0 100.100.189.0 /24
+ip nat outside source static network 10.128.190.0 100.100.190.0 /24
+ip nat outside source static network 10.128.191.0 100.100.191.0 /24
+ip nat outside source static network 10.128.192.0 100.100.192.0 /24
+ip nat outside source static network 10.128.193.0 100.100.193.0 /24
+ip nat outside source static network 10.128.194.0 100.100.194.0 /24
+ip nat outside source static network 10.128.195.0 100.100.195.0 /24
+ip nat outside source static network 10.128.196.0 100.100.196.0 /24
+ip nat outside source static network 10.128.197.0 100.100.197.0 /24
+ip nat outside source static network 10.128.198.0 100.100.198.0 /24
+ip nat outside source static network 10.128.199.0 100.100.199.0 /24
+ip nat outside source static network 10.128.200.0 100.100.200.0 /24
+ip nat outside source static network 10.128.201.0 100.100.201.0 /24
+ip nat outside source static network 10.128.202.0 100.100.202.0 /24
+ip nat outside source static network 10.128.203.0 100.100.203.0 /24
+ip nat outside source static network 10.128.204.0 100.100.204.0 /24
+ip nat outside source static network 10.128.205.0 100.100.205.0 /24
+ip nat outside source static network 10.128.206.0 100.100.206.0 /24
+ip nat outside source static network 10.128.207.0 100.100.207.0 /24
+ip nat outside source static network 10.128.208.0 100.100.208.0 /24
+ip nat outside source static network 10.128.209.0 100.100.209.0 /24
+ip nat outside source static network 10.128.210.0 100.100.210.0 /24
+ip nat outside source static network 10.128.211.0 100.100.211.0 /24
+ip nat outside source static network 10.128.212.0 100.100.212.0 /24
+ip nat outside source static network 10.128.213.0 100.100.213.0 /24
+ip nat outside source static network 10.128.214.0 100.100.214.0 /24
+ip nat outside source static network 10.128.215.0 100.100.215.0 /24
+ip nat outside source static network 10.128.216.0 100.100.216.0 /24
+ip nat outside source static network 10.128.217.0 100.100.217.0 /24
+ip nat outside source static network 10.128.218.0 100.100.218.0 /24
+ip nat outside source static network 10.128.219.0 100.100.219.0 /24
+ip nat outside source static network 10.128.220.0 100.100.220.0 /24
+ip nat outside source static network 10.128.221.0 100.100.221.0 /24
+ip nat outside source static network 10.128.222.0 100.100.222.0 /24
+ip nat outside source static network 10.128.223.0 100.100.223.0 /24
+ip nat outside source static network 10.128.224.0 100.100.224.0 /24
+ip nat outside source static network 10.128.225.0 100.100.225.0 /24
+ip nat outside source static network 10.128.226.0 100.100.226.0 /24
+ip nat outside source static network 10.128.227.0 100.100.227.0 /24
+ip nat outside source static network 10.128.228.0 100.100.228.0 /24
+ip nat outside source static network 10.128.229.0 100.100.229.0 /24
+ip nat outside source static network 10.128.230.0 100.100.230.0 /24
+ip nat outside source static network 10.128.231.0 100.100.231.0 /24
+ip nat outside source static network 10.128.232.0 100.100.232.0 /24
+ip nat outside source static network 10.128.233.0 100.100.233.0 /24
+ip nat outside source static network 10.128.234.0 100.100.234.0 /24
+ip nat outside source static network 10.128.235.0 100.100.235.0 /24
+ip nat outside source static network 10.128.236.0 100.100.236.0 /24
+ip nat outside source static network 10.128.237.0 100.100.237.0 /24
+ip nat outside source static network 10.128.238.0 100.100.238.0 /24
+ip nat outside source static network 10.128.239.0 100.100.239.0 /24
+ip nat outside source static network 10.128.240.0 100.100.240.0 /24
+ip nat outside source static network 10.128.241.0 100.100.241.0 /24
+ip nat outside source static network 10.128.242.0 100.100.242.0 /24
+ip nat outside source static network 10.128.243.0 100.100.243.0 /24
+ip nat outside source static network 10.128.244.0 100.100.244.0 /24
+ip nat outside source static network 10.128.245.0 100.100.245.0 /24
+ip nat outside source static network 10.128.246.0 100.100.246.0 /24
+ip nat outside source static network 10.128.247.0 100.100.247.0 /24
+ip nat outside source static network 10.128.248.0 100.100.248.0 /24
+ip nat outside source static network 10.128.249.0 100.100.249.0 /24
+ip nat outside source static network 10.128.250.0 100.100.250.0 /24
+ip nat outside source static network 10.128.251.0 100.100.251.0 /24
+ip nat outside source static network 10.128.252.0 100.100.252.0 /24
+ip nat outside source static network 10.128.253.0 100.100.253.0 /24
+ip nat outside source static network 10.128.254.0 100.100.254.0 /24
+ip nat outside source static network 10.128.255.0 100.100.255.0 /24
+ip nat outside source static network 10.129.0.0 100.101.0.0 /24
+ip nat outside source static network 10.129.1.0 100.101.1.0 /24
+ip nat outside source static network 10.129.2.0 100.101.2.0 /24
+ip nat outside source static network 10.129.3.0 100.101.3.0 /24
+ip nat outside source static network 10.129.4.0 100.101.4.0 /24
+ip nat outside source static network 10.129.5.0 100.101.5.0 /24
+ip nat outside source static network 10.129.6.0 100.101.6.0 /24
+ip nat outside source static network 10.129.7.0 100.101.7.0 /24
+ip nat outside source static network 10.129.8.0 100.101.8.0 /24
+ip nat outside source static network 10.129.9.0 100.101.9.0 /24
+ip nat outside source static network 10.129.10.0 100.101.10.0 /24
+ip nat outside source static network 10.129.11.0 100.101.11.0 /24
+ip nat outside source static network 10.129.12.0 100.101.12.0 /24
+ip nat outside source static network 10.129.13.0 100.101.13.0 /24
+ip nat outside source static network 10.129.14.0 100.101.14.0 /24
+ip nat outside source static network 10.129.15.0 100.101.15.0 /24
+ip nat outside source static network 10.129.16.0 100.101.16.0 /24
+ip nat outside source static network 10.129.17.0 100.101.17.0 /24
+ip nat outside source static network 10.129.18.0 100.101.18.0 /24
+ip nat outside source static network 10.129.19.0 100.101.19.0 /24
+ip nat outside source static network 10.129.20.0 100.101.20.0 /24
+ip nat outside source static network 10.129.21.0 100.101.21.0 /24
+ip nat outside source static network 10.129.22.0 100.101.22.0 /24
+ip nat outside source static network 10.129.23.0 100.101.23.0 /24
+ip nat outside source static network 10.129.24.0 100.101.24.0 /24
+ip nat outside source static network 10.129.25.0 100.101.25.0 /24
+ip nat outside source static network 10.129.26.0 100.101.26.0 /24
+ip nat outside source static network 10.129.27.0 100.101.27.0 /24
+ip nat outside source static network 10.129.28.0 100.101.28.0 /24
+ip nat outside source static network 10.129.29.0 100.101.29.0 /24
+ip nat outside source static network 10.129.30.0 100.101.30.0 /24
+ip nat outside source static network 10.129.31.0 100.101.31.0 /24
+ip nat outside source static network 10.129.32.0 100.101.32.0 /24
+ip nat outside source static network 10.129.33.0 100.101.33.0 /24
+ip nat outside source static network 10.129.34.0 100.101.34.0 /24
+ip nat outside source static network 10.129.35.0 100.101.35.0 /24
+ip nat outside source static network 10.129.36.0 100.101.36.0 /24
+ip nat outside source static network 10.129.37.0 100.101.37.0 /24
+ip nat outside source static network 10.129.38.0 100.101.38.0 /24
+ip nat outside source static network 10.129.39.0 100.101.39.0 /24
+ip nat outside source static network 10.129.40.0 100.101.40.0 /24
+ip nat outside source static network 10.129.41.0 100.101.41.0 /24
+ip nat outside source static network 10.129.42.0 100.101.42.0 /24
+ip nat outside source static network 10.129.43.0 100.101.43.0 /24
+ip nat outside source static network 10.129.44.0 100.101.44.0 /24
+ip nat outside source static network 10.129.45.0 100.101.45.0 /24
+ip nat outside source static network 10.129.46.0 100.101.46.0 /24
+ip nat outside source static network 10.129.47.0 100.101.47.0 /24
+ip nat outside source static network 10.129.48.0 100.101.48.0 /24
+ip nat outside source static network 10.129.49.0 100.101.49.0 /24
+ip nat outside source static network 10.129.50.0 100.101.50.0 /24
+ip nat outside source static network 10.129.51.0 100.101.51.0 /24
+ip nat outside source static network 10.129.52.0 100.101.52.0 /24
+ip nat outside source static network 10.129.53.0 100.101.53.0 /24
+ip nat outside source static network 10.129.54.0 100.101.54.0 /24
+ip nat outside source static network 10.129.55.0 100.101.55.0 /24
+ip nat outside source static network 10.129.56.0 100.101.56.0 /24
+ip nat outside source static network 10.129.57.0 100.101.57.0 /24
+ip nat outside source static network 10.129.58.0 100.101.58.0 /24
+ip nat outside source static network 10.129.59.0 100.101.59.0 /24
+ip nat outside source static network 10.129.60.0 100.101.60.0 /24
+ip nat outside source static network 10.129.61.0 100.101.61.0 /24
+ip nat outside source static network 10.129.62.0 100.101.62.0 /24
+ip nat outside source static network 10.129.63.0 100.101.63.0 /24
+ip nat outside source static network 10.129.64.0 100.101.64.0 /24
+ip nat outside source static network 10.129.65.0 100.101.65.0 /24
+ip nat outside source static network 10.129.66.0 100.101.66.0 /24
+ip nat outside source static network 10.129.67.0 100.101.67.0 /24
+ip nat outside source static network 10.129.68.0 100.101.68.0 /24
+ip nat outside source static network 10.129.69.0 100.101.69.0 /24
+ip nat outside source static network 10.129.70.0 100.101.70.0 /24
+ip nat outside source static network 10.129.71.0 100.101.71.0 /24
+ip nat outside source static network 10.129.72.0 100.101.72.0 /24
+ip nat outside source static network 10.129.73.0 100.101.73.0 /24
+ip nat outside source static network 10.129.74.0 100.101.74.0 /24
+ip nat outside source static network 10.129.75.0 100.101.75.0 /24
+ip nat outside source static network 10.129.76.0 100.101.76.0 /24
+ip nat outside source static network 10.129.77.0 100.101.77.0 /24
+ip nat outside source static network 10.129.78.0 100.101.78.0 /24
+ip nat outside source static network 10.129.79.0 100.101.79.0 /24
+ip nat outside source static network 10.129.80.0 100.101.80.0 /24
+ip nat outside source static network 10.129.81.0 100.101.81.0 /24
+ip nat outside source static network 10.129.82.0 100.101.82.0 /24
+ip nat outside source static network 10.129.83.0 100.101.83.0 /24
+ip nat outside source static network 10.129.84.0 100.101.84.0 /24
+ip nat outside source static network 10.129.85.0 100.101.85.0 /24
+ip nat outside source static network 10.129.86.0 100.101.86.0 /24
+ip nat outside source static network 10.129.87.0 100.101.87.0 /24
+ip nat outside source static network 10.129.88.0 100.101.88.0 /24
+ip nat outside source static network 10.129.89.0 100.101.89.0 /24
+ip nat outside source static network 10.129.90.0 100.101.90.0 /24
+ip nat outside source static network 10.129.91.0 100.101.91.0 /24
+ip nat outside source static network 10.129.92.0 100.101.92.0 /24
+ip nat outside source static network 10.129.93.0 100.101.93.0 /24
+ip nat outside source static network 10.129.94.0 100.101.94.0 /24
+ip nat outside source static network 10.129.95.0 100.101.95.0 /24
+ip nat outside source static network 10.129.96.0 100.101.96.0 /24
+ip nat outside source static network 10.129.97.0 100.101.97.0 /24
+ip nat outside source static network 10.129.98.0 100.101.98.0 /24
+ip nat outside source static network 10.129.99.0 100.101.99.0 /24
+ip nat outside source static network 10.129.100.0 100.101.100.0 /24
+ip nat outside source static network 10.129.101.0 100.101.101.0 /24
+ip nat outside source static network 10.129.102.0 100.101.102.0 /24
+ip nat outside source static network 10.129.103.0 100.101.103.0 /24
+ip nat outside source static network 10.129.104.0 100.101.104.0 /24
+ip nat outside source static network 10.129.105.0 100.101.105.0 /24
+ip nat outside source static network 10.129.106.0 100.101.106.0 /24
+ip nat outside source static network 10.129.107.0 100.101.107.0 /24
+ip nat outside source static network 10.129.108.0 100.101.108.0 /24
+ip nat outside source static network 10.129.109.0 100.101.109.0 /24
+ip nat outside source static network 10.129.110.0 100.101.110.0 /24
+ip nat outside source static network 10.129.111.0 100.101.111.0 /24
+ip nat outside source static network 10.129.112.0 100.101.112.0 /24
+ip nat outside source static network 10.129.113.0 100.101.113.0 /24
+ip nat outside source static network 10.129.114.0 100.101.114.0 /24
+ip nat outside source static network 10.129.115.0 100.101.115.0 /24
+ip nat outside source static network 10.129.116.0 100.101.116.0 /24
+ip nat outside source static network 10.129.117.0 100.101.117.0 /24
+ip nat outside source static network 10.129.118.0 100.101.118.0 /24
+ip nat outside source static network 10.129.119.0 100.101.119.0 /24
+ip nat outside source static network 10.129.120.0 100.101.120.0 /24
+ip nat outside source static network 10.129.121.0 100.101.121.0 /24
+ip nat outside source static network 10.129.122.0 100.101.122.0 /24
+ip nat outside source static network 10.129.123.0 100.101.123.0 /24
+ip nat outside source static network 10.129.124.0 100.101.124.0 /24
+ip nat outside source static network 10.129.125.0 100.101.125.0 /24
+ip nat outside source static network 10.129.126.0 100.101.126.0 /24
+ip nat outside source static network 10.129.127.0 100.101.127.0 /24
+ip nat outside source static network 10.129.128.0 100.101.128.0 /24
+ip nat outside source static network 10.129.129.0 100.101.129.0 /24
+ip nat outside source static network 10.129.130.0 100.101.130.0 /24
+ip nat outside source static network 10.129.131.0 100.101.131.0 /24
+ip nat outside source static network 10.129.132.0 100.101.132.0 /24
+ip nat outside source static network 10.129.133.0 100.101.133.0 /24
+ip nat outside source static network 10.129.134.0 100.101.134.0 /24
+ip nat outside source static network 10.129.135.0 100.101.135.0 /24
+ip nat outside source static network 10.129.136.0 100.101.136.0 /24
+ip nat outside source static network 10.129.137.0 100.101.137.0 /24
+ip nat outside source static network 10.129.138.0 100.101.138.0 /24
+ip nat outside source static network 10.129.139.0 100.101.139.0 /24
+ip nat outside source static network 10.129.140.0 100.101.140.0 /24
+ip nat outside source static network 10.129.141.0 100.101.141.0 /24
+ip nat outside source static network 10.129.142.0 100.101.142.0 /24
+ip nat outside source static network 10.129.143.0 100.101.143.0 /24
+ip nat outside source static network 10.129.144.0 100.101.144.0 /24
+ip nat outside source static network 10.129.145.0 100.101.145.0 /24
+ip nat outside source static network 10.129.146.0 100.101.146.0 /24
+ip nat outside source static network 10.129.147.0 100.101.147.0 /24
+ip nat outside source static network 10.129.148.0 100.101.148.0 /24
+ip nat outside source static network 10.129.149.0 100.101.149.0 /24
+ip nat outside source static network 10.129.150.0 100.101.150.0 /24
+ip nat outside source static network 10.129.151.0 100.101.151.0 /24
+ip nat outside source static network 10.129.152.0 100.101.152.0 /24
+ip nat outside source static network 10.129.153.0 100.101.153.0 /24
+ip nat outside source static network 10.129.154.0 100.101.154.0 /24
+ip nat outside source static network 10.129.155.0 100.101.155.0 /24
+ip nat outside source static network 10.129.156.0 100.101.156.0 /24
+ip nat outside source static network 10.129.157.0 100.101.157.0 /24
+ip nat outside source static network 10.129.158.0 100.101.158.0 /24
+ip nat outside source static network 10.129.159.0 100.101.159.0 /24
+ip nat outside source static network 10.129.160.0 100.101.160.0 /24
+ip nat outside source static network 10.129.161.0 100.101.161.0 /24
+ip nat outside source static network 10.129.162.0 100.101.162.0 /24
+ip nat outside source static network 10.129.163.0 100.101.163.0 /24
+ip nat outside source static network 10.129.164.0 100.101.164.0 /24
+ip nat outside source static network 10.129.165.0 100.101.165.0 /24
+ip nat outside source static network 10.129.166.0 100.101.166.0 /24
+ip nat outside source static network 10.129.167.0 100.101.167.0 /24
+ip nat outside source static network 10.129.168.0 100.101.168.0 /24
+ip nat outside source static network 10.129.169.0 100.101.169.0 /24
+ip nat outside source static network 10.129.170.0 100.101.170.0 /24
+ip nat outside source static network 10.129.171.0 100.101.171.0 /24
+ip nat outside source static network 10.129.172.0 100.101.172.0 /24
+ip nat outside source static network 10.129.173.0 100.101.173.0 /24
+ip nat outside source static network 10.129.174.0 100.101.174.0 /24
+ip nat outside source static network 10.129.175.0 100.101.175.0 /24
+ip nat outside source static network 10.129.176.0 100.101.176.0 /24
+ip nat outside source static network 10.129.177.0 100.101.177.0 /24
+ip nat outside source static network 10.129.178.0 100.101.178.0 /24
+ip nat outside source static network 10.129.179.0 100.101.179.0 /24
+ip nat outside source static network 10.129.180.0 100.101.180.0 /24
+ip nat outside source static network 10.129.181.0 100.101.181.0 /24
+ip nat outside source static network 10.129.182.0 100.101.182.0 /24
+ip nat outside source static network 10.129.183.0 100.101.183.0 /24
+ip nat outside source static network 10.129.184.0 100.101.184.0 /24
+ip nat outside source static network 10.129.185.0 100.101.185.0 /24
+ip nat outside source static network 10.129.186.0 100.101.186.0 /24
+ip nat outside source static network 10.129.187.0 100.101.187.0 /24
+ip nat outside source static network 10.129.188.0 100.101.188.0 /24
+ip nat outside source static network 10.129.189.0 100.101.189.0 /24
+ip nat outside source static network 10.129.190.0 100.101.190.0 /24
+ip nat outside source static network 10.129.191.0 100.101.191.0 /24
+ip nat outside source static network 10.129.192.0 100.101.192.0 /24
+ip nat outside source static network 10.129.193.0 100.101.193.0 /24
+ip nat outside source static network 10.129.194.0 100.101.194.0 /24
+ip nat outside source static network 10.129.195.0 100.101.195.0 /24
+ip nat outside source static network 10.129.196.0 100.101.196.0 /24
+ip nat outside source static network 10.129.197.0 100.101.197.0 /24
+ip nat outside source static network 10.129.198.0 100.101.198.0 /24
+ip nat outside source static network 10.129.199.0 100.101.199.0 /24
+ip nat outside source static network 10.129.200.0 100.101.200.0 /24
+ip nat outside source static network 10.129.201.0 100.101.201.0 /24
+ip nat outside source static network 10.129.202.0 100.101.202.0 /24
+ip nat outside source static network 10.129.203.0 100.101.203.0 /24
+ip nat outside source static network 10.129.204.0 100.101.204.0 /24
+ip nat outside source static network 10.129.205.0 100.101.205.0 /24
+ip nat outside source static network 10.129.206.0 100.101.206.0 /24
+ip nat outside source static network 10.129.207.0 100.101.207.0 /24
+ip nat outside source static network 10.129.208.0 100.101.208.0 /24
+ip nat outside source static network 10.129.209.0 100.101.209.0 /24
+ip nat outside source static network 10.129.210.0 100.101.210.0 /24
+ip nat outside source static network 10.129.211.0 100.101.211.0 /24
+ip nat outside source static network 10.129.212.0 100.101.212.0 /24
+ip nat outside source static network 10.129.213.0 100.101.213.0 /24
+ip nat outside source static network 10.129.214.0 100.101.214.0 /24
+ip nat outside source static network 10.129.215.0 100.101.215.0 /24
+ip nat outside source static network 10.129.216.0 100.101.216.0 /24
+ip nat outside source static network 10.129.217.0 100.101.217.0 /24
+ip nat outside source static network 10.129.218.0 100.101.218.0 /24
+ip nat outside source static network 10.129.219.0 100.101.219.0 /24
+ip nat outside source static network 10.129.220.0 100.101.220.0 /24
+ip nat outside source static network 10.129.221.0 100.101.221.0 /24
+ip nat outside source static network 10.129.222.0 100.101.222.0 /24
+ip nat outside source static network 10.129.223.0 100.101.223.0 /24
+ip nat outside source static network 10.129.224.0 100.101.224.0 /24
+ip nat outside source static network 10.129.225.0 100.101.225.0 /24
+ip nat outside source static network 10.129.226.0 100.101.226.0 /24
+ip nat outside source static network 10.129.227.0 100.101.227.0 /24
+ip nat outside source static network 10.129.228.0 100.101.228.0 /24
+ip nat outside source static network 10.129.229.0 100.101.229.0 /24
+ip nat outside source static network 10.129.230.0 100.101.230.0 /24
+ip nat outside source static network 10.129.231.0 100.101.231.0 /24
+ip nat outside source static network 10.129.232.0 100.101.232.0 /24
+ip nat outside source static network 10.129.233.0 100.101.233.0 /24
+ip nat outside source static network 10.129.234.0 100.101.234.0 /24
+ip nat outside source static network 10.129.235.0 100.101.235.0 /24
+ip nat outside source static network 10.129.236.0 100.101.236.0 /24
+ip nat outside source static network 10.129.237.0 100.101.237.0 /24
+ip nat outside source static network 10.129.238.0 100.101.238.0 /24
+ip nat outside source static network 10.129.239.0 100.101.239.0 /24
+ip nat outside source static network 10.129.240.0 100.101.240.0 /24
+ip nat outside source static network 10.129.241.0 100.101.241.0 /24
+ip nat outside source static network 10.129.242.0 100.101.242.0 /24
+ip nat outside source static network 10.129.243.0 100.101.243.0 /24
+ip nat outside source static network 10.129.244.0 100.101.244.0 /24
+ip nat outside source static network 10.129.245.0 100.101.245.0 /24
+ip nat outside source static network 10.129.246.0 100.101.246.0 /24
+ip nat outside source static network 10.129.247.0 100.101.247.0 /24
+ip nat outside source static network 10.129.248.0 100.101.248.0 /24
+ip nat outside source static network 10.129.249.0 100.101.249.0 /24
+ip nat outside source static network 10.129.250.0 100.101.250.0 /24
+ip nat outside source static network 10.129.251.0 100.101.251.0 /24
+ip nat outside source static network 10.129.252.0 100.101.252.0 /24
+ip nat outside source static network 10.129.253.0 100.101.253.0 /24
+ip nat outside source static network 10.129.254.0 100.101.254.0 /24
+ip nat outside source static network 10.129.255.0 100.101.255.0 /24
+ip nat outside source static network 10.130.0.0 100.102.0.0 /24
+ip nat outside source static network 10.130.1.0 100.102.1.0 /24
+ip nat outside source static network 10.130.2.0 100.102.2.0 /24
+ip nat outside source static network 10.130.3.0 100.102.3.0 /24
+ip nat outside source static network 10.130.4.0 100.102.4.0 /24
+ip nat outside source static network 10.130.5.0 100.102.5.0 /24
+ip nat outside source static network 10.130.6.0 100.102.6.0 /24
+ip nat outside source static network 10.130.7.0 100.102.7.0 /24
+ip nat outside source static network 10.130.8.0 100.102.8.0 /24
+ip nat outside source static network 10.130.9.0 100.102.9.0 /24
+ip nat outside source static network 10.130.10.0 100.102.10.0 /24
+ip nat outside source static network 10.130.11.0 100.102.11.0 /24
+ip nat outside source static network 10.130.12.0 100.102.12.0 /24
+ip nat outside source static network 10.130.13.0 100.102.13.0 /24
+ip nat outside source static network 10.130.14.0 100.102.14.0 /24
+ip nat outside source static network 10.130.15.0 100.102.15.0 /24
+ip nat outside source static network 10.130.16.0 100.102.16.0 /24
+ip nat outside source static network 10.130.17.0 100.102.17.0 /24
+ip nat outside source static network 10.130.18.0 100.102.18.0 /24
+ip nat outside source static network 10.130.19.0 100.102.19.0 /24
+ip nat outside source static network 10.130.20.0 100.102.20.0 /24
+ip nat outside source static network 10.130.21.0 100.102.21.0 /24
+ip nat outside source static network 10.130.22.0 100.102.22.0 /24
+ip nat outside source static network 10.130.23.0 100.102.23.0 /24
+ip nat outside source static network 10.130.24.0 100.102.24.0 /24
+ip nat outside source static network 10.130.25.0 100.102.25.0 /24
+ip nat outside source static network 10.130.26.0 100.102.26.0 /24
+ip nat outside source static network 10.130.27.0 100.102.27.0 /24
+ip nat outside source static network 10.130.28.0 100.102.28.0 /24
+ip nat outside source static network 10.130.29.0 100.102.29.0 /24
+ip nat outside source static network 10.130.30.0 100.102.30.0 /24
+ip nat outside source static network 10.130.31.0 100.102.31.0 /24
+ip nat outside source static network 10.130.32.0 100.102.32.0 /24
+ip nat outside source static network 10.130.33.0 100.102.33.0 /24
+ip nat outside source static network 10.130.34.0 100.102.34.0 /24
+ip nat outside source static network 10.130.35.0 100.102.35.0 /24
+ip nat outside source static network 10.130.36.0 100.102.36.0 /24
+ip nat outside source static network 10.130.37.0 100.102.37.0 /24
+ip nat outside source static network 10.130.38.0 100.102.38.0 /24
+ip nat outside source static network 10.130.39.0 100.102.39.0 /24
+ip nat outside source static network 10.130.40.0 100.102.40.0 /24
+ip nat outside source static network 10.130.41.0 100.102.41.0 /24
+ip nat outside source static network 10.130.42.0 100.102.42.0 /24
+ip nat outside source static network 10.130.43.0 100.102.43.0 /24
+ip nat outside source static network 10.130.44.0 100.102.44.0 /24
+ip nat outside source static network 10.130.45.0 100.102.45.0 /24
+ip nat outside source static network 10.130.46.0 100.102.46.0 /24
+ip nat outside source static network 10.130.47.0 100.102.47.0 /24
+ip nat outside source static network 10.130.48.0 100.102.48.0 /24
+ip nat outside source static network 10.130.49.0 100.102.49.0 /24
+ip nat outside source static network 10.130.50.0 100.102.50.0 /24
+ip nat outside source static network 10.130.51.0 100.102.51.0 /24
+ip nat outside source static network 10.130.52.0 100.102.52.0 /24
+ip nat outside source static network 10.130.53.0 100.102.53.0 /24
+ip nat outside source static network 10.130.54.0 100.102.54.0 /24
+ip nat outside source static network 10.130.55.0 100.102.55.0 /24
+ip nat outside source static network 10.130.56.0 100.102.56.0 /24
+ip nat outside source static network 10.130.57.0 100.102.57.0 /24
+ip nat outside source static network 10.130.58.0 100.102.58.0 /24
+ip nat outside source static network 10.130.59.0 100.102.59.0 /24
+ip nat outside source static network 10.130.60.0 100.102.60.0 /24
+ip nat outside source static network 10.130.61.0 100.102.61.0 /24
+ip nat outside source static network 10.130.62.0 100.102.62.0 /24
+ip nat outside source static network 10.130.63.0 100.102.63.0 /24
+ip nat outside source static network 10.130.64.0 100.102.64.0 /24
+ip nat outside source static network 10.130.65.0 100.102.65.0 /24
+ip nat outside source static network 10.130.66.0 100.102.66.0 /24
+ip nat outside source static network 10.130.67.0 100.102.67.0 /24
+ip nat outside source static network 10.130.68.0 100.102.68.0 /24
+ip nat outside source static network 10.130.69.0 100.102.69.0 /24
+ip nat outside source static network 10.130.70.0 100.102.70.0 /24
+ip nat outside source static network 10.130.71.0 100.102.71.0 /24
+ip nat outside source static network 10.130.72.0 100.102.72.0 /24
+ip nat outside source static network 10.130.73.0 100.102.73.0 /24
+ip nat outside source static network 10.130.74.0 100.102.74.0 /24
+ip nat outside source static network 10.130.75.0 100.102.75.0 /24
+ip nat outside source static network 10.130.76.0 100.102.76.0 /24
+ip nat outside source static network 10.130.77.0 100.102.77.0 /24
+ip nat outside source static network 10.130.78.0 100.102.78.0 /24
+ip nat outside source static network 10.130.79.0 100.102.79.0 /24
+ip nat outside source static network 10.130.80.0 100.102.80.0 /24
+ip nat outside source static network 10.130.81.0 100.102.81.0 /24
+ip nat outside source static network 10.130.82.0 100.102.82.0 /24
+ip nat outside source static network 10.130.83.0 100.102.83.0 /24
+ip nat outside source static network 10.130.84.0 100.102.84.0 /24
+ip nat outside source static network 10.130.85.0 100.102.85.0 /24
+ip nat outside source static network 10.130.86.0 100.102.86.0 /24
+ip nat outside source static network 10.130.87.0 100.102.87.0 /24
+ip nat outside source static network 10.130.88.0 100.102.88.0 /24
+ip nat outside source static network 10.130.89.0 100.102.89.0 /24
+ip nat outside source static network 10.130.90.0 100.102.90.0 /24
+ip nat outside source static network 10.130.91.0 100.102.91.0 /24
+ip nat outside source static network 10.130.92.0 100.102.92.0 /24
+ip nat outside source static network 10.130.93.0 100.102.93.0 /24
+ip nat outside source static network 10.130.94.0 100.102.94.0 /24
+ip nat outside source static network 10.130.95.0 100.102.95.0 /24
+ip nat outside source static network 10.130.96.0 100.102.96.0 /24
+ip nat outside source static network 10.130.97.0 100.102.97.0 /24
+ip nat outside source static network 10.130.98.0 100.102.98.0 /24
+ip nat outside source static network 10.130.99.0 100.102.99.0 /24
+ip nat outside source static network 10.130.100.0 100.102.100.0 /24
+ip nat outside source static network 10.130.101.0 100.102.101.0 /24
+ip nat outside source static network 10.130.102.0 100.102.102.0 /24
+ip nat outside source static network 10.130.103.0 100.102.103.0 /24
+ip nat outside source static network 10.130.104.0 100.102.104.0 /24
+ip nat outside source static network 10.130.105.0 100.102.105.0 /24
+ip nat outside source static network 10.130.106.0 100.102.106.0 /24
+ip nat outside source static network 10.130.107.0 100.102.107.0 /24
+ip nat outside source static network 10.130.108.0 100.102.108.0 /24
+ip nat outside source static network 10.130.109.0 100.102.109.0 /24
+ip nat outside source static network 10.130.110.0 100.102.110.0 /24
+ip nat outside source static network 10.130.111.0 100.102.111.0 /24
+ip nat outside source static network 10.130.112.0 100.102.112.0 /24
+ip nat outside source static network 10.130.113.0 100.102.113.0 /24
+ip nat outside source static network 10.130.114.0 100.102.114.0 /24
+ip nat outside source static network 10.130.115.0 100.102.115.0 /24
+ip nat outside source static network 10.130.116.0 100.102.116.0 /24
+ip nat outside source static network 10.130.117.0 100.102.117.0 /24
+ip nat outside source static network 10.130.118.0 100.102.118.0 /24
+ip nat outside source static network 10.130.119.0 100.102.119.0 /24
+ip nat outside source static network 10.130.120.0 100.102.120.0 /24
+ip nat outside source static network 10.130.121.0 100.102.121.0 /24
+ip nat outside source static network 10.130.122.0 100.102.122.0 /24
+ip nat outside source static network 10.130.123.0 100.102.123.0 /24
+ip nat outside source static network 10.130.124.0 100.102.124.0 /24
+ip nat outside source static network 10.130.125.0 100.102.125.0 /24
+ip nat outside source static network 10.130.126.0 100.102.126.0 /24
+ip nat outside source static network 10.130.127.0 100.102.127.0 /24
+ip nat outside source static network 10.130.128.0 100.102.128.0 /24
+ip nat outside source static network 10.130.129.0 100.102.129.0 /24
+ip nat outside source static network 10.130.130.0 100.102.130.0 /24
+ip nat outside source static network 10.130.131.0 100.102.131.0 /24
+ip nat outside source static network 10.130.132.0 100.102.132.0 /24
+ip nat outside source static network 10.130.133.0 100.102.133.0 /24
+ip nat outside source static network 10.130.134.0 100.102.134.0 /24
+ip nat outside source static network 10.130.135.0 100.102.135.0 /24
+ip nat outside source static network 10.130.136.0 100.102.136.0 /24
+ip nat outside source static network 10.130.137.0 100.102.137.0 /24
+ip nat outside source static network 10.130.138.0 100.102.138.0 /24
+ip nat outside source static network 10.130.139.0 100.102.139.0 /24
+ip nat outside source static network 10.130.140.0 100.102.140.0 /24
+ip nat outside source static network 10.130.141.0 100.102.141.0 /24
+ip nat outside source static network 10.130.142.0 100.102.142.0 /24
+ip nat outside source static network 10.130.143.0 100.102.143.0 /24
+ip nat outside source static network 10.130.144.0 100.102.144.0 /24
+ip nat outside source static network 10.130.145.0 100.102.145.0 /24
+ip nat outside source static network 10.130.146.0 100.102.146.0 /24
+ip nat outside source static network 10.130.147.0 100.102.147.0 /24
+ip nat outside source static network 10.130.148.0 100.102.148.0 /24
+ip nat outside source static network 10.130.149.0 100.102.149.0 /24
+ip nat outside source static network 10.130.150.0 100.102.150.0 /24
+ip nat outside source static network 10.130.151.0 100.102.151.0 /24
+ip nat outside source static network 10.130.152.0 100.102.152.0 /24
+ip nat outside source static network 10.130.153.0 100.102.153.0 /24
+ip nat outside source static network 10.130.154.0 100.102.154.0 /24
+ip nat outside source static network 10.130.155.0 100.102.155.0 /24
+ip nat outside source static network 10.130.156.0 100.102.156.0 /24
+ip nat outside source static network 10.130.157.0 100.102.157.0 /24
+ip nat outside source static network 10.130.158.0 100.102.158.0 /24
+ip nat outside source static network 10.130.159.0 100.102.159.0 /24
+ip nat outside source static network 10.130.160.0 100.102.160.0 /24
+ip nat outside source static network 10.130.161.0 100.102.161.0 /24
+ip nat outside source static network 10.130.162.0 100.102.162.0 /24
+ip nat outside source static network 10.130.163.0 100.102.163.0 /24
+ip nat outside source static network 10.130.164.0 100.102.164.0 /24
+ip nat outside source static network 10.130.165.0 100.102.165.0 /24
+ip nat outside source static network 10.130.166.0 100.102.166.0 /24
+ip nat outside source static network 10.130.167.0 100.102.167.0 /24
+ip nat outside source static network 10.130.168.0 100.102.168.0 /24
+ip nat outside source static network 10.130.169.0 100.102.169.0 /24
+ip nat outside source static network 10.130.170.0 100.102.170.0 /24
+ip nat outside source static network 10.130.171.0 100.102.171.0 /24
+ip nat outside source static network 10.130.172.0 100.102.172.0 /24
+ip nat outside source static network 10.130.173.0 100.102.173.0 /24
+ip nat outside source static network 10.130.174.0 100.102.174.0 /24
+ip nat outside source static network 10.130.175.0 100.102.175.0 /24
+ip nat outside source static network 10.130.176.0 100.102.176.0 /24
+ip nat outside source static network 10.130.177.0 100.102.177.0 /24
+ip nat outside source static network 10.130.178.0 100.102.178.0 /24
+ip nat outside source static network 10.130.179.0 100.102.179.0 /24
+ip nat outside source static network 10.130.180.0 100.102.180.0 /24
+ip nat outside source static network 10.130.181.0 100.102.181.0 /24
+ip nat outside source static network 10.130.182.0 100.102.182.0 /24
+ip nat outside source static network 10.130.183.0 100.102.183.0 /24
+ip nat outside source static network 10.130.184.0 100.102.184.0 /24
+ip nat outside source static network 10.130.185.0 100.102.185.0 /24
+ip nat outside source static network 10.130.186.0 100.102.186.0 /24
+ip nat outside source static network 10.130.187.0 100.102.187.0 /24
+ip nat outside source static network 10.130.188.0 100.102.188.0 /24
+ip nat outside source static network 10.130.189.0 100.102.189.0 /24
+ip nat outside source static network 10.130.190.0 100.102.190.0 /24
+ip nat outside source static network 10.130.191.0 100.102.191.0 /24
+ip nat outside source static network 10.130.192.0 100.102.192.0 /24
+ip nat outside source static network 10.130.193.0 100.102.193.0 /24
+ip nat outside source static network 10.130.194.0 100.102.194.0 /24
+ip nat outside source static network 10.130.195.0 100.102.195.0 /24
+ip nat outside source static network 10.130.196.0 100.102.196.0 /24
+ip nat outside source static network 10.130.197.0 100.102.197.0 /24
+ip nat outside source static network 10.130.198.0 100.102.198.0 /24
+ip nat outside source static network 10.130.199.0 100.102.199.0 /24
+ip nat outside source static network 10.130.200.0 100.102.200.0 /24
+ip nat outside source static network 10.130.201.0 100.102.201.0 /24
+ip nat outside source static network 10.130.202.0 100.102.202.0 /24
+ip nat outside source static network 10.130.203.0 100.102.203.0 /24
+ip nat outside source static network 10.130.204.0 100.102.204.0 /24
+ip nat outside source static network 10.130.205.0 100.102.205.0 /24
+ip nat outside source static network 10.130.206.0 100.102.206.0 /24
+ip nat outside source static network 10.130.207.0 100.102.207.0 /24
+ip nat outside source static network 10.130.208.0 100.102.208.0 /24
+ip nat outside source static network 10.130.209.0 100.102.209.0 /24
+ip nat outside source static network 10.130.210.0 100.102.210.0 /24
+ip nat outside source static network 10.130.211.0 100.102.211.0 /24
+ip nat outside source static network 10.130.212.0 100.102.212.0 /24
+ip nat outside source static network 10.130.213.0 100.102.213.0 /24
+ip nat outside source static network 10.130.214.0 100.102.214.0 /24
+ip nat outside source static network 10.130.215.0 100.102.215.0 /24
+ip nat outside source static network 10.130.216.0 100.102.216.0 /24
+ip nat outside source static network 10.130.217.0 100.102.217.0 /24
+ip nat outside source static network 10.130.218.0 100.102.218.0 /24
+ip nat outside source static network 10.130.219.0 100.102.219.0 /24
+ip nat outside source static network 10.130.220.0 100.102.220.0 /24
+ip nat outside source static network 10.130.221.0 100.102.221.0 /24
+ip nat outside source static network 10.130.222.0 100.102.222.0 /24
+ip nat outside source static network 10.130.223.0 100.102.223.0 /24
+ip nat outside source static network 10.130.224.0 100.102.224.0 /24
+ip nat outside source static network 10.130.225.0 100.102.225.0 /24
+ip nat outside source static network 10.130.226.0 100.102.226.0 /24
+ip nat outside source static network 10.130.227.0 100.102.227.0 /24
+ip nat outside source static network 10.130.228.0 100.102.228.0 /24
+ip nat outside source static network 10.130.229.0 100.102.229.0 /24
+ip nat outside source static network 10.130.230.0 100.102.230.0 /24
+ip nat outside source static network 10.130.231.0 100.102.231.0 /24
+ip nat outside source static network 10.130.232.0 100.102.232.0 /24
+ip nat outside source static network 10.130.233.0 100.102.233.0 /24
+ip nat outside source static network 10.130.234.0 100.102.234.0 /24
+ip nat outside source static network 10.130.235.0 100.102.235.0 /24
+ip nat outside source static network 10.130.236.0 100.102.236.0 /24
+ip nat outside source static network 10.130.237.0 100.102.237.0 /24
+ip nat outside source static network 10.130.238.0 100.102.238.0 /24
+ip nat outside source static network 10.130.239.0 100.102.239.0 /24
+ip nat outside source static network 10.130.240.0 100.102.240.0 /24
+ip nat outside source static network 10.130.241.0 100.102.241.0 /24
+ip nat outside source static network 10.130.242.0 100.102.242.0 /24
+ip nat outside source static network 10.130.243.0 100.102.243.0 /24
+ip nat outside source static network 10.130.244.0 100.102.244.0 /24
+ip nat outside source static network 10.130.245.0 100.102.245.0 /24
+ip nat outside source static network 10.130.246.0 100.102.246.0 /24
+ip nat outside source static network 10.130.247.0 100.102.247.0 /24
+ip nat outside source static network 10.130.248.0 100.102.248.0 /24
+ip nat outside source static network 10.130.249.0 100.102.249.0 /24
+ip nat outside source static network 10.130.250.0 100.102.250.0 /24
+ip nat outside source static network 10.130.251.0 100.102.251.0 /24
+ip nat outside source static network 10.130.252.0 100.102.252.0 /24
+ip nat outside source static network 10.130.253.0 100.102.253.0 /24
+ip nat outside source static network 10.130.254.0 100.102.254.0 /24
+ip nat outside source static network 10.130.255.0 100.102.255.0 /24
+ip nat outside source static network 10.131.0.0 100.103.0.0 /24
+ip nat outside source static network 10.131.1.0 100.103.1.0 /24
+ip nat outside source static network 10.131.2.0 100.103.2.0 /24
+ip nat outside source static network 10.131.3.0 100.103.3.0 /24
+ip nat outside source static network 10.131.4.0 100.103.4.0 /24
+ip nat outside source static network 10.131.5.0 100.103.5.0 /24
+ip nat outside source static network 10.131.6.0 100.103.6.0 /24
+ip nat outside source static network 10.131.7.0 100.103.7.0 /24
+ip nat outside source static network 10.131.8.0 100.103.8.0 /24
+ip nat outside source static network 10.131.9.0 100.103.9.0 /24
+ip nat outside source static network 10.131.10.0 100.103.10.0 /24
+ip nat outside source static network 10.131.11.0 100.103.11.0 /24
+ip nat outside source static network 10.131.12.0 100.103.12.0 /24
+ip nat outside source static network 10.131.13.0 100.103.13.0 /24
+ip nat outside source static network 10.131.14.0 100.103.14.0 /24
+ip nat outside source static network 10.131.15.0 100.103.15.0 /24
+ip nat outside source static network 10.131.16.0 100.103.16.0 /24
+ip nat outside source static network 10.131.17.0 100.103.17.0 /24
+ip nat outside source static network 10.131.18.0 100.103.18.0 /24
+ip nat outside source static network 10.131.19.0 100.103.19.0 /24
+ip nat outside source static network 10.131.20.0 100.103.20.0 /24
+ip nat outside source static network 10.131.21.0 100.103.21.0 /24
+ip nat outside source static network 10.131.22.0 100.103.22.0 /24
+ip nat outside source static network 10.131.23.0 100.103.23.0 /24
+ip nat outside source static network 10.131.24.0 100.103.24.0 /24
+ip nat outside source static network 10.131.25.0 100.103.25.0 /24
+ip nat outside source static network 10.131.26.0 100.103.26.0 /24
+ip nat outside source static network 10.131.27.0 100.103.27.0 /24
+ip nat outside source static network 10.131.28.0 100.103.28.0 /24
+ip nat outside source static network 10.131.29.0 100.103.29.0 /24
+ip nat outside source static network 10.131.30.0 100.103.30.0 /24
+ip nat outside source static network 10.131.31.0 100.103.31.0 /24
+ip nat outside source static network 10.131.32.0 100.103.32.0 /24
+ip nat outside source static network 10.131.33.0 100.103.33.0 /24
+ip nat outside source static network 10.131.34.0 100.103.34.0 /24
+ip nat outside source static network 10.131.35.0 100.103.35.0 /24
+ip nat outside source static network 10.131.36.0 100.103.36.0 /24
+ip nat outside source static network 10.131.37.0 100.103.37.0 /24
+ip nat outside source static network 10.131.38.0 100.103.38.0 /24
+ip nat outside source static network 10.131.39.0 100.103.39.0 /24
+ip nat outside source static network 10.131.40.0 100.103.40.0 /24
+ip nat outside source static network 10.131.41.0 100.103.41.0 /24
+ip nat outside source static network 10.131.42.0 100.103.42.0 /24
+ip nat outside source static network 10.131.43.0 100.103.43.0 /24
+ip nat outside source static network 10.131.44.0 100.103.44.0 /24
+ip nat outside source static network 10.131.45.0 100.103.45.0 /24
+ip nat outside source static network 10.131.46.0 100.103.46.0 /24
+ip nat outside source static network 10.131.47.0 100.103.47.0 /24
+ip nat outside source static network 10.131.48.0 100.103.48.0 /24
+ip nat outside source static network 10.131.49.0 100.103.49.0 /24
+ip nat outside source static network 10.131.50.0 100.103.50.0 /24
+ip nat outside source static network 10.131.51.0 100.103.51.0 /24
+ip nat outside source static network 10.131.52.0 100.103.52.0 /24
+ip nat outside source static network 10.131.53.0 100.103.53.0 /24
+ip nat outside source static network 10.131.54.0 100.103.54.0 /24
+ip nat outside source static network 10.131.55.0 100.103.55.0 /24
+ip nat outside source static network 10.131.56.0 100.103.56.0 /24
+ip nat outside source static network 10.131.57.0 100.103.57.0 /24
+ip nat outside source static network 10.131.58.0 100.103.58.0 /24
+ip nat outside source static network 10.131.59.0 100.103.59.0 /24
+ip nat outside source static network 10.131.60.0 100.103.60.0 /24
+ip nat outside source static network 10.131.61.0 100.103.61.0 /24
+ip nat outside source static network 10.131.62.0 100.103.62.0 /24
+ip nat outside source static network 10.131.63.0 100.103.63.0 /24
+ip nat outside source static network 10.131.64.0 100.103.64.0 /24
+ip nat outside source static network 10.131.65.0 100.103.65.0 /24
+ip nat outside source static network 10.131.66.0 100.103.66.0 /24
+ip nat outside source static network 10.131.67.0 100.103.67.0 /24
+ip nat outside source static network 10.131.68.0 100.103.68.0 /24
+ip nat outside source static network 10.131.69.0 100.103.69.0 /24
+ip nat outside source static network 10.131.70.0 100.103.70.0 /24
+ip nat outside source static network 10.131.71.0 100.103.71.0 /24
+ip nat outside source static network 10.131.72.0 100.103.72.0 /24
+ip nat outside source static network 10.131.73.0 100.103.73.0 /24
+ip nat outside source static network 10.131.74.0 100.103.74.0 /24
+ip nat outside source static network 10.131.75.0 100.103.75.0 /24
+ip nat outside source static network 10.131.76.0 100.103.76.0 /24
+ip nat outside source static network 10.131.77.0 100.103.77.0 /24
+ip nat outside source static network 10.131.78.0 100.103.78.0 /24
+ip nat outside source static network 10.131.79.0 100.103.79.0 /24
+ip nat outside source static network 10.131.80.0 100.103.80.0 /24
+ip nat outside source static network 10.131.81.0 100.103.81.0 /24
+ip nat outside source static network 10.131.82.0 100.103.82.0 /24
+ip nat outside source static network 10.131.83.0 100.103.83.0 /24
+ip nat outside source static network 10.131.84.0 100.103.84.0 /24
+ip nat outside source static network 10.131.85.0 100.103.85.0 /24
+ip nat outside source static network 10.131.86.0 100.103.86.0 /24
+ip nat outside source static network 10.131.87.0 100.103.87.0 /24
+ip nat outside source static network 10.131.88.0 100.103.88.0 /24
+ip nat outside source static network 10.131.89.0 100.103.89.0 /24
+ip nat outside source static network 10.131.90.0 100.103.90.0 /24
+ip nat outside source static network 10.131.91.0 100.103.91.0 /24
+ip nat outside source static network 10.131.92.0 100.103.92.0 /24
+ip nat outside source static network 10.131.93.0 100.103.93.0 /24
+ip nat outside source static network 10.131.94.0 100.103.94.0 /24
+ip nat outside source static network 10.131.95.0 100.103.95.0 /24
+ip nat outside source static network 10.131.96.0 100.103.96.0 /24
+ip nat outside source static network 10.131.97.0 100.103.97.0 /24
+ip nat outside source static network 10.131.98.0 100.103.98.0 /24
+ip nat outside source static network 10.131.99.0 100.103.99.0 /24
+ip nat outside source static network 10.131.100.0 100.103.100.0 /24
+ip nat outside source static network 10.131.101.0 100.103.101.0 /24
+ip nat outside source static network 10.131.102.0 100.103.102.0 /24
+ip nat outside source static network 10.131.103.0 100.103.103.0 /24
+ip nat outside source static network 10.131.104.0 100.103.104.0 /24
+ip nat outside source static network 10.131.105.0 100.103.105.0 /24
+ip nat outside source static network 10.131.106.0 100.103.106.0 /24
+ip nat outside source static network 10.131.107.0 100.103.107.0 /24
+ip nat outside source static network 10.131.108.0 100.103.108.0 /24
+ip nat outside source static network 10.131.109.0 100.103.109.0 /24
+ip nat outside source static network 10.131.110.0 100.103.110.0 /24
+ip nat outside source static network 10.131.111.0 100.103.111.0 /24
+ip nat outside source static network 10.131.112.0 100.103.112.0 /24
+ip nat outside source static network 10.131.113.0 100.103.113.0 /24
+ip nat outside source static network 10.131.114.0 100.103.114.0 /24
+ip nat outside source static network 10.131.115.0 100.103.115.0 /24
+ip nat outside source static network 10.131.116.0 100.103.116.0 /24
+ip nat outside source static network 10.131.117.0 100.103.117.0 /24
+ip nat outside source static network 10.131.118.0 100.103.118.0 /24
+ip nat outside source static network 10.131.119.0 100.103.119.0 /24
+ip nat outside source static network 10.131.120.0 100.103.120.0 /24
+ip nat outside source static network 10.131.121.0 100.103.121.0 /24
+ip nat outside source static network 10.131.122.0 100.103.122.0 /24
+ip nat outside source static network 10.131.123.0 100.103.123.0 /24
+ip nat outside source static network 10.131.124.0 100.103.124.0 /24
+ip nat outside source static network 10.131.125.0 100.103.125.0 /24
+ip nat outside source static network 10.131.126.0 100.103.126.0 /24
+ip nat outside source static network 10.131.127.0 100.103.127.0 /24
+ip nat outside source static network 10.131.128.0 100.103.128.0 /24
+ip nat outside source static network 10.131.129.0 100.103.129.0 /24
+ip nat outside source static network 10.131.130.0 100.103.130.0 /24
+ip nat outside source static network 10.131.131.0 100.103.131.0 /24
+ip nat outside source static network 10.131.132.0 100.103.132.0 /24
+ip nat outside source static network 10.131.133.0 100.103.133.0 /24
+ip nat outside source static network 10.131.134.0 100.103.134.0 /24
+ip nat outside source static network 10.131.135.0 100.103.135.0 /24
+ip nat outside source static network 10.131.136.0 100.103.136.0 /24
+ip nat outside source static network 10.131.137.0 100.103.137.0 /24
+ip nat outside source static network 10.131.138.0 100.103.138.0 /24
+ip nat outside source static network 10.131.139.0 100.103.139.0 /24
+ip nat outside source static network 10.131.140.0 100.103.140.0 /24
+ip nat outside source static network 10.131.141.0 100.103.141.0 /24
+ip nat outside source static network 10.131.142.0 100.103.142.0 /24
+ip nat outside source static network 10.131.143.0 100.103.143.0 /24
+ip nat outside source static network 10.131.144.0 100.103.144.0 /24
+ip nat outside source static network 10.131.145.0 100.103.145.0 /24
+ip nat outside source static network 10.131.146.0 100.103.146.0 /24
+ip nat outside source static network 10.131.147.0 100.103.147.0 /24
+ip nat outside source static network 10.131.148.0 100.103.148.0 /24
+ip nat outside source static network 10.131.149.0 100.103.149.0 /24
+ip nat outside source static network 10.131.150.0 100.103.150.0 /24
+ip nat outside source static network 10.131.151.0 100.103.151.0 /24
+ip nat outside source static network 10.131.152.0 100.103.152.0 /24
+ip nat outside source static network 10.131.153.0 100.103.153.0 /24
+ip nat outside source static network 10.131.154.0 100.103.154.0 /24
+ip nat outside source static network 10.131.155.0 100.103.155.0 /24
+ip nat outside source static network 10.131.156.0 100.103.156.0 /24
+ip nat outside source static network 10.131.157.0 100.103.157.0 /24
+ip nat outside source static network 10.131.158.0 100.103.158.0 /24
+ip nat outside source static network 10.131.159.0 100.103.159.0 /24
+ip nat outside source static network 10.131.160.0 100.103.160.0 /24
+ip nat outside source static network 10.131.161.0 100.103.161.0 /24
+ip nat outside source static network 10.131.162.0 100.103.162.0 /24
+ip nat outside source static network 10.131.163.0 100.103.163.0 /24
+ip nat outside source static network 10.131.164.0 100.103.164.0 /24
+ip nat outside source static network 10.131.165.0 100.103.165.0 /24
+ip nat outside source static network 10.131.166.0 100.103.166.0 /24
+ip nat outside source static network 10.131.167.0 100.103.167.0 /24
+ip nat outside source static network 10.131.168.0 100.103.168.0 /24
+ip nat outside source static network 10.131.169.0 100.103.169.0 /24
+ip nat outside source static network 10.131.170.0 100.103.170.0 /24
+ip nat outside source static network 10.131.171.0 100.103.171.0 /24
+ip nat outside source static network 10.131.172.0 100.103.172.0 /24
+ip nat outside source static network 10.131.173.0 100.103.173.0 /24
+ip nat outside source static network 10.131.174.0 100.103.174.0 /24
+ip nat outside source static network 10.131.175.0 100.103.175.0 /24
+ip nat outside source static network 10.131.176.0 100.103.176.0 /24
+ip nat outside source static network 10.131.177.0 100.103.177.0 /24
+ip nat outside source static network 10.131.178.0 100.103.178.0 /24
+ip nat outside source static network 10.131.179.0 100.103.179.0 /24
+ip nat outside source static network 10.131.180.0 100.103.180.0 /24
+ip nat outside source static network 10.131.181.0 100.103.181.0 /24
+ip nat outside source static network 10.131.182.0 100.103.182.0 /24
+ip nat outside source static network 10.131.183.0 100.103.183.0 /24
+ip nat outside source static network 10.131.184.0 100.103.184.0 /24
+ip nat outside source static network 10.131.185.0 100.103.185.0 /24
+ip nat outside source static network 10.131.186.0 100.103.186.0 /24
+ip nat outside source static network 10.131.187.0 100.103.187.0 /24
+ip nat outside source static network 10.131.188.0 100.103.188.0 /24
+ip nat outside source static network 10.131.189.0 100.103.189.0 /24
+ip nat outside source static network 10.131.190.0 100.103.190.0 /24
+ip nat outside source static network 10.131.191.0 100.103.191.0 /24
+ip nat outside source static network 10.131.192.0 100.103.192.0 /24
+ip nat outside source static network 10.131.193.0 100.103.193.0 /24
+ip nat outside source static network 10.131.194.0 100.103.194.0 /24
+ip nat outside source static network 10.131.195.0 100.103.195.0 /24
+ip nat outside source static network 10.131.196.0 100.103.196.0 /24
+ip nat outside source static network 10.131.197.0 100.103.197.0 /24
+ip nat outside source static network 10.131.198.0 100.103.198.0 /24
+ip nat outside source static network 10.131.199.0 100.103.199.0 /24
+ip nat outside source static network 10.131.200.0 100.103.200.0 /24
+ip nat outside source static network 10.131.201.0 100.103.201.0 /24
+ip nat outside source static network 10.131.202.0 100.103.202.0 /24
+ip nat outside source static network 10.131.203.0 100.103.203.0 /24
+ip nat outside source static network 10.131.204.0 100.103.204.0 /24
+ip nat outside source static network 10.131.205.0 100.103.205.0 /24
+ip nat outside source static network 10.131.206.0 100.103.206.0 /24
+ip nat outside source static network 10.131.207.0 100.103.207.0 /24
+ip nat outside source static network 10.131.208.0 100.103.208.0 /24
+ip nat outside source static network 10.131.209.0 100.103.209.0 /24
+ip nat outside source static network 10.131.210.0 100.103.210.0 /24
+ip nat outside source static network 10.131.211.0 100.103.211.0 /24
+ip nat outside source static network 10.131.212.0 100.103.212.0 /24
+ip nat outside source static network 10.131.213.0 100.103.213.0 /24
+ip nat outside source static network 10.131.214.0 100.103.214.0 /24
+ip nat outside source static network 10.131.215.0 100.103.215.0 /24
+ip nat outside source static network 10.131.216.0 100.103.216.0 /24
+ip nat outside source static network 10.131.217.0 100.103.217.0 /24
+ip nat outside source static network 10.131.218.0 100.103.218.0 /24
+ip nat outside source static network 10.131.219.0 100.103.219.0 /24
+ip nat outside source static network 10.131.220.0 100.103.220.0 /24
+ip nat outside source static network 10.131.221.0 100.103.221.0 /24
+ip nat outside source static network 10.131.222.0 100.103.222.0 /24
+ip nat outside source static network 10.131.223.0 100.103.223.0 /24
+ip nat outside source static network 10.131.224.0 100.103.224.0 /24
+ip nat outside source static network 10.131.225.0 100.103.225.0 /24
+ip nat outside source static network 10.131.226.0 100.103.226.0 /24
+ip nat outside source static network 10.131.227.0 100.103.227.0 /24
+ip nat outside source static network 10.131.228.0 100.103.228.0 /24
+ip nat outside source static network 10.131.229.0 100.103.229.0 /24
+ip nat outside source static network 10.131.230.0 100.103.230.0 /24
+ip nat outside source static network 10.131.231.0 100.103.231.0 /24
+ip nat outside source static network 192.168.12.0 172.30.12.0 /24
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip prefix-list OVERLAP description prefixes that exist on both sides of the DCI: translated, not advertised
+ip prefix-list OVERLAP seq 5 permit 192.168.12.0/24
+ip prefix-list OVERLAP seq 10 permit 10.128.0.0/14
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+route-map NO-OVERLAP deny 10 
+ description the overlapping prefixes stay on their own side of the NAT
+ match ip address prefix-list OVERLAP
+!
+route-map NO-OVERLAP permit 20 
+ description everything else is advertised normally
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

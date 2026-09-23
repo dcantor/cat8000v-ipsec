@@ -1005,7 +1005,7 @@ async function loadHistory(sha) {
   $('br-history').querySelector('tbody').innerHTML = h.commits.map(c => `<tr style="cursor:pointer;${c.sha === h.sha ? 'background:var(--bg)' : ''}" onclick="loadHistory('${c.sha}')"><td class="cred" style="white-space:nowrap">${esc(c.date)}</td><td>${esc(c.author)}</td><td><a href="${esc(c.url)}" target="_blank" onclick="event.stopPropagation()">${esc(c.sha.slice(0, 8))}</a> <span class="hint">${esc(c.message.replace(/BACKUP CONFIGURATIONS JOB /, 'backup '))}</span></td></tr>`).join('') || '<tr><td colspan="3" class="hint">no backups yet</td></tr>';
   if (h.diff != null) { $('br-hist-diff').className = 'code'; $('br-hist-diff').innerHTML = h.diff.split('\n').map(l => `<span class="${l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : ''}">${esc(l)}</span>`).join('\n'); }
 }
-const SHOWS = [['ike', 'IKEv2 SAs'], ['ipsec', 'IPsec SAs'], ['bgp', 'BGP summary'], ['routes', 'BGP routes'], ['default', 'default route'], ['interfaces', 'interfaces'], ['pki', 'certificates'], ['platform', 'platform'], ['log', 'log']];
+const SHOWS = [['ike', 'IKEv2 SAs'], ['ipsec', 'IPsec SAs'], ['bgp', 'BGP summary'], ['routes', 'BGP routes'], ['default', 'default route'], ['interfaces', 'interfaces'], ['pki', 'certificates'], ['platform', 'platform'], ['nat', 'NAT'], ['dns', 'DNS'], ['log', 'log']];
 async function loadShow(what, refresh) {
   const name = decodeURIComponent(location.hash.slice(8)); $('br-show').className = 'code hint'; $('br-show').textContent = 'running…';
   document.querySelectorAll('#br-show-btns button').forEach(b => b.classList.toggle('primary', b.dataset.what === what));

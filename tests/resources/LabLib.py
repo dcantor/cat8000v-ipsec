@@ -12,6 +12,7 @@ from pathlib import Path
 
 import requests
 import urllib3
+from paramiko.ssh_exception import SSHException
 from netmiko import ConnectHandler
 from robot.api import logger
 from robot.api.deco import keyword, library
@@ -29,26 +30,41 @@ class LabLib:
         self._ssh = {}   # device host -> netmiko connection
 
     # ---- switches: SSH ---------------------------------------------------
-    def _conn(self, host):
+    def _open(self, host):
+        c = ConnectHandler(device_type="cisco_xe", host=host, username=USERNAME, password=PASSWORD, secret=PASSWORD, fast_cli=False)
+        c.enable(); return c
+
+    def _conn(self, host, reopen=False):
+        """One session per router, kept between keywords. A test that waits out a long portal run comes back to a session the
+        router has since closed (VTY idle timeout, or its crypto being reconfigured), so a dead one is replaced."""
+        c = self._ssh.get(host)
+        if c is not None and (reopen or not c.is_alive()):
+            try: c.disconnect()
+            except Exception: pass                                   # noqa: BLE001 — it is already gone
+            self._ssh.pop(host, None)
         if host not in self._ssh:
-            self._ssh[host] = ConnectHandler(
-                device_type="cisco_xe", host=host, username=USERNAME,
-                password=PASSWORD, secret=PASSWORD, fast_cli=False,
-            )
-            self._ssh[host].enable()
+            self._ssh[host] = self._open(host)
         return self._ssh[host]
+
+    def _send(self, host, what):
+        """`what(conn)` once, and again on a fresh session when the old one turns out to be closed."""
+        try:
+            return what(self._conn(host))
+        except (OSError, EOFError, SSHException) as e:               # "Socket is closed", a dropped transport, a torn-down session
+            logger.info(f"{host}: session lost ({e.__class__.__name__}: {e}) — reconnecting")
+            return what(self._conn(host, reopen=True))
 
     @keyword
     def run_command(self, host, command, timeout=60):
         """Run a show/exec command on a switch over SSH and return its output."""
-        out = self._conn(host).send_command(command, read_timeout=float(timeout))
+        out = self._send(host, lambda c: c.send_command(command, read_timeout=float(timeout)))
         logger.info(f"<pre>{host}# {command}\n{out}</pre>", html=True)
         return out
 
     @keyword
     def configure_router(self, host, *lines):
         """Push configuration lines to a router over SSH (one configuration session; used to inject deliberate drift)."""
-        out = self._conn(host).send_config_set(list(lines), exit_config_mode=True, cmd_verify=False, read_timeout=60)
+        out = self._send(host, lambda c: c.send_config_set(list(lines), exit_config_mode=True, cmd_verify=False, read_timeout=60))
         logger.info(f"<pre>{host}(config)# {chr(10).join(lines)}\n{out}</pre>", html=True)
         bad = [l for l in out.splitlines() if l.startswith("%")]
         if bad: raise AssertionError(f"{host} refused: {' | '.join(bad)}")
@@ -56,7 +72,7 @@ class LabLib:
 
     @keyword
     def get_running_config(self, host):
-        return self._conn(host).send_command("show running-config", read_timeout=120)
+        return self._send(host, lambda c: c.send_command("show running-config", read_timeout=120))
 
     @keyword
     def close_all_connections(self):
@@ -123,6 +139,8 @@ class LabLib:
         r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_vyos.py"), "--check"], capture_output=True, text=True,
                            timeout=300, env={**os.environ, "NAUTOBOT_URL": url, "NAUTOBOT_TOKEN": token})
         logger.info(f"<pre>{r.stdout[-4000:]}\n{r.stderr[-1000:]}</pre>", html=True)
+        if r.returncode and "Traceback" in r.stderr:   # an error talking to a firewall is not configuration drift
+            raise AssertionError(f"render_vyos --check could not reach a firewall: {r.stderr.strip().splitlines()[-1][:300]}")
         return r.returncode
 
     @keyword
@@ -215,6 +233,8 @@ class LabLib:
         r = subprocess.run([sys.executable, str(LAB_DIR / "nautobot" / "render_nac.py"), "--check"], capture_output=True, text=True,
                            timeout=120, env={**os.environ, "NAUTOBOT_URL": url, "NAUTOBOT_TOKEN": token})
         logger.info(f"<pre>{r.stdout[-4000:]}\n{r.stderr[-1000:]}</pre>", html=True)
+        if r.returncode and "Traceback" in r.stderr:   # an error talking to a firewall is not configuration drift
+            raise AssertionError(f"render_vyos --check could not reach a firewall: {r.stderr.strip().splitlines()[-1][:300]}")
         return r.returncode
 
     # ---- host-side helpers -----------------------------------------------

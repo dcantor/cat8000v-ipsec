@@ -29,6 +29,9 @@ diff -ru -I '^! .* captured ' "$out/configs/pre-run" "$out/configs/post-run" > "
   && echo "    no configuration changes during the run" \
   || echo "    configuration changed during the run, see configs/pre-vs-post.diff"
 
+echo "==> evidence report"
+"$(cd .. && pwd)/webapp/.venv/bin/python" report_pdf.py "$out" || echo "warning: could not build the PDF report (needs webapp/.venv: playwright)" >&2
+
 ln -sfn "$(basename "$out")" ../results/latest
 echo "==> report: $out/report.html  (rc=$rc)"
 exit $rc

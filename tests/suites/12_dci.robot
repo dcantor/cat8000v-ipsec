@@ -214,3 +214,77 @@ DNS is fixed up on the way through the NAT: a name that resolves to an overlappi
     ${p}=    Show    ${acq}    ping ${name}.${DNS_ZONE}[domain] source ${DNS_CLIENT}[${acq}][source_interface] repeat 3
     Should Contain    ${p}    ${translated}    msg=the DNS answer was not fixed up: the name should resolve to ${translated}, not ${real} — ${p}
     Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${acq} resolved the name but could not reach it: ${p}
+
+NAT scales: a thousand overlapping prefixes are translated in both directions with no drops
+    [Documentation]    The scale set puts a thousand prefixes on both sides at once, each with its own pair of static translations on
+    ...    the DCI (plus the two single ones), while BGP only carries the three aggregates — the scale lands on the NAT, not the
+    ...    routing table. A branch host sweeps every translated prefix and the acquisition sweeps a sample back.
+    [Tags]    slow
+    Skip If    not $SCALE    no scale set is modelled
+    ${stats}=    Show    ${NAT_ROUTER}    show ip nat statistics
+    ${static}=    Get Regexp Matches    ${stats}    \\((\\d+) static    1
+    Should Be Equal As Integers    ${static}[0]    ${{ 2 * (len($SCALE_ENTRIES) + len($OVERLAPS)) }}
+    ...    msg=the DCI should hold two static translations per overlapping prefix
+    Should Contain    ${stats}    In-to-out drops: 0
+    Should Contain    ${stats}    Out-to-in drops: 0
+    # the routing table stays small: one aggregate per range, not one route per prefix
+    ${rt}=    Show    ${NAT_ROUTER}    show ip route | include /${SCALE}[aggregate_len]
+    Should Contain    ${rt}    ${SCALE_AGGREGATES}[inside_global]    msg=the translated ranges should be aggregates, not one route per prefix: ${rt}
+    Should Contain    ${rt}    ${SCALE_AGGREGATES}[outside_local]
+    Should Contain    ${rt}    ${SCALE_AGGREGATES}[prefix]    msg=the acquisition should originate its copies as one aggregate: ${rt}
+    # ACME -> the acquisition: every one of the thousand, from a branch host deep in the VPN (in parallel, or this alone takes minutes)
+    ${targets}=    Evaluate    " ".join(e["acquisition_as_acme_sees_it"] for e in $SCALE_ENTRIES)
+    ${n}=    Evaluate    len($SCALE_ENTRIES)
+    ${sweep}=    Catenate    SEPARATOR=\n
+    ...    echo "${targets}" | tr " " "\\n" | xargs -P 40 -I@ sh -c 'ping -c1 -W2 $0 >/dev/null 2>&1 || echo "FAIL $0"' @ > /tmp/nat-sweep.out 2>&1
+    ...    echo "reached $(( ${n} - $(grep -c FAIL /tmp/nat-sweep.out) ))/${n}"
+    ...    head -5 /tmp/nat-sweep.out
+    ${rc}    ${out}=    Run    ${LAN_HOSTS}[${HOST_OF}[spoke1]][host]    ${sweep}    timeout=300
+    Should Contain    ${out}    reached ${n}/${n}    msg=not every translated prefix answered: ${out}
+    # the acquisition -> ACME: a sample back through the other half of the translation, sourced from its own copy of the prefix
+    FOR    ${e}    IN    @{SCALE_ENTRIES}[::100]
+        ${p}=    Show    ${{ $SCALE["acquisition_router"] }}    ping ${e}[acme_as_acquisition_sees_it] source ${e}[acquisition_ip] repeat 2
+        Should Match Regexp    ${p}    Success rate is (100|50) percent    msg=${e}[prefix]: the acquisition cannot reach ACME's copy at ${e}[acme_as_acquisition_sees_it]
+    END
+
+DNS fix-up scales and works from either side: a host on one side resolves the other side's zone through the NAT
+    [Documentation]    Each side answers for its own zone with its own copies of the overlapping prefixes — a thousand records each.
+    ...    A branch host on the ACME side resolves every name in the acquired company's zone (its resolver is the server's translated
+    ...    address) and gets addresses it can actually reach; the acquisition resolves ACME's zone the same way. Both are rewritten by
+    ...    the DCI in flight.
+    [Tags]    slow
+    Skip If    not $SCALE or not $HOST_RESOLVERS    no scale set or no host resolver is modelled
+    # ACME host -> the acquired company's zone (records point at the acquisition's copies, answers come back translated)
+    ${host}=    Evaluate    [h for h in $HOST_RESOLVERS][0]
+    ${zone}=    Evaluate    [z for n, z in $DNS_ZONES.items() if (z.get("scale") or {}).get("side") == "acquisition"][0]
+    ${n}=    Evaluate    min(len($SCALE_ENTRIES), int($zone["scale"]["count"]))
+    ${fmt}=    Set Variable    ${zone}[scale][name_format]    # the names are built here, outside the comprehension: a Robot variable is not visible inside one
+    ${domain}=    Set Variable    ${zone}[domain]
+    ${pairs}=    Evaluate    " ".join("${fmt}".format(n=e["n"]) + ".${domain}=" + e["acquisition_as_acme_sees_it"] for e in $SCALE_ENTRIES[:${n}])
+    ${check}=    Catenate    SEPARATOR=\n
+    ...    cat > /tmp/dnscheck.sh <<'EOS'
+    ...    p=$1
+    ...    n=$(echo "$p" | cut -d= -f1)
+    ...    want=$(echo "$p" | cut -d= -f2)
+    ...    a=$(nslookup -type=a "$n" 2>/dev/null | grep "^Address:" | grep -v ":53" | head -1 | sed "s/^Address:[[:space:]]*//")
+    ...    if [ "$a" = "$want" ] && ping -c1 -W2 "$a" >/dev/null 2>&1; then exit 0; fi
+    ...    echo "BAD $n got=$a want=$want"
+    ...    EOS
+    ...    echo "${pairs}" | tr " " "\\n" | xargs -P 40 -I@ sh /tmp/dnscheck.sh @ > /tmp/dns-sweep.out 2>&1
+    ...    echo "resolved+reached $(( ${n} - $(grep -c BAD /tmp/dns-sweep.out) ))/${n}"
+    ...    head -5 /tmp/dns-sweep.out
+    ${rc}    ${out}=    Run    ${LAN_HOSTS}[${host}][host]    ${check}    timeout=300
+    Should Contain    ${out}    resolved+reached ${n}/${n}    msg=the answers were not rewritten for ${host}: ${out}
+    # and the other way: the acquisition resolves ACME's zone from its overlapping address
+    ${acme_zone}=    Evaluate    [z for n, z in $DNS_ZONES.items() if (z.get("scale") or {}).get("side", "acme") == "acme"][0]
+    FOR    ${e}    IN    @{SCALE_ENTRIES}[::250]
+        ${name}=    Evaluate    $acme_zone["scale"]["name_format"].format(n=$e["n"])
+        ${p}=    Show    ${{ $SCALE["acquisition_router"] }}    ping ${name}.${acme_zone}[domain] source ${e}[acquisition_ip] repeat 2
+        Should Contain    ${p}    ${e}[acme_as_acquisition_sees_it]    msg=${name} was not fixed up: ${p}
+        Should Match Regexp    ${p}    Success rate is (100|50) percent
+    END
+    # the DNS flow itself crosses the NAT with both halves translated
+    ${t}=    Show    ${NAT_ROUTER}    show ip nat translations | include :53
+    ${ig}=    Evaluate    $SCALE_AGGREGATES["inside_global"].split(".")[0]
+    Should Match Regexp    ${t}    (?m)^udp\\s+${ig}\\.\\d+\\.\\d+\\.\\d+:53\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:53
+    ...    msg=no translated DNS flow towards the acquisition's server: ${t}
