@@ -254,6 +254,9 @@ plans, the branch pages, hosts and the ping mesh, firewalls, PKI, runs (queue, r
   numbered requirements with priority, acceptance criteria and the suite / code that verifies each, as an 18-page PDF and as
   a filterable workbook (Overview with the count per area, Requirements, Roles & glossary, Traceability, Constraints).
   Both come from `docs/requirements.html`: `docs/build_pdf.py requirements.html` and `docs/build_xlsx.py`.
+- **`docs/dci.pdf`** — the DCI in detail: the topology of the interconnect, the path a branch takes to the acquired
+  company, the routes each side exchanges (and the ones deliberately filtered), the twice-NAT, the DNS fix-up, and how
+  suite 12 proves all of it at 1000 prefixes and 1000 records — 13 pages with live command output (source `docs/dci.html`).
 - `webapp/README.md` — portal internals, run modes, resuming, platform quirks.
 
 ### Monitoring (Prometheus + Grafana on the NMS)

@@ -7,6 +7,11 @@
   the test coverage map and the file map.
 - `workflows.html` is the source (Mermaid diagrams); rebuild the PDF with
   `webapp/.venv/bin/python docs/build_pdf.py` (headless Chrome via Playwright).
+- `dci.pdf` — **The DCI: an acquired company inside the VPN**: the interconnect's topology, the path a branch takes to
+  the acquisition (with real traceroutes), the routes exchanged and the route filter that keeps each side's copy of an
+  overlapping prefix at home, the twice-NAT address model and its configuration, the DNS fix-up in both directions, and
+  how suite 12 sweeps 1000 prefixes and 1000 records and what a run leaves behind. `dci.html` is the source;
+  rebuild with `webapp/.venv/bin/python docs/build_pdf.py dci.html`. Every command output in it is from the live lab.
 - `requirements.pdf` / `requirements.xlsx` — the **requirements specification** of the service: 106 numbered requirements
   (NET, SOT, INT, NAC, FW, PKI, CUST, HOST, INET, SEC, RUN, UI, CMP, API, MON, TST, LAB, DOC, NFR) with a MUST / SHOULD / MAY
   priority, acceptance criteria and the Robot suite or code that verifies each, plus the system context, roles and glossary,

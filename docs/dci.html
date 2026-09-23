@@ -1,0 +1,386 @@
+<!doctype html><html><head><meta charset="utf-8"><title>The DCI: an acquired company inside the VPN — topology, routing, NAT, DNS and how it is tested</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm }
+  body { font: 10.5pt/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c2430; margin: 0 }
+  h1 { font-size: 24pt; margin: 0 0 4pt } h2 { font-size: 15.5pt; margin: 20pt 0 8pt; padding-bottom: 3pt; border-bottom: 2px solid #0b62d6; page-break-after: avoid }
+  h3 { font-size: 12pt; margin: 13pt 0 5pt; page-break-after: avoid } h4 { font-size: 10.6pt; margin: 9pt 0 3pt }
+  .sub { color: #6b7684; font-size: 11pt } .toc { columns: 2; font-size: 10pt } .toc li { margin: 2pt 0 }
+  table { border-collapse: collapse; width: 100%; font-size: 9.2pt; margin: 6pt 0 10pt } tr { page-break-inside: avoid }
+  th, td { border: 1px solid #d7dde5; padding: 4pt 6pt; vertical-align: top; text-align: left } th { background: #eef2f7 }
+  code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 8.8pt; background: #f3f5f8; padding: 0 3px; border-radius: 3px }
+  pre.term { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 8.1pt; line-height: 1.35; background: #f8fafc; border: 1px solid #d7dde5;
+             border-left: 4px solid #64748b; padding: 6pt 8pt; margin: 6pt 0 10pt; white-space: pre-wrap; page-break-inside: avoid }
+  pre.term b { color: #0b62d6 } pre.term .c { color: #6b7684 }
+  pre.mermaid { page-break-inside: avoid; margin: 8pt 0 10pt; text-align: center } .mermaid svg { max-width: 100%; max-height: 235mm; height: auto; width: auto }
+  .box { border: 1px solid #d7dde5; border-left: 4px solid #0b62d6; padding: 6pt 10pt; margin: 8pt 0; background: #f8fafc; page-break-inside: avoid }
+  .warn { border-left-color: #b26a00; background: #fffbeb } .brk { page-break-before: always } .small { font-size: 9pt }
+  .pill { display: inline-block; padding: 0 6px; border-radius: 8px; background: #e9edf3; font-size: 8.5pt }
+  .ok { color: #15803d; font-weight: 600 } ol.steps li { margin: 3pt 0 }
+  pre.topo .mermaid svg, .topo svg { max-height: 142mm }
+</style></head><body>
+
+<h1>The DCI: an acquired company inside the VPN</h1>
+<div class="sub">Topology, the path a branch takes, the routes exchanged, the twice-NAT, the DNS fix-up — and how the test suite proves all of it</div>
+<p class="small">Catalyst 8000v IPsec VTI lab · <code>github.com/dcantor/cat8000v-ipsec</code>. Every address, configuration line and command output in this
+document was taken from the running lab; the test results are from run <code>results/2026-09-23_02-08-05</code> (74/74 passing).</p>
+
+<h2>Contents</h2>
+<ol class="toc">
+<li>What the DCI is, and the problem it solves</li>
+<li>Topology and the objects behind it</li>
+<li>The path a branch takes to the acquisition</li>
+<li>The routes exchanged (and the ones deliberately not)</li>
+<li>How the NAT is set up</li>
+<li>How DNS is fixed up</li>
+<li>How the test is run and validated</li>
+<li>Where every line of this comes from</li>
+</ol>
+
+<h2>1. What the DCI is, and the problem it solves</h2>
+<p>ACME Networks sells the VPN service; the branches are its customers. <b>ACME has acquired a company</b>, and that company arrives with
+its own network — including addresses ACME already uses. The lab models the whole situation: a <b>data-centre interconnect</b>
+(<code>DCI</code>) hangs off one headend, the acquired company's edge router (<code>ACME-acquisition</code>) hangs off the DCI, and the two
+sides collide on <b>1001 prefixes</b> at once:</p>
+<table>
+<tr><th style="width:26%">Collision</th><th style="width:37%">On the ACME side</th><th style="width:37%">On the acquired company's side</th></tr>
+<tr><td>A branch LAN, reused verbatim</td><td><code>192.168.12.0/24</code> — branch 1's LAN; <code>host-spoke1</code> is <code>192.168.12.2</code></td><td><code>192.168.12.0/24</code> — a server on <code>Loopback2</code>, also <code>192.168.12.2</code></td></tr>
+<tr><td>A thousand /24s (the scale set)</td><td><code>10.128.0.0/24</code> … <code>10.131.231.0/24</code>, ACME holds <code>.1</code> in each</td><td>the same thousand prefixes, the acquired company holds <code>.2</code> in each</td></tr>
+</table>
+<p>Nothing is renumbered. The DCI hides the collision with a <b>twice-NAT</b>, keeps each side's copy on its own side with a route
+filter, and <b>doctors DNS answers</b> in flight so that a name resolved across the DCI returns an address the asker can actually
+reach. The whole arrangement is modelled in Nautobot, rendered by the same Network-as-Code pipeline and Golden Config template as
+every other router, and proven by twelve Robot tests.</p>
+
+<div class="box"><b>Why it is interesting.</b> The scale lands on the NAT, not on the routing table: the DCI carries <b>2002 static
+translations</b> while BGP carries <b>three aggregates</b>. A thousand interfaces per side would be absurd, so each side holds its
+thousand addresses as <b>secondary addresses on one loopback</b>.</p></div>
+
+<h2>2. Topology and the objects behind it</h2>
+<pre class="mermaid topo">
+flowchart TB
+  subgraph ACME["ACME Networks — the provider · tenant group &lt;i&gt;Service provider&lt;/i&gt;"]
+    direction TB
+    HS1["host-spoke1 · 192.168.12.2"]
+    S1["spoke1 · AS 65201 · LAN 192.168.12.0/24"]
+    M(["the other headends and spokes&lt;br/&gt;IPsec VTI mesh + eBGP"])
+    WH["west-headend · AS 65206&lt;br/&gt;LAN 192.168.16.0/24&lt;br/&gt;Loopback900: 1000 × 10.128.N.1"]
+    HS1 --- S1
+    S1 -.- M -.- WH
+  end
+  D["DCI · AS 65208 · role vpn-dci&lt;br/&gt;Gi2 100.64.20.2 = ip nat outside · Gi3 100.64.21.1 = ip nat inside&lt;br/&gt;2002 static translations · DNS ALG · LAN 192.168.31.0/24"]
+  subgraph ACQ["The acquired company — its own customer tenant"]
+    direction TB
+    A["ACME-acquisition · AS 65209 · role partner-edge&lt;br/&gt;LAN 192.168.30.0/24 · Lo1 10.60.0.0/24 · Lo2 192.168.12.2 (the collision)&lt;br/&gt;Loopback900: 1000 × 10.128.N.2 · ip dns server, 1000 records"]
+    HA["host-acquisition · 192.168.30.2"]
+    A --- HA
+  end
+  WH == "100.64.20.0/30 · plain routed link, no IPsec" ==&gt; D
+  D == "100.64.21.0/30 · plain routed link, no IPsec" ==&gt; A
+  classDef acme fill:#eef2f7,stroke:#0b62d6
+  classDef acq fill:#fdf3e7,stroke:#b26a00
+  classDef dci fill:#e8f1e8,stroke:#15803d
+  class HS1,S1,M,WH acme
+  class A,HA acq
+  class D dci
+</pre>
+
+<table>
+<tr><th style="width:17%">Device</th><th style="width:11%">Nautobot role</th><th style="width:16%">Tenant</th><th style="width:8%">AS</th><th>Interfaces that matter</th></tr>
+<tr><td><code>west-headend</code></td><td>vpn-hub</td><td>ACME Networks</td><td>65206</td><td><code>Gi3</code> 100.64.20.1 → the DCI · <code>Gi9</code> LAN · <code>Loopback900</code> 10.128.N.1 ×1000</td></tr>
+<tr><td><code>DCI</code></td><td>vpn-dci</td><td>ACME Networks</td><td>65208</td><td><code>Gi2</code> 100.64.20.2 <span class="pill">nat outside</span> · <code>Gi3</code> 100.64.21.1 <span class="pill">nat inside</span> · <code>Gi9</code> LAN 192.168.31.0/24</td></tr>
+<tr><td><code>ACME-acquisition</code></td><td>partner-edge</td><td>(its own customer tenant)</td><td>65209</td><td><code>Gi2</code> 100.64.21.2 · <code>Gi5</code> LAN 192.168.30.1 · <code>Lo1</code> 10.60.0.1/24 · <code>Lo2</code> 192.168.12.2 · <code>Loopback900</code> 10.128.N.2 ×1000</td></tr>
+</table>
+<p class="small">Both links are cables between router ports in Nautobot — no firewall between them — and neither router carries a tunnel, a
+crypto profile or a keyring: <b>the encryption stops at the headends</b>. The acquired company's overlapping prefix lives in its own
+Nautobot <b>namespace</b> (<code>acquisition</code>), because it is not ACME's address space.</p>
+
+<h2 class="brk">3. The path a branch takes to the acquisition</h2>
+<p>A branch has no special knowledge of the DCI. It learns the acquisition's prefixes over its IPsec tunnels like any other
+destination, and the path runs branch → tunnel → headend(s) → <code>west-headend</code> → DCI → acquisition. Taken live from
+<code>host-spoke1</code>:</p>
+<pre class="term">host-spoke1 $ <b>traceroute -n 192.168.30.2</b>            <span class="c"># the acquisition's LAN host</span>
+ 1  192.168.12.1   0.407 ms     <span class="c">spoke1, the branch's own gateway</span>
+ 2  172.17.4.1     1.508 ms     <span class="c">central-headend, over Tunnel4 (IPsec VTI)</span>
+ 3  172.17.5.2     1.430 ms     <span class="c">spoke2 — the branch mesh is the transit between headends</span>
+ 4  172.17.9.1     4.226 ms     <span class="c">west-headend, over Tunnel9</span>
+ 5  *                           <span class="c">the DCI does not answer this probe — see the note below</span>
+ 6  100.64.21.2    4.056 ms     <span class="c">ACME-acquisition</span>
+ 7  192.168.30.2   4.383 ms     <span class="c">host-acquisition</span></pre>
+<p>From a host that is <i>not</i> inside the overlapping prefix the same path is three hops shorter and the DCI answers normally:</p>
+<pre class="term">host-west $ <b>traceroute -n 192.168.30.2</b>
+ 1  192.168.16.1   0.005 ms     <span class="c">west-headend</span>
+ 2  100.64.20.2    0.523 ms     <span class="c">DCI</span>
+ 3  100.64.21.2    1.201 ms     <span class="c">ACME-acquisition</span>
+ 4  192.168.30.2   1.873 ms</pre>
+<div class="box warn"><b>Why hop 5 is silent — and why that is correct.</b> The DCI's own routing table resolves
+<code>192.168.12.0/24</code> <i>towards the acquired company</i> (<code>B 192.168.12.0/24 via 100.64.21.2</code>), because on the DCI
+that prefix belongs to the acquisition — ACME's copy is filtered out. A TTL-expired message the DCI generates for
+<code>host-spoke1</code> would therefore be sent to the acquisition's server instead of back to the branch, so it never arrives. Hosts
+inside the overlapping prefix cannot ping the DCI itself either (<code>host-west</code> can). Traffic <i>through</i> the DCI is
+unaffected: that is translated, and translation happens before the DCI's own routing decision matters.</p></div>
+
+<h3>The same path for a translated address, packet by packet</h3>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant H as host-spoke1&lt;br/&gt;192.168.12.2
+  participant W as west-headend
+  participant D as DCI
+  participant A as ACME-acquisition&lt;br/&gt;10.128.7.2 (Loopback900)
+  H->>W: dst 100.96.7.2 · src 192.168.12.2&lt;br/&gt;(over the VTI mesh)
+  W->>D: dst 100.96.7.2&lt;br/&gt;BGP: 100.96.0.0/14 via the DCI
+  Note over D,A: twice-NAT · dst 100.96.7.2 → 10.128.7.2 (inside static)&lt;br/&gt;src 192.168.12.2 → 172.30.12.2 (outside static)
+  D->>A: dst 10.128.7.2 · src 172.30.12.2
+  A-->>D: dst 172.30.12.2 · src 10.128.7.2
+  Note over D,A: both translations reversed
+  D-->>H: dst 192.168.12.2 · src 100.96.7.2
+</pre>
+<p>Neither end ever sees the other's real address, and neither end needs a route for it.</p>
+
+<h2>4. The routes exchanged (and the ones deliberately not)</h2>
+<p>One eBGP session per hop — the same <code>nautobot-bgp-models</code> peerings the tunnels use, just over a direct link:</p>
+<pre class="term">DCI # <b>show ip bgp summary</b>
+Neighbor        V    AS  MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd
+100.64.20.1     4 65206     1258    1266      219    0    0 17:15:07       <b>14</b>   <span class="c">west-headend (ACME)</span>
+100.64.21.2     4 65209     1146    1257      219    0    0 17:15:35        <b>5</b>   <span class="c">ACME-acquisition</span></pre>
+
+<h3>What ACME learns from the DCI — seven prefixes, none of them colliding</h3>
+<pre class="term">west-headend # <b>show ip bgp neighbors 100.64.20.2 routes</b>
+     Network          Next Hop        Path
+ *&gt;  10.60.0.0/24     100.64.20.2     65208 65209 i   <span class="c">the acquisition's service prefix</span>
+ *&gt;  10.255.1.8/32    100.64.20.2     65208 i         <span class="c">DCI loopback</span>
+ *&gt;  10.255.1.9/32    100.64.20.2     65208 65209 i   <span class="c">acquisition loopback</span>
+ *&gt;  <b>100.96.0.0/14</b>    100.64.20.2     65208 i         <span class="c">the thousand overlapping prefixes, translated</span>
+ *&gt;  <b>172.31.12.0/24</b>   100.64.20.2     65208 i         <span class="c">the acquisition's server on the branch-1 LAN, translated</span>
+ *&gt;  192.168.30.0     100.64.20.2     65208 65209 i   <span class="c">the acquisition's LAN</span>
+ *&gt;  192.168.31.0     100.64.20.2     65208 i         <span class="c">the DCI's own LAN</span>
+Total number of prefixes 7</pre>
+<p>Those seven are re-advertised into the VTI mesh, so <b>every branch</b> has them through its own headends — with the AS path
+showing the trip out to the DCI:</p>
+<pre class="term">spoke1 # <b>show ip route bgp | include 100.96|172.31.12|192.168.30</b>
+B        100.96.0.0/14 [20/0] via 172.17.4.1, 03:41:50      <span class="c">via its tunnel to central-headend</span>
+B        172.31.12.0   [20/0] via 172.17.4.1, 03:41:50
+B     192.168.30.0/24  [20/0] via 172.17.4.1, 03:41:50
+
+spoke1 # <b>show ip bgp 100.96.0.0/14</b>
+Paths: (2 available, best #2)
+  65200 65203 65206 65208   from 172.17.1.1      <span class="c">east-headend → … → west-headend → DCI</span>
+  65204 65202 65206 65208   from 172.17.4.1      <span class="c">central-headend → spoke2 → west-headend → DCI (best)</span></pre>
+
+<h3>What the acquired company learns — twenty prefixes, ACME's branch-1 LAN excluded</h3>
+<pre class="term">ACME-acquisition # <b>show ip route | include 10.128|100.96|100.100|192.168.12|192.168.30</b>
+S        10.128.0.0/14 is directly connected, Null0          <span class="c">the aggregate it originates for its own thousand</span>
+C        10.128.0.0/24 is directly connected, Loopback900    <span class="c">…its own copies (+999 secondaries)</span>
+B        <b>100.96.0.0/14</b>  [20/0] via 100.64.21.1               <span class="c">how ACME sees the acquisition's thousand</span>
+B        <b>100.100.0.0/14</b> [20/0] via 100.64.21.1               <span class="c">how the acquisition reaches ACME's thousand</span>
+C        192.168.12.0/24 is directly connected, Loopback2    <span class="c">its own copy — ACME's is never learned</span>
+C        192.168.30.0/24 is directly connected, GigabitEthernet5</pre>
+
+<h3>The filter that keeps each copy at home</h3>
+<pre class="term">DCI # <b>show running-config | include OVERLAP|NO-OVERLAP</b>
+ip prefix-list OVERLAP description prefixes that exist on both sides of the DCI: translated, not advertised
+ip prefix-list OVERLAP seq 5  permit 192.168.12.0/24
+ip prefix-list OVERLAP seq 10 permit 10.128.0.0/14
+route-map NO-OVERLAP deny 10       <span class="c">match ip address prefix-list OVERLAP</span>
+route-map NO-OVERLAP permit 20     <span class="c">everything else is advertised normally</span>
+  neighbor 100.64.20.1 route-map NO-OVERLAP <b>in</b>     <span class="c">ACME's copy never enters the DCI</span>
+  neighbor 100.64.20.1 route-map NO-OVERLAP <b>out</b>    <span class="c">the acquisition's copy never leaves towards ACME</span>
+  neighbor 100.64.21.2 route-map NO-OVERLAP <b>out</b>    <span class="c">ACME's copy never leaves towards the acquisition</span></pre>
+<p>Each router therefore keeps <b>exactly one path per prefix</b> — its own. What crosses the DCI instead is the translated range,
+which the DCI originates itself, together with the two static routes the translation needs:</p>
+<pre class="term">DCI # <b>show running-config | include ^ip route</b>
+ip route 100.96.0.0   255.252.0.0 <b>Null0</b>        name nat-inside-global    <span class="c">translated before the routing lookup</span>
+ip route 172.31.12.0  255.255.255.0 <b>Null0</b>      name nat-inside-global
+ip route 100.100.0.0  255.252.0.0 <b>100.64.20.1</b> name nat-outside-local    <span class="c">routed before the translation</span>
+ip route 172.30.12.0  255.255.255.0 <b>100.64.20.1</b> name nat-outside-local</pre>
+<div class="box"><b>Read the two halves.</b> A packet from ACME to <code>100.96.x.y</code> is translated <i>first</i> and then routed, so
+that range only needs to exist — a <code>Null0</code> route is enough, and it is what the DCI advertises to ACME. A packet from the
+acquisition to <code>100.100.x.y</code> is routed <i>first</i> and translated after, so the DCI needs a real next hop towards ACME. ACME
+itself never learns <code>100.100.0.0/14</code>: by the time a packet reaches <code>west-headend</code> its destination is already the
+real <code>10.128.x.1</code>.</p></div>
+
+<h2 class="brk">5. How the NAT is set up</h2>
+<p>Two interface roles and two kinds of static translation — the pair that IOS calls <i>twice NAT</i>, because both the source and the
+destination of a flow are rewritten:</p>
+<table>
+<tr><th style="width:23%">Term</th><th style="width:39%">In this lab</th><th>Configured as</th></tr>
+<tr><td><b>inside local</b></td><td>the acquired company's real address, e.g. <code>10.128.7.2</code></td><td rowspan="2"><code>ip nat inside source static network 10.128.N.0 100.96.N.0 /24</code></td></tr>
+<tr><td><b>inside global</b></td><td>the same host <i>as ACME sees it</i>: <code>100.96.7.2</code></td></tr>
+<tr><td><b>outside global</b></td><td>ACME's real address, e.g. <code>10.128.7.1</code> (or <code>192.168.12.2</code>)</td><td rowspan="2"><code>ip nat outside source static network 10.128.N.0 100.100.N.0 /24</code></td></tr>
+<tr><td><b>outside local</b></td><td>the same host <i>as the acquisition sees it</i>: <code>100.100.7.1</code> (or <code>172.30.12.2</code>)</td></tr>
+</table>
+<pre class="term">DCI # <b>show running-config | include source static network 10.128.0.0 |source static network 192.168.12.0</b>
+ip nat inside  source static network 10.128.0.0   100.96.0.0  /24     <span class="c">× 1000, one per scale prefix</span>
+ip nat outside source static network 10.128.0.0   100.100.0.0 /24     <span class="c">× 1000</span>
+ip nat inside  source static network 192.168.12.0 172.31.12.0 /24     <span class="c">the single hand-written overlap</span>
+ip nat outside source static network 192.168.12.0 172.30.12.0 /24
+
+DCI # <b>show ip nat statistics</b>
+Total active translations: 3018 (<b>2002 static</b>, 1016 dynamic; 0 extended)
+Outside interfaces:  GigabitEthernet2        <span class="c">towards ACME</span>
+Inside interfaces:   GigabitEthernet3        <span class="c">towards the acquired company</span>
+Hits: 21266  Misses: 19603
+<b>In-to-out drops: 0  Out-to-in drops: 0</b></pre>
+<p>A <code>network</code> static maps a whole /24 in one line and shows up in the translation table as a single entry per address in
+use:</p>
+<pre class="term">DCI # <b>show ip nat translations | include 100.96.7.2</b>
+---  100.96.7.2            10.128.7.2            ---                   ---
+     <span class="c">inside global         inside local          outside local         outside global</span></pre>
+
+<h3>Where the thousand come from</h3>
+<p>One <code>scale</code> block in <code>lab-intent.json</code> generates every line above — the statics, the loopback addresses on both
+sides, the aggregates and the DNS records:</p>
+<pre class="term">"nat": { "inside_interface": "GigabitEthernet3", "outside_interface": "GigabitEthernet2", "dns_fixup": true,
+  "overlaps": [ { "prefix": "192.168.12.0/24", "inside_global": "172.31.12.0/24", "outside_local": "172.30.12.0/24" } ],
+  "scale": { "count": 1000, "prefix_base": "10.128.0.0/24",
+             "inside_global_base": "100.96.0.0/24", "outside_local_base": "100.100.0.0/24", "aggregate_len": 14,
+             "acme_router": "west-headend",     "acme_host": 1,
+             "acquisition_router": "ACME-acquisition", "acquisition_host": 2,
+             "loopback_base": 900, "loopback_mode": "secondaries" } }</pre>
+<table>
+<tr><th style="width:30%">Generated</th><th style="width:34%">On the device</th><th>Note</th></tr>
+<tr><td>2 × 1000 static translations</td><td><code>DCI</code></td><td>plus 2 for the single overlap = <b>2002</b></td></tr>
+<tr><td>1000 addresses per side</td><td><code>west-headend</code> and <code>ACME-acquisition</code>, <code>Loopback900</code></td><td>primary + 999 <b>secondary</b> addresses — one interface, not a thousand</td></tr>
+<tr><td>3 aggregates</td><td>BGP</td><td><code>100.96.0.0/14</code>, <code>100.100.0.0/14</code>, <code>10.128.0.0/14</code> — the routing table stays small</td></tr>
+<tr><td>1 prefix-list line</td><td><code>DCI</code></td><td><code>OVERLAP seq 10 permit 10.128.0.0/14</code> covers all thousand</td></tr>
+<tr><td>2 × 1000 DNS records</td><td>the two zones (§6)</td><td>one per prefix, pointing at that side's own copy</td></tr>
+</table>
+<div class="box warn"><b>Two platform limits worth knowing.</b> IOS-XE's CLI RPC rejects a payload of this size
+(<i>“invalid value for: config-clis … has a bad length/size”</i> at roughly two thousand lines), so the renderer splits every CLI
+template into <b>400-line chunks</b>, repeating the section header where the lines only make sense inside one. And a CLI template
+never removes the lines of a previous version — shrinking a scale set means removing the old statements explicitly.</p></div>
+
+<h2 class="brk">6. How DNS is fixed up</h2>
+<p>Each side answers for its own zone, with its own copies of the overlapping addresses. A resolver on the far side of the DCI would
+therefore be handed an address that means something completely different at home — unless the NAT rewrites the answer. That rewrite
+is the DNS <b>application-level gateway</b> built into IOS NAT: when a DNS reply crosses a NAT boundary, the A records inside the
+payload are translated with the same statics as the packet header.</p>
+<table>
+<tr><th style="width:22%">Zone</th><th style="width:20%">Answered by</th><th style="width:29%">Records</th><th>Asked by</th></tr>
+<tr><td><code>acquisition.local</code></td><td><code>ACME-acquisition</code><br><span class="small"><code>ip dns server</code> + 1001 <code>ip host</code> lines</span></td><td><code>acq0…acq999</code> → <code>10.128.N.2</code><br><code>server</code> → <code>10.128.0.2</code></td><td><code>host-spoke1</code>, whose <code>resolv.conf</code> names the server at its <i>translated</i> address</td></tr>
+<tr><td><code>acme.local</code></td><td><code>west-headend</code></td><td><code>svc0…svc999</code> → <code>10.128.N.1</code><br>plus the named lab hosts</td><td><code>ACME-acquisition</code> itself (<code>ip name-server</code> + <code>ip domain lookup source-interface</code>)</td></tr>
+</table>
+<pre class="term">host-spoke1 $ <b>cat /etc/resolv.conf</b>          <span class="c">written by cloud-init from `dns_client` in the intent</span>
+search acquisition.local
+nameserver <b>100.96.0.2</b>                       <span class="c">= 10.128.0.2 (the server) as ACME sees it</span></pre>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant H as host-spoke1&lt;br/&gt;192.168.12.2
+  participant D as DCI
+  participant A as ACME-acquisition&lt;br/&gt;ip dns server
+  H->>D: A? acq7.acquisition.local&lt;br/&gt;to 100.96.0.2
+  Note over D,A: header · dst 100.96.0.2 → 10.128.0.2&lt;br/&gt;src 192.168.12.2 → 172.30.12.2
+  D->>A: A? acq7.acquisition.local&lt;br/&gt;to 10.128.0.2, from 172.30.12.2
+  A-->>D: answer: acq7 = 10.128.7.2&lt;br/&gt;(the record as configured)
+  Note over D,A: DNS ALG rewrites the answer in the payload:&lt;br/&gt;10.128.7.2 → 100.96.7.2 (it matches an inside static)
+  D-->>H: answer: acq7 = 100.96.7.2
+  H->>D: ping 100.96.7.2 — reaches 10.128.7.2
+</pre>
+<pre class="term">host-spoke1 $ <b>nslookup -type=a acq777.acquisition.local</b>
+Address: <b>100.99.9.2</b>            <span class="c">the record on the server says 10.131.9.2</span>
+
+DCI # <b>show ip nat translations | include :53</b>
+      <span class="c">inside global        inside local         outside local        outside global</span>
+<span class="c">branch → the acquisition's zone</span>
+udp   <b>100.96.0.2:53</b>        <b>10.128.0.2:53</b>        172.30.12.2:51258    192.168.12.2:51258
+<span class="c">the acquisition → ACME's zone</span>
+udp   172.31.12.2:38993    192.168.12.2:38993   192.168.16.1:53      192.168.16.1:53</pre>
+<p>The reverse direction works the same way and is easiest to see from the router itself, which resolves and pings in one command:</p>
+<pre class="term">ACME-acquisition # <b>ping svc7.acme.local source 10.128.7.2</b>
+Sending 2, 100-byte ICMP Echos to <b>100.100.7.1</b>, timeout is 2 seconds:   <span class="c">the record says 10.128.7.1</span>
+Packet sent with a source address of 10.128.7.2
+!!
+Success rate is 100 percent (2/2), round-trip min/avg/max = 1/2/3 ms</pre>
+<div class="box warn"><b>The source address is the part that is easy to get wrong.</b> The ALG only rewrites a payload on a flow the NAT
+is already translating. <code>host-spoke1</code> sits in <code>192.168.12.0/24</code> — the single hand-written overlap — so its queries
+leave as <code>172.30.12.2</code> and the answer comes back doctored; <code>ACME-acquisition</code> sources its own queries from
+<code>Loopback2</code> for exactly the same reason. A host outside any overlap would receive the raw <code>10.131.9.2</code> and have
+nowhere to send it. Setting <code>"dns_fixup": false</code> in the intent renders the opposite: <code>no-payload</code> on the statics
+and <code>no ip nat service dns tcp/udp</code>.</p></div>
+
+<h2 class="brk">7. How the test is run and validated</h2>
+<p>Suite <code>tests/suites/12_dci.robot</code> — twelve tests, every expected value read from the intent or Nautobot, never from a
+constant in the test. Run it with <code>./lab.sh test</code> (or from the portal); the whole suite is 74 tests across 12 suites.</p>
+<table>
+<tr><th style="width:44%">Test</th><th>What it proves</th><th style="width:8%">Time</th></tr>
+<tr><td>The DCI chain is modelled in Nautobot</td><td>roles <code>vpn-dci</code> / <code>partner-edge</code>, the right tenants and design patterns, both links cabled with their /30s, the acquisition's service prefix tagged for advertisement</td><td>1s</td></tr>
+<tr><td>The interconnect links are up … no IPsec anywhere</td><td>modelled addresses on both ends, the far end pings, and neither router holds a tunnel, crypto profile, keyring or trustpoint</td><td>8s</td></tr>
+<tr><td>eBGP is Established on every hop</td><td>one session per link, over the link addresses, with the AS numbers from the model</td><td>4s</td></tr>
+<tr><td>The acquisition originates its prefixes and every branch learns them</td><td><code>network</code> statements on the acquisition; every spoke has the prefixes <b>via one of its own headends</b></td><td>7s</td></tr>
+<tr><td>A branch reaches the acquisition's LAN and its service prefix</td><td>end-to-end ping from each branch's LAN address, and the acquisition back to every branch</td><td>8s</td></tr>
+<tr><td>The host behind the acquisition is in the mesh and breaks out</td><td>full host ping mesh plus internet through <code>west-headend</code>, with the DCI and headend hops asserted in the traceroute</td><td>9s</td></tr>
+<tr><td>Golden Config renders the DCI chain and reports it compliant</td><td>both routers in the Golden Config scope; every compliance feature matches, including the 2002 NAT lines and the 1000 DNS records</td><td>0s</td></tr>
+<tr><td>The overlapping prefix exists on both sides and neither learns the other's copy</td><td>both sides really do use <code>192.168.12.0/24</code>; the DCI reaches it through the acquisition; no spoke learns the acquisition's copy and vice versa</td><td>6s</td></tr>
+<tr><td>The DCI translates in both directions</td><td>ACME reaches the server at the inside-global address, the acquisition reaches ACME's host at the outside-local one, and both halves appear in the translation table</td><td>8s</td></tr>
+<tr><td>DNS is fixed up on the way through the NAT</td><td>a name whose record is an overlapping address resolves to the translated one, and the address answers</td><td>3s</td></tr>
+<tr><td><b>NAT scales</b>: a thousand prefixes, both directions, no drops</td><td>2002 static translations, zero drops, only the three aggregates in the routing table, and a branch host reaching <b>1000/1000</b> translated prefixes</td><td>10s</td></tr>
+<tr><td><b>DNS fix-up scales</b> and works from either side</td><td><b>resolved+reached 1000/1000</b> from the branch host, a sample of the reverse direction from the acquisition, and a translated DNS flow in the NAT table</td><td>16s</td></tr>
+</table>
+
+<h3>How the two scale tests actually sweep</h3>
+<ol class="steps">
+<li><b>The expected values are computed from the intent</b>, not hard-coded: <code>intent.nat_scale()</code> expands the
+<code>scale</code> block into 1000 entries, each with its prefix, its inside-global and outside-local forms, and each side's address
+(<code>acquisition_as_acme_sees_it</code> = <code>100.96.N.2</code>, <code>acme_as_acquisition_sees_it</code> =
+<code>100.100.N.1</code>). The same function feeds the renderer, so the test and the device are computed from one source.</li>
+<li><b>The NAT sweep</b> ships the thousand target addresses to <code>host-spoke1</code> as one list and pings them forty at a time
+(<code>xargs -P 40</code>): about five seconds for all thousand, against minutes if run serially. The test asserts
+<code>reached 1000/1000</code> and prints any address that failed.</li>
+<li><b>The DNS sweep</b> ships a thousand <code>name=expected</code> pairs, resolves each with <code>nslookup -type=a</code> (filtering
+out busybox's server line and its AAAA “No answer” noise), compares the answer to the address the NAT <i>should</i> have produced and
+then <b>pings it</b> — so a name that resolves to something unreachable fails. The assertion is
+<code>resolved+reached 1000/1000</code>.</li>
+<li><b>The reverse direction</b> is checked from the router, where there is no busybox: <code>ping svcN.acme.local source
+10.128.N.2</code> must both resolve to the outside-local form and succeed.</li>
+<li><b>The counters</b> are read independently: <code>show ip nat statistics</code> must show exactly two static translations per
+overlapping prefix and zero drops, and <code>show ip route</code> must contain the three aggregates and nothing per-prefix.</li>
+</ol>
+
+<h3>What a run leaves behind</h3>
+<table>
+<tr><th style="width:30%">Artefact</th><th>Contents</th></tr>
+<tr><td><code>results/&lt;run&gt;/report.pdf</code></td><td>the evidence report: every suite and test with its result, duration and the numbers it measured (<code>reached 1000/1000</code>, <code>resolved+reached 1000/1000</code>, <code>Total active translations: … 2002 static</code>)</td></tr>
+<tr><td><code>results/&lt;run&gt;/log.html</code>, <code>report.html</code>, <code>output.xml</code></td><td>Robot's own log and report; the PDF is generated from the XML, so it can be rebuilt for any past run</td></tr>
+<tr><td><code>results/&lt;run&gt;/configs/</code></td><td>running and startup configuration of <b>every</b> Catalyst 8000v before and after the run, and <code>pre-vs-post.diff</code></td></tr>
+<tr><td>Nautobot Golden Config</td><td>171/171 compliance rows compliant — the NAT and DNS are two of the compliance features, so a hand-edit anywhere in the 2002 lines or the 2000 records shows up as drift</td></tr>
+</table>
+
+<h2>8. Where every line of this comes from</h2>
+<pre class="mermaid">
+flowchart TB
+  I[("lab-intent.json&lt;br/&gt;nat · dns · dns_client · scale")]
+  S["nautobot/seed.py&lt;br/&gt;devices, cables, prefixes,&lt;br/&gt;namespace, tenants, peerings,&lt;br/&gt;config contexts"]
+  N[("Nautobot&lt;br/&gt;source of truth")]
+  R["nautobot/render_nac.py&lt;br/&gt;nat_cli · dns_cli&lt;br/&gt;scale_loopbacks_cli&lt;br/&gt;cli_templates (400-line chunks)"]
+  T[("nac/data/devices.nac.yaml")]
+  TF["terraform · CiscoDevNet/iosxe&lt;br/&gt;tools/nac_apply.py (staged)"]
+  G["Golden Config template&lt;br/&gt;c8000v-ipsec.j2&lt;br/&gt;(32-bit arithmetic for the scale set)"]
+  DEV["DCI · west-headend · ACME-acquisition"]
+  C["Compliance:&lt;br/&gt;NAT (DCI) · DNS · BGP policy · …"]
+  RB["tests/suites/12_dci.robot&lt;br/&gt;+ lab_vars.py"]
+  I --> S --> N
+  N --> R --> T --> TF --> DEV
+  N --> G --> C
+  DEV --> C
+  I -. "same expansion&lt;br/&gt;intent.nat_scale()" .-> RB
+  DEV --> RB
+</pre>
+<table>
+<tr><th style="width:34%">File</th><th>Its part in the DCI</th></tr>
+<tr><td><code>lab-intent.json</code></td><td>the <code>nat</code>, <code>dns</code> and <code>dns_client</code> blocks, including the <code>scale</code> block that generates the thousand</td></tr>
+<tr><td><code>nautobot/intent.py</code></td><td><code>nat_scale()</code>, <code>nat_scale_aggregates()</code>, <code>dns_scale()</code> — the one expansion used by the renderer, the template context and the tests</td></tr>
+<tr><td><code>nautobot/seed.py</code></td><td>the devices, roles, tenants, cables, prefixes (in the <code>acquisition</code> namespace), BGP peerings and the config contexts keyed by hostname</td></tr>
+<tr><td><code>nautobot/render_nac.py</code></td><td>the NAT and DNS CLI templates, the loopback-secondaries block, the interface <code>ip nat inside/outside</code> flags, the prefix-list and route-map, and the 400-line chunking</td></tr>
+<tr><td><code>nautobot/golden-config-templates/c8000v-ipsec.j2</code></td><td>the intended configuration for the same lines — expanded in 32-bit arithmetic so the thousand prefixes stay correct past the third octet</td></tr>
+<tr><td><code>tests/suites/12_dci.robot</code>, <code>tests/resources/lab_vars.py</code></td><td>the twelve tests and the values they expect, derived from the intent</td></tr>
+<tr><td><code>tests/report_pdf.py</code>, <code>tests/run.sh</code></td><td>the evidence PDF each run produces</td></tr>
+</table>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', themeVariables: { fontSize: '15px' }, flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', nodeSpacing: 30, rankSpacing: 34, wrappingWidth: 240 }, sequence: { useMaxWidth: false, actorMargin: 90, messageMargin: 32, width: 180, wrap: true, messageFontSize: 13, actorFontSize: 13, noteAlign: 'left' } });
+  await mermaid.run({ querySelector: 'pre.mermaid' });
+  window.__mermaid_done = true;
+</script>
+</body></html>
