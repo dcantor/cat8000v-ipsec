@@ -110,7 +110,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#compliance" data-view="compliance">Compliance</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <nav><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="inventory">Inventory</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#jobs" data-view="jobs">Jobs</a><a href="#compliance" data-view="compliance">Compliance</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span> · <a href="#" id="theme-toggle" title="dark / light (follows the OS setting until chosen)">☾ dark</a></div>
 </header>
 <main>
@@ -316,6 +316,44 @@
     <div class="hint" id="tools-oob" style="margin-bottom:10px"></div>
     <div class="wide"><table id="tools-devices" style="min-width:1100px"><thead><tr><th>Device</th><th>Role</th><th>Platform</th><th>Where</th><th>Management IP</th><th>SSH</th><th>Username</th><th>Password</th><th>RESTCONF / NETCONF</th><th>Serial console</th></tr></thead><tbody></tbody></table></div>
     <div class="hint" id="tools-host" style="margin-top:10px"></div>
+  </div>
+</main>
+<main id="view-jobs" hidden style="grid-template-columns:1fr">
+  <div class="card">
+    <h2>Jobs <small id="jobs-note">every change this portal makes is a job: deployments, adding or removing a branch, re-homing, key and certificate work, Golden Config, remediation and test runs</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center">
+        <select id="jobs-status" title="filter by status"><option value="">any status</option><option>running</option><option>queued</option><option>success</option><option>failed</option><option>cancelled</option><option>interrupted</option></select>
+        <select id="jobs-mode" title="filter by what the job does"><option value="">any job</option></select>
+        <input id="jobs-q" placeholder="router, ticket, user" style="width:150px" title="match the target, the change ticket or who started it">
+        <button type="button" class="small" onclick="loadJobs()">Refresh</button></span></h2>
+    <div class="kpis" id="jobs-kpis"></div>
+  </div>
+  <div class="card">
+    <h2>Recent jobs <small>newest first, live — click one to open its page, with its steps, its log and its test report</small></h2>
+    <div class="wide"><table id="jobs-table" style="min-width:1100px"><thead><tr><th>Started</th><th>Job</th><th>Target</th><th>Status</th><th>Progress</th><th>Duration</th><th>Started by</th><th>Ticket</th><th>Tests</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="hint" style="margin-top:8px">Jobs execute one at a time — one Terraform state, one intent — so a job started while another is running waits in line and can be cancelled before it starts. A job that failed part-way can be resumed from its failed step.</div>
+  </div>
+</main>
+<main id="view-job" hidden style="grid-template-columns:1fr">
+  <div class="card">
+    <h2><a href="#jobs" class="hint" style="font-weight:400">← Jobs</a> &nbsp;<span id="job-title">Job</span> <small id="job-sub"></small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center" id="job-actions"></span></h2>
+    <div id="job-head" class="hint">loading…</div>
+    <div class="kpis" id="job-kpis"></div>
+  </div>
+  <div class="card">
+    <h2>Steps <small id="job-steps-note">what the pipeline does, in order — each step carries what it did in one line</small></h2>
+    <ul class="steps" id="job-steps"></ul>
+  </div>
+  <div class="card">
+    <h2>Log <small>everything the job printed: the commands it ran and their output</small>
+      <span style="float:right;display:inline-flex;gap:8px;align-items:center"><label class="hint" style="user-select:none"><input type="checkbox" id="job-follow" checked> follow</label><span class="hint" id="job-log-note"></span></span></h2>
+    <pre class="log" id="job-log" style="max-height:520px"></pre>
+  </div>
+  <div class="card" id="job-testcard" hidden>
+    <h2>Test report <small id="job-test-links"></small></h2>
+    <div id="job-test-summary"></div>
+    <div id="job-test-suites"></div>
   </div>
 </main>
 <main id="view-inventory" hidden style="grid-template-columns:1fr">
@@ -585,45 +623,62 @@ async function start(mode) {
   base = intent; watch(run.id);
 }
 
-function watch(id) {
-  current = id; logCount = 0; $('log').textContent = ''; $('testcard').hidden = true;
-  document.querySelectorAll('#f .actions button').forEach(b => b.disabled = true);
-  $('runcard').scrollIntoView({ behavior: 'smooth', block: 'start' });   // the status block is above the buttons that start a run
+let LOGBUF = '';            // the job's output so far, so the provision card and the job page can both show it
+function pollStart(id) {
+  if (current !== id) { current = id; logCount = 0; LOGBUF = ''; $('log').textContent = ''; $('job-log').textContent = ''; $('testcard').hidden = true; $('job-testcard').hidden = true; }
   clearInterval(pollTimer); poll(); pollTimer = setInterval(poll, 2000);
+}
+function setLog(el, text) {   // keep following the tail only while the reader is at the bottom
+  const follow = el.id === 'job-log' ? $('job-follow').checked : true;
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  if (el.textContent === text) return;
+  el.textContent = text;
+  if (follow && atBottom) el.scrollTop = el.scrollHeight;
+}
+function openJob(id) { location.hash = '#job/' + encodeURIComponent(id); }      // every job has its own page
+function watch(id) {                                                            // start a job's page and follow it
+  document.querySelectorAll('#f .actions button').forEach(b => b.disabled = true);
+  openJob(id);
+}
+function watchInline(id) {   // the deployment card on the Provision page (the demo recorder drives this one)
+  pollStart(id); $('runcard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function poll() {
   if (!current) return;
   const r = await (await fetch(`/api/runs/${current}?since=${logCount}`)).json();
-  render(r);
-  if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) { clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false); loadRuns(); if (['spoke', 'hub', 'remove', 'rotate', 'rehome', 'auth', 'renew'].includes(r.mode)) load(); }
+  if (r.log && r.log.length) { LOGBUF += r.log.map(l => l.line).join('\n') + '\n'; logCount = (r.log_offset || 0) + r.log.length; }
+  render(r); renderJob(r);
+  if (['success', 'failed', 'cancelled', 'interrupted'].includes(r.status)) {
+    clearInterval(pollTimer); pollTimer = null; document.querySelectorAll('#f .actions button').forEach(b => b.disabled = false);
+    loadRuns(); if (jobsTimer) loadJobs();
+    if (['spoke', 'hub', 'remove', 'rotate', 'rehome', 'auth', 'renew'].includes(r.mode)) load();
+  }
 }
 
 function render(r) {
-  $('run-id').textContent = r.id;
+  $('run-id').innerHTML = `${esc(r.id)} · <a href="#job/${encodeURIComponent(r.id)}">open the job page</a>`;
   $('run-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${r.mode}${r.spoke ? ' ' + esc(r.spoke.name || '') : ''}${r.user ? ' · by ' + esc(r.user) : ''} · ${r.status === 'queued' ? 'queued ' : 'started '}${fmtT(r.started)}${r.finished ? ' · finished ' + fmtT(r.finished) + ' (' + dur(r.started, r.finished) + ')' : ''}${r.resume_of ? ' · resumed from ' + esc(r.resume_of) : ''}` + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '')
     + (r.status === 'queued' ? `<div class="msg" style="margin-top:6px">Waiting: #${r.queue_position || '?'} in line${r.waiting_for ? ` behind run <a onclick="watch('${r.waiting_for}')">${esc(r.waiting_for)}</a>` : ''} — runs execute one at a time (one Terraform state, one intent). <button type="button" class="small" onclick="cancelRun('${r.id}')">Cancel</button></div>` : '')
     + ((r.status === 'failed' || r.status === 'interrupted') ? `<div style="margin-top:6px"><button type="button" onclick="resumeRun('${r.id}')">Resume from the failed step</button></div>` : '');
   $('steps').innerHTML = r.steps.map(s => `<li><span class="dot ${s.status}"></span><div class="t">${s.title}<div class="s">${esc(s.summary || '')}</div></div><span class="d">${s.status}${s.started ? ' · ' + dur(s.started, s.finished || Date.now() / 1000) : ''}</span></li>`).join('');
-  if (r.log && r.log.length) {
-    const el = $('log'); const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    el.textContent += r.log.map(l => l.line).join('\n') + '\n'; logCount = (r.log_offset || 0) + r.log.length;
-    if (atBottom) el.scrollTop = el.scrollHeight;
-  }
-  if (r.tests) {
-    $('testcard').hidden = false;
-    const t = r.tests, pct = t.total ? Math.round(100 * t.passed / t.total) : 0;
-    $('test-summary').innerHTML = `<div><span class="${t.failed ? 'test-fail' : 'test-pass'}">${t.failed ? 'FAIL' : 'PASS'}</span> — ${t.passed}/${t.total} tests passed</div><div class="bar"><div class="${t.failed ? 'fail' : ''}" style="width:${pct}%"></div></div>`;
-    $('test-links').innerHTML = r.results_dir ? `<a href="/results/${r.results_dir}/report.html" target="_blank">report.html</a> · <a href="/results/${r.results_dir}/log.html" target="_blank">log.html</a> · backups: ${(r.devices || []).map(d => `<a href="/results/${r.results_dir}/configs/post-run/${d}.running-config.txt" target="_blank">${esc(d)}</a>`).join(' ')} · <a href="/results/${r.results_dir}/configs/pre-vs-post.diff" target="_blank">diff</a>` : '';
-    $('test-suites').innerHTML = t.suites.map(s => `<h3 style="font-size:13px;margin:12px 0 4px">${esc(s.name)} <span class="${s.failed ? 'test-fail' : 'test-pass'}">${s.passed}/${s.tests.length}</span></h3>
-      <table>${s.tests.map(x => `<tr><td style="width:60px" class="${x.status === 'PASS' ? 'test-pass' : 'test-fail'}">${x.status}</td><td>${esc(x.name)}${x.status !== 'PASS' ? `<div class="msg">${esc(x.message)}</div>` : ''}</td><td style="width:60px;color:var(--muted)">${x.elapsed ? Number(x.elapsed).toFixed(1) + 's' : ''}</td></tr>`).join('')}</table>`).join('');
-  }
+  setLog($('log'), LOGBUF);
+  if (r.tests) { $('testcard').hidden = false; renderTests(r, 'test-summary', 'test-links', 'test-suites'); }
+}
+
+// the test report of a finished job, rendered into either page
+function renderTests(r, sumId, linksId, suitesId) {
+  const t = r.tests, pct = t.total ? Math.round(100 * t.passed / t.total) : 0;
+  $(sumId).innerHTML = `<div><span class="${t.failed ? 'test-fail' : 'test-pass'}">${t.failed ? 'FAIL' : 'PASS'}</span> — ${t.passed}/${t.total} tests passed</div><div class="bar"><div class="${t.failed ? 'fail' : ''}" style="width:${pct}%"></div></div>`;
+  $(linksId).innerHTML = r.results_dir ? `<a href="/results/${r.results_dir}/report.pdf" target="_blank">report.pdf</a> · <a href="/results/${r.results_dir}/report.html" target="_blank">report.html</a> · <a href="/results/${r.results_dir}/log.html" target="_blank">log.html</a> · backups: ${(r.devices || []).map(d => `<a href="/results/${r.results_dir}/configs/post-run/${d}.running-config.txt" target="_blank">${esc(d)}</a>`).join(' ')} · <a href="/results/${r.results_dir}/configs/pre-vs-post.diff" target="_blank">diff</a>` : '';
+  $(suitesId).innerHTML = t.suites.map(s => `<h3 style="font-size:13px;margin:12px 0 4px">${esc(s.name)} <span class="${s.failed ? 'test-fail' : 'test-pass'}">${s.passed}/${s.tests.length}</span></h3>
+    <table>${s.tests.map(x => `<tr><td style="width:60px" class="${x.status === 'PASS' ? 'test-pass' : 'test-fail'}">${x.status}</td><td>${esc(x.name)}${x.status !== 'PASS' ? `<div class="msg">${esc(x.message)}</div>` : ''}</td><td style="width:60px;color:var(--muted)">${x.elapsed ? Number(x.elapsed).toFixed(1) + 's' : ''}</td></tr>`).join('')}</table>`).join('');
 }
 
 async function loadRuns() {
   const rs = await (await fetch('/api/runs')).json();
   const live = rs.find(r => r.status === 'running' || r.status === 'queued');
-  if (live && !current) watch(live.id);
+  if (live && !current) watchInline(live.id);   // a job is already running: show it here too, without leaving the page
   $('runs').innerHTML = rs.map(r => `<tr><td><a onclick="watch('${r.id}')">${new Date(r.started * 1000).toLocaleString()}</a></td><td>${r.mode}${r.spoke && r.spoke.name ? ' <span class="hint">' + esc(r.spoke.name) + '</span>' : ''}${r.user ? ' <span class="hint">by ' + esc(r.user) + '</span>' : ''}</td><td class="status ${r.status}">${r.status}${r.status === 'queued' && r.queue_position ? ' #' + r.queue_position : ''}</td><td>${esc(r.vpn || '')}</td><td>${esc(r.change_ticket || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">none yet</td></tr>';
 }
 
@@ -871,14 +926,108 @@ $('rm-go').onclick = async () => {
   const run = await r.json(); $('rm').hidden = true; watch(run.id);
 };
 
+// ---- jobs: the list, and a page per job -------------------------------------------------------------------------------
+const JOB_MODES = {
+  deploy: 'Deploy configuration', plan: 'Dry run (plan only)', test: 'Test run', spoke: 'Add a branch', hub: 'Add a headend',
+  remove: 'Remove a branch', rehome: 'Re-home a branch', rotate: 'Rotate a pre-shared key', renew: 'Renew a certificate',
+  auth: 'Change IKE authentication', golden: 'Golden Config', remediate: 'Remediate drift', reapply: 'Re-apply from the model',
+};
+const JOB_WHAT = {
+  deploy: 'the whole model pushed: Nautobot seed → NaC render → Terraform plan and staged apply → Golden Config → tests',
+  plan: 'the same pipeline, stopping after the Terraform plan — nothing is pushed',
+  test: 'the Robot Framework suites against the live lab',
+  spoke: 'lab.conf → VM → bootstrap → onboarding → intent → the deploy pipeline for the branch and its headends',
+  hub: 'the same for a new headend, linked to every branch',
+  remove: 'power off → Nautobot clean-up → intent and lab.conf → Terraform state → apply on the headends → delete the VM',
+  rehome: 'new links and tunnels allocated, dropped ones removed, then Terraform on the headends and the branch',
+  rotate: 'a new pre-shared key → intent → Nautobot fingerprint → Terraform → the SAs cleared and verified',
+  renew: 'a new CSR signed by the lab CA, imported, the SAs cleared and every tunnel back on RSA',
+  auth: 'the branch moves between pre-shared key and certificate: profiles, keyring, trustpoint, SAs',
+  golden: 'Nautobot Golden Config: backup → intended configuration → compliance (nothing is pushed)',
+  remediate: "Nautobot's remediation lines pushed over SSH and saved, then Golden Config again",
+  reapply: 'the model re-asserted on one router: NaC render → targeted plan and apply → Golden Config',
+};
+const jobLabel = m => JOB_MODES[m] || m;
+const jobTarget = r => (r.spoke && r.spoke.name) || (r.rehome && r.rehome.spoke) || '';
+const jobProgress = r => { const s = r.steps || []; return { done: s.filter(x => x.status === 'success').length, total: s.length, running: (s.find(x => x.status === 'running') || {}).title }; };
+let JOBS_ALL = [], jobsTimer = null, jobId = null;
+
+async function loadJobs() {
+  const rs = await (await fetch('/api/runs')).json(); JOBS_ALL = rs;
+  const modes = [...new Set(rs.map(r => r.mode))].sort();
+  const sel = $('jobs-mode'), keep = sel.value;
+  sel.innerHTML = '<option value="">any job</option>' + modes.map(m => `<option value="${esc(m)}">${esc(jobLabel(m))}</option>`).join('');
+  sel.value = keep;
+  const n = s => rs.filter(r => r.status === s).length;
+  $('jobs-kpis').innerHTML = [[n('running') + n('queued'), 'running or queued', n('running') + n('queued') ? 'run' : ''], [n('success'), 'succeeded', 'ok'],
+    [n('failed') + n('interrupted'), 'failed', n('failed') + n('interrupted') ? 'bad' : ''], [rs.length, 'jobs kept', ''],
+    [rs.filter(r => r.tests).reduce((a, r) => a + r.tests.total, 0), 'tests run in them', '']]
+    .map(([v, l, c]) => `<div class="kpi"><div class="v ${c === 'ok' ? 'test-pass' : c === 'bad' ? 'test-fail' : ''}" style="font-size:22px;font-weight:600">${esc(v)}</div><div class="hint">${esc(l)}</div></div>`).join('');
+  renderJobs();
+}
+
+function renderJobs() {
+  const st = $('jobs-status').value, md = $('jobs-mode').value, q = $('jobs-q').value.trim().toLowerCase();
+  const rows = JOBS_ALL.filter(r => (!st || r.status === st) && (!md || r.mode === md)
+    && (!q || [jobTarget(r), r.change_ticket, r.user, r.id, jobLabel(r.mode)].some(x => String(x || '').toLowerCase().includes(q))));
+  const op = can('operator');
+  $('jobs-table').querySelector('tbody').innerHTML = rows.map(r => {
+    const p = jobProgress(r), live = r.status === 'running' || r.status === 'queued';
+    const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    return `<tr><td style="white-space:nowrap"><a onclick="openJob('${esc(r.id)}')" title="open this job">${new Date(r.started * 1000).toLocaleString()}</a></td>
+      <td>${esc(jobLabel(r.mode))}${r.resume_of ? ' <span class="hint">(resumed)</span>' : ''}</td>
+      <td>${jobTarget(r) ? branchLink(jobTarget(r)) : '<span class="hint">the whole lab</span>'}</td>
+      <td style="white-space:nowrap"><span class="status ${r.status}">${r.status}${r.status === 'queued' && r.queue_position ? ' #' + r.queue_position : ''}</span></td>
+      <td style="min-width:150px">${p.total ? `<div class="bar" title="${p.done} of ${p.total} steps"><div class="${r.status === 'failed' || r.status === 'interrupted' ? 'fail' : ''}" style="width:${pct}%"></div></div><span class="hint">${p.done}/${p.total}${p.running ? ' · ' + esc(p.running) : ''}</span>` : ''}</td>
+      <td class="hint" style="white-space:nowrap">${r.finished ? dur(r.started, r.finished) : (live ? dur(r.started, Date.now() / 1000) + '…' : '')}</td>
+      <td>${esc(r.user || '')}</td><td>${esc(r.change_ticket || '')}</td>
+      <td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td>
+      <td style="white-space:nowrap"><button type="button" class="small" onclick="openJob('${esc(r.id)}')">Open</button>${r.status === 'queued' ? ` <button type="button" class="small" ${op ? '' : 'disabled title="operator role required"'} onclick="cancelRun('${esc(r.id)}')">Cancel</button>` : ''}${(r.status === 'failed' || r.status === 'interrupted') ? ` <button type="button" class="small" ${op ? '' : 'disabled title="operator role required"'} onclick="resumeRun('${esc(r.id)}')">Resume</button>` : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="10" class="hint">no job matches</td></tr>';
+  $('jobs-note').textContent = `${rows.length} of ${JOBS_ALL.length} job${JOBS_ALL.length === 1 ? '' : 's'} — every change this portal makes is a job, and jobs execute one at a time`;
+}
+
+function loadJob(id) {
+  if (jobId !== id) { jobId = id; $('job-title').textContent = 'Job ' + id; $('job-head').textContent = 'loading…'; $('job-steps').innerHTML = ''; $('job-kpis').innerHTML = ''; }
+  pollStart(id);
+}
+
+function renderJob(r) {
+  if (!r || r.id !== jobId) return;
+  const p = jobProgress(r), live = r.status === 'running' || r.status === 'queued', op = can('operator');
+  $('job-title').innerHTML = `${esc(jobLabel(r.mode))}${jobTarget(r) ? ' · ' + branchLink(jobTarget(r)) : ''}`;
+  $('job-sub').textContent = r.id;
+  $('job-head').innerHTML = `<span class="status ${r.status}">${r.status.toUpperCase()}</span> · ${esc(JOB_WHAT[r.mode] || '')}`
+    + (r.error ? `<div class="msg">${esc(r.error)}</div>` : '')
+    + (r.status === 'queued' ? `<div class="msg" style="margin-top:6px">Waiting: #${r.queue_position || '?'} in line${r.waiting_for ? ` behind <a onclick="openJob('${r.waiting_for}')">${esc(r.waiting_for)}</a>` : ''} — jobs execute one at a time (one Terraform state, one intent).</div>` : '');
+  $('job-kpis').innerHTML = [
+    [r.status, r.finished ? 'finished ' + fmtT(r.finished) : (r.status === 'queued' ? 'not started yet' : 'started ' + fmtT(r.started)), r.status === 'success' ? 'ok' : (r.status === 'failed' || r.status === 'interrupted') ? 'bad' : ''],
+    [`${p.done} / ${p.total}`, p.running ? 'steps · now: ' + p.running : 'steps completed', ''],
+    [r.finished ? dur(r.started, r.finished) : dur(r.started, Date.now() / 1000), live ? 'elapsed' : 'took', ''],
+    [r.user || '–', 'started by' + (r.resume_of ? ' (resumed)' : ''), ''],
+    [r.tests ? `${r.tests.passed} / ${r.tests.total}` : '–', 'tests passed', r.tests ? (r.tests.failed ? 'bad' : 'ok') : ''],
+  ].map(([v, l, c]) => `<div class="kpi"><div class="v ${c === 'ok' ? 'test-pass' : c === 'bad' ? 'test-fail' : ''}" style="font-size:20px;font-weight:600">${esc(v)}</div><div class="hint">${esc(l)}</div></div>`).join('');
+  $('job-actions').innerHTML = `${r.status === 'queued' ? `<button type="button" class="small" ${op ? '' : 'disabled title="operator role required"'} onclick="cancelRun('${r.id}')">Cancel</button>` : ''}
+    ${(r.status === 'failed' || r.status === 'interrupted') ? `<button type="button" class="small" ${op ? '' : 'disabled title="operator role required"'} onclick="resumeRun('${r.id}')">Resume from the failed step</button>` : ''}
+    ${r.results_dir ? `<a class="hint" href="/results/${r.results_dir}/" target="_blank">results</a>` : ''}
+    ${r.change_ticket ? `<span class="hint">ticket ${esc(r.change_ticket)}</span>` : ''}`;
+  $('job-steps').innerHTML = r.steps.map(s => `<li><span class="dot ${s.status}"></span><div class="t">${s.title}<div class="s">${esc(s.summary || '')}</div></div><span class="d">${s.status}${s.started ? ' · ' + dur(s.started, s.finished || Date.now() / 1000) : ''}</span></li>`).join('');
+  $('job-log-note').textContent = LOGBUF ? `${LOGBUF.split('\n').length - 1} lines` : (live ? 'waiting for output…' : 'no output');
+  setLog($('job-log'), LOGBUF);
+  if (r.tests) { $('job-testcard').hidden = false; renderTests(r, 'job-test-summary', 'job-test-links', 'job-test-suites'); }
+}
+
 // ---- views ----------------------------------------------------------------
 function showView() {
-  const h = (location.hash || '#provision').slice(1); const v = h.startsWith('branch/') ? 'branch' : h;
+  const h = (location.hash || '#provision').slice(1); const v = h.startsWith('branch/') ? 'branch' : h.startsWith('job/') ? 'job' : h;
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches'; $('view-compliance').hidden = v !== 'compliance';
-  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches')));
+  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches'; $('view-compliance').hidden = v !== 'compliance'; $('view-jobs').hidden = v !== 'jobs'; $('view-job').hidden = v !== 'job';
+  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches') || (a.dataset.view === 'jobs' && v === 'job')));
   if (v !== 'inventory' && typeof stopLive === 'function') stopLive();
+  if (v !== 'jobs') { clearInterval(jobsTimer); jobsTimer = null; }
   if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false); if (v === 'compliance') loadCompliance(false);
+  if (v === 'jobs') { loadJobs(); jobsTimer = setInterval(loadJobs, 5000); }
+  if (v === 'job') loadJob(decodeURIComponent(h.slice(4)));
 }
 const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open ${esc(n)}'s page">${esc(n)}</a>`;
 
@@ -922,9 +1071,9 @@ function showCompliance(dev, feature) {
 async function complianceRun(body, label) {
   const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) { const e = await r.json().catch(() => ({})); alert(typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.problems ? e.detail.problems.join('\n') : JSON.stringify(e.detail))); return; }
-  const run = await r.json(); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="location.hash='#provision';watch('${run.id}')">${esc(run.id)}</a> ${esc(run.status)} — the report refreshes when it finishes`;
+  const run = await r.json(); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="openJob('${run.id}')">${esc(run.id)}</a> ${esc(run.status)} — the report refreshes when it finishes`;
   document.querySelectorAll('#view-compliance button').forEach(b => b.disabled = true);
-  const wait = setInterval(async () => { const d = await (await fetch(`/api/runs/${run.id}`)).json(); if (['success', 'failed', 'cancelled', 'interrupted'].includes(d.status)) { clearInterval(wait); await loadCompliance(true); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="location.hash='#provision';watch('${run.id}')">${esc(run.id)}</a> <span class="status ${d.status}">${d.status.toUpperCase()}</span>${d.error ? ' — ' + esc(d.error) : ''} · ` + $('cmp-note').textContent; document.querySelectorAll('#view-compliance button').forEach(b => b.disabled = false); applyRoles(); } }, 5000);
+  const wait = setInterval(async () => { const d = await (await fetch(`/api/runs/${run.id}`)).json(); if (['success', 'failed', 'cancelled', 'interrupted'].includes(d.status)) { clearInterval(wait); await loadCompliance(true); $('cmp-note').innerHTML = `${esc(label)}: run <a onclick="openJob('${run.id}')">${esc(run.id)}</a> <span class="status ${d.status}">${d.status.toUpperCase()}</span>${d.error ? ' — ' + esc(d.error) : ''} · ` + $('cmp-note').textContent; document.querySelectorAll('#view-compliance button').forEach(b => b.disabled = false); applyRoles(); } }, 5000);
 }
 $('cmp-run').onclick = () => complianceRun({ mode: 'golden', options: {} }, 'Golden Config');
 function remediate(dev, features) {
@@ -1060,7 +1209,7 @@ async function loadBranch(name, refresh) {
   CFG = null; loadConfig(refresh);
   $('br-show-btns').innerHTML = SHOWS.map(([k, l]) => `<button type="button" class="small" data-what="${k}" onclick="loadShow('${k}', false)">${l}</button>`).join(' ') + ` <button type="button" class="small" onclick="const b = document.querySelector('#br-show-btns button.primary'); if (b) loadShow(b.dataset.what, true)" title="run the selected command again">↻</button>`;
   $('br-show').className = 'code hint'; $('br-show').textContent = 'pick a command'; loadShow('ike', false);
-  $('br-runs').querySelector('tbody').innerHTML = d.runs.map(r => `<tr><td>${new Date(r.started * 1000).toLocaleString()}</td><td><a onclick="location.hash='provision';watch('${r.id}')">${esc(r.mode)}</a></td><td class="status ${r.status}">${r.status}</td><td>${esc(r.user || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">none</td></tr>';
+  $('br-runs').querySelector('tbody').innerHTML = d.runs.map(r => `<tr><td>${new Date(r.started * 1000).toLocaleString()}</td><td><a onclick="openJob('${r.id}')">${esc(jobLabel(r.mode))}</a></td><td class="status ${r.status}">${r.status}</td><td>${esc(r.user || '')}</td><td>${r.tests ? `<span class="${r.tests.failed ? 'test-fail' : 'test-pass'}">${r.tests.passed}/${r.tests.total}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">none</td></tr>';
 }
 window.addEventListener('hashchange', showView);
 
@@ -1104,7 +1253,7 @@ async function loadAudit() {
     if (r.mode) bits.push(`<b>${esc(r.mode)}</b>`); if (sp.name) bits.push(esc(sp.name)); if (sp.hubs) bits.push('→ ' + sp.hubs.map(esc).join(', ')); if (sp.city) bits.push(esc(sp.city)); if (sp.psk) bits.push('key ' + esc(sp.psk));
     if (r.path && !r.mode) bits.push(`<span class="cred">${esc(r.method)} ${esc(r.path)}</span>`); if (r.options) bits.push(`<span class="hint">${esc(Object.entries(r.options).map(([k, v]) => k + '=' + v).join(' '))}</span>`); return bits.join(' '); };
   $('audit-table').querySelector('tbody').innerHTML = rows.map(r => `<tr><td class="cred">${esc(r.time)}</td><td><b>${esc(r.user || '-')}</b></td><td>${esc(r.role || '')}</td><td class="cred">${esc(r.ip || '')}</td><td>${esc(r.action)}</td><td>${what(r)}</td>
-      <td>${r.status != null ? `<span class="${r.status < 300 ? 'test-pass' : 'test-fail'}">${r.status}</span>` : ''}</td><td>${r.run_id ? `<a onclick="location.hash='provision';watch('${esc(r.run_id)}')">${esc(r.run_id)}</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">nothing yet</td></tr>';
+      <td>${r.status != null ? `<span class="${r.status < 300 ? 'test-pass' : 'test-fail'}">${r.status}</span>` : ''}</td><td>${r.run_id ? `<a onclick="openJob('${esc(r.run_id)}')">${esc(r.run_id)}</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="hint">nothing yet</td></tr>';
 }
 
 // ---- firewalls: rules with counters and the recent log, per firewall ------------------------------------------------

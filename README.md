@@ -104,9 +104,30 @@ and the portal streams each step's status and log.
   time; a second operator's run queues (cancellable until it starts).
 - **Deployment status**: steps with results, live log, parsed test report with links to the Robot
   report, log, per-router config backups and the pre/post diff. Runs are kept and a failed or
-  interrupted run can be **resumed from the failed step**.
+  interrupted run can be **resumed from the failed step**. Every run also has **its own page** —
+  see the Jobs tab below.
 
 ![Deployment status](docs/screenshots/portal-run.png)
+
+### Jobs tab — one page per job
+Every change the portal makes is a **job**: a deployment or dry run, adding or removing a branch, a re-home, a key
+rotation or certificate renewal, an authentication switch, Golden Config, a remediation, a re-apply or a test run.
+
+- **The list** (`#jobs`) shows the recent jobs newest first with what each one does, its target, its status, a
+  **progress bar with the step it is on**, how long it took (ticking while it runs), who started it, the change
+  ticket and the test result — filterable by status, by kind of job and by a search over router, ticket or user, and
+  it refreshes itself every five seconds.
+- **A job's own page** (`#job/<id>`) is where a running job is watched: what the job does, KPIs (status, steps done,
+  elapsed, who started it, tests passed), every step with its one-line summary and its duration, the **live log**
+  with a *follow* toggle, and the test report with links to `report.pdf`, `report.html`, `log.html`, the per-router
+  backups and the pre/post diff. A queued job shows its place in line and can be cancelled; a failed one can be
+  resumed from its failed step, and the page is a plain link you can share.
+
+Starting anything from anywhere in the portal — the Deploy button, a wizard, a day-2 action, a Compliance
+remediation — opens that job's page, and every job id in the Branches, Compliance and Audit pages links to it.
+
+![Jobs](docs/screenshots/portal-jobs.png)
+![A job's page](docs/screenshots/portal-job.png)
 
 ### Routers table — per-branch authentication and day-2 actions
 Every router row shows its **IKE authentication** (each branch chooses pre-shared key or certificate; a headend shows the

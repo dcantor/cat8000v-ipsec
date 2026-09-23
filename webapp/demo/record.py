@@ -121,7 +121,7 @@ with sync_playwright() as pw:
     caption(page, "Runs: every change is a pipeline run with live status, logs and a test report", "runs execute one at a time (one Terraform state, one intent) — a queued run shows its place in line and can be cancelled; a failed one resumes from the failed step")
     runs = page.evaluate("fetch('/api/runs').then(r => r.json())")
     ok = next((r for r in runs if r["status"] == "success" and r["mode"] in ("spoke", "hub", "auth", "deploy")), next((r for r in runs if r["status"] == "success"), runs[0]))
-    page.evaluate("id => watch(id)", ok["id"]); time.sleep(2.5); hold(page, 4)
+    page.evaluate("id => watchInline(id)", ok["id"]); time.sleep(2.5); hold(page, 4)
     note(page, "#steps", "each step: what it did, in one line — the full log below"); hold(page, 2.5); note_off(page)
     page.mouse.wheel(0, 500); time.sleep(0.5); hold(page, 2.5)
     page.evaluate("window.scrollTo(0, 0)"); time.sleep(0.3)
