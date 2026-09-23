@@ -103,6 +103,15 @@
       "city": "Los Angeles, CA",
       "lat": 34.0522,
       "lon": -118.2437,
+      "dns": {
+        "domain": "acme.local",
+        "hosts": {
+          "host-spoke1": "192.168.12.2",
+          "spoke1": "192.168.12.1",
+          "west-headend": "192.168.16.1",
+          "host-west": "192.168.16.2"
+        }
+      },
       "address": "6115 Harbor Dr, Suite 514, Los Angeles, CA 80823"
     },
     {
@@ -223,7 +232,20 @@
       "contact": "noc-west@lab.local",
       "city": "San Jose, CA",
       "lat": 37.3382,
-      "lon": -121.8863
+      "lon": -121.8863,
+      "nat": {
+        "inside_interface": "GigabitEthernet3",
+        "outside_interface": "GigabitEthernet2",
+        "dns_fixup": true,
+        "overlaps": [
+          {
+            "prefix": "192.168.12.0/24",
+            "inside_global": "172.31.12.0/24",
+            "outside_local": "172.30.12.0/24",
+            "description": "the acquired company reuses ACME's branch-1 LAN"
+          }
+        ]
+      }
     },
     {
       "name": "ACME-acquisition",
@@ -254,8 +276,20 @@
           "address": "10.60.0.1/24",
           "description": "acquisition services",
           "advertise": true
+        },
+        {
+          "name": "Loopback2",
+          "address": "192.168.12.2/24",
+          "description": "acquisition server on an overlapping prefix (same address as ACME's host-spoke1)",
+          "advertise": true,
+          "namespace": "acquisition"
         }
-      ]
+      ],
+      "dns_client": {
+        "server": "192.168.16.1",
+        "source_interface": "Loopback2",
+        "domain": "acme.local"
+      }
     },
     {
       "name": "fw-central",

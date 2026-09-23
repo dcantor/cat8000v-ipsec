@@ -89,7 +89,10 @@ class Device(BaseModel):
     psk_rotated: Optional[str] = Field(None, description="when the spoke's key was last rotated")
     ike_authentication: Optional[Literal["psk", "certificate"]] = Field(None, description="spokes only: how this spoke authenticates IKEv2 (chosen at provisioning, changeable later); unset = the lab default profile.ike.authentication")
     customer: Optional[Customer] = Field(None, description="spokes and partner routers: the customer this site belongs to (a Nautobot tenant; generated when missing)")
-    loopbacks: Optional[list[dict[str, Any]]] = Field(None, description="extra loopbacks the router originates besides Loopback0: [{name, address, description, advertise}] — the acquisition's service prefix")
+    loopbacks: Optional[list[dict[str, Any]]] = Field(None, description="extra loopbacks the router originates besides Loopback0: [{name, address, description, advertise, namespace}] — the acquisition's service prefix, and its server on a prefix that overlaps ACME's (its own Nautobot namespace)")
+    nat: Optional[dict[str, Any]] = Field(None, description="the DCI's twice-NAT for overlapping address space: {inside_interface, outside_interface, dns_fixup, overlaps: [{prefix, inside_global, outside_local, description}]}")
+    dns: Optional[dict[str, Any]] = Field(None, description="the DNS zone this router answers for: {domain, hosts: {name: address}} — the names the acquisition resolves through the DCI's NAT (with DNS fix-up)")
+    dns_client: Optional[dict[str, Any]] = Field(None, description="where this router resolves names: {server, source_interface, domain} — the acquisition asks ACME's server through the DCI, sourced from its translated address")
     address: Optional[str] = Field(None, description="headends only: the street address of ACME's regional site (the Nautobot location's physical address)")
 
 

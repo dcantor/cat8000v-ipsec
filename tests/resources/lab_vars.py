@@ -34,8 +34,12 @@ DIRECT_PEERINGS = intent_mod.direct_peerings(_I)
 EXTRA_LOOPBACKS = {n: intent_mod.extra_loopbacks(_I, n) for n in ALL_ROUTERS}
 _ACQ_PREFIXES = sorted([EDGE_ROUTERS[n]["lan"] for n in EDGE_NAMES if EDGE_ROUTERS[n]["role"] == "partner"] +
                        [str(ipaddress.IPv4Interface(lo["address"]).network) for n in EDGE_NAMES if EDGE_ROUTERS[n]["role"] == "partner" for lo in EXTRA_LOOPBACKS[n] if lo.get("advertise", True)])
-ACQUISITION_PREFIXES = _ACQ_PREFIXES                                          # what the acquired company originates
-ACQUISITION_IPS = [str(ipaddress.IPv4Network(p)[1]) for p in _ACQ_PREFIXES]   # the .1 of each: what a branch pings
+NAT = {n: intent_mod.nat(_I, n) for n in ALL_ROUTERS if intent_mod.nat(_I, n)}
+NAT_ROUTER = next(iter(NAT), None)
+OVERLAPS = NAT[NAT_ROUTER]["overlaps"] if NAT_ROUTER else []
+_OVERLAPPING = {ov["prefix"] for ov in OVERLAPS}                              # translated by the DCI, never advertised across it
+ACQUISITION_PREFIXES = [p for p in _ACQ_PREFIXES if p not in _OVERLAPPING]    # what the acquired company originates into the VPN
+ACQUISITION_IPS = [str(ipaddress.IPv4Network(p)[1]) for p in ACQUISITION_PREFIXES]   # the .1 of each: what a branch pings
 # VyOS firewalls: one per headend, between the headend (eth1) and its spokes (eth2..)
 LINKS = _I["links"]                                        # every WAN link of the intent (a, a_port, b, b_port, prefix)
 FIREWALLS = {d["name"]: {"host": d["mgmt_ip"], "hub": d["hub"], "region": d.get("region"), "site": d.get("site"), "bandwidth_mbps": int(d.get("bandwidth_mbps") or 0)} for d in _I["devices"] if d["role"] == "firewall"}
@@ -127,3 +131,10 @@ for _s in SPOKES:
 # the DCI chain hangs off one headend: its name (and the interconnect router), so a host behind it is expected to break out there
 DCI_UPLINK = next((p["b"] for p in DIRECT_PEERINGS if ALL_ROUTERS.get(p["a"], {}).get("role") == "hub"), None)
 DCI_UPLINK_HUB = next((p["a"] for p in DIRECT_PEERINGS if ALL_ROUTERS.get(p["a"], {}).get("role") == "hub"), None)
+
+# the DCI's twice-NAT: where the overlapping prefix is answered from on each side
+DNS_SERVER = next((n for n in ALL_ROUTERS if intent_mod.dns(_I, n)), None)
+DNS_ZONE = intent_mod.dns(_I, DNS_SERVER) if DNS_SERVER else {}
+DNS_CLIENT = {n: intent_mod.dns_client(_I, n) for n in ALL_ROUTERS if intent_mod.dns_client(_I, n)}
+
+INTENT_FILE = str(intent_mod.INTENT_FILE)   # the document every run round-trips through the API

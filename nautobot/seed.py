@@ -79,7 +79,7 @@ roles = {"hub": get_or_create(nb.extras.roles, {"name": "vpn-hub"}, color="e91e6
          "dci": get_or_create(nb.extras.roles, {"name": "vpn-dci"}, color="00bcd4", content_types=["dcim.device"]),
          "partner": get_or_create(nb.extras.roles, {"name": "partner-edge"}, color="9c27b0", content_types=["dcim.device"])}
 prole = {n: get_or_create(nb.extras.roles, {"name": n}, color=c, content_types=["ipam.prefix"])
-         for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"), ("service", "009688"))}
+         for n, c in (("oob-management", "9e9e9e"), ("wan-p2p", "607d8b"), ("vpn-tunnel", "3f51b5"), ("site-lan", "4caf50"), ("loopback", "795548"), ("service", "009688"), ("nat", "e91e63"))}
 tag_adv = get_or_create(nb.extras.tags, {"name": "bgp:advertise"}, color="ff5722", content_types=["ipam.prefix"])
 
 # site / device metadata as custom fields (site_code + contact on locations, contact on devices)
@@ -250,14 +250,26 @@ CTX = {"oob": I["oob"], "domain_name": I["domain_name"],
        # internet breakout: each firewall's uplink port (DHCP on the libvirt NAT network) masquerades the site LANs; only LAN -> uplink may cross
        # (rendered by render_vyos.py); the headend behind it holds a static default via the firewall and originates a default route to its spokes,
        # and every spoke prefers the nearest headend's default (render_nac.py: local preference per neighbour from `preference`)
+       # the DCI's twice-NAT for the prefixes that exist on both sides, and the DNS zone ACME answers for (keyed by hostname, like
+       # internet.preference): the NaC renderer and the Golden Config template render both from here, so pushed and expected agree
+       "nat": {d["name"]: intent_mod.nat(I, d["name"]) for d in I["devices"] if intent_mod.nat(I, d["name"])},
+       "dns": {d["name"]: intent_mod.dns(I, d["name"]) for d in I["devices"] if intent_mod.dns(I, d["name"])},
+       "dns_client": {d["name"]: intent_mod.dns_client(I, d["name"]) for d in I["devices"] if intent_mod.dns_client(I, d["name"])},
        "internet": {"enabled": bool(INET["enabled"]), "uplink": f"eth{INET['uplink_port']}", "nat_sources": sorted(d["lan"] for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES), "preference": INET["preference"]}}   # nat_sources: every site behind the VPN, the DCI chain included
 cc = nb.extras.config_contexts.get(name="c8000v-ipsec")
 if cc is None: nb.extras.config_contexts.create(name="c8000v-ipsec", weight=1000, data=CTX, locations=[site.id]); created.append("config-context:c8000v-ipsec")
 elif cc.data != CTX: cc.update({"data": CTX})
+for stale in ("c8000v-ipsec-nat-DCI", "c8000v-ipsec-dns-west-headend"):   # an earlier attempt at per-device contexts: this Nautobot has no scoping relations
+    x = nb.extras.config_contexts.get(name=stale)
+    if x: x.delete(); created.append(f"removed config-context:{stale}")
 
-def ensure_prefix(cidr, role, desc="", ptype="network"):
-    net = str(ipaddress.IPv4Network(cidr, strict=False)); pf = nb.ipam.prefixes.get(prefix=net, namespace=ns.id)
-    if pf is None: pf = nb.ipam.prefixes.create(prefix=net, namespace=ns.id, status=active.id, type=ptype); created.append(f"prefix:{net}")
+def ensure_namespace(name):
+    """A Nautobot namespace: address space that may overlap the lab's own (the acquired company behind the DCI)."""
+    return get_or_create(nb.ipam.namespaces, {"name": name}, description="address space of the acquired company reached over the DCI (overlaps ACME's)")
+def ensure_prefix(cidr, role, desc="", ptype="network", namespace=None):
+    nsid = (namespace or ns).id
+    net = str(ipaddress.IPv4Network(cidr, strict=False)); pf = nb.ipam.prefixes.get(prefix=net, namespace=nsid)
+    if pf is None: pf = nb.ipam.prefixes.create(prefix=net, namespace=nsid, status=active.id, type=ptype); created.append(f"prefix:{net}" + (f" ({namespace.name})" if namespace else ""))
     ensure(pf, role=role.id, description=desc, status=active.id, type=ptype); return pf
 def tag(pf):
     if tag_adv.id not in [t.id for t in pf.tags]: pf.update({"tags": [t.id for t in pf.tags] + [tag_adv.id]}); created.append(f"tag bgp:advertise on {pf.prefix}")
@@ -265,10 +277,12 @@ def ensure_iface(dev, name, itype, desc="", mgmt_only=False, vrf=None, enabled=T
     itf = nb.dcim.interfaces.get(device=dev.id, name=name)
     if itf is None: itf = nb.dcim.interfaces.create(device=dev.id, name=name, type=itype, status=active.id); created.append(f"interface:{dev.name}/{name}")
     ensure(itf, type=itype, description=desc, mgmt_only=mgmt_only, enabled=enabled, status=active.id, vrf=vrf, **({"mac_address": mac} if mac else {})); return itf
-def ensure_ip(itf, cidr, primary_of=None, exclusive=True):
-    """Address cidr on itf; other addresses of the same kind (same interface, exclusive) are unassigned so re-addressing works."""
-    ip = nb.ipam.ip_addresses.get(address=cidr, namespace=ns.id) or nb.ipam.ip_addresses.get(address=cidr.split("/")[0], namespace=ns.id)
-    if ip is None: ip = nb.ipam.ip_addresses.create(address=cidr, namespace=ns.id, status=active.id); created.append(f"ip:{cidr}")
+def ensure_ip(itf, cidr, primary_of=None, exclusive=True, namespace=None):
+    """Address cidr on itf; other addresses of the same kind (same interface, exclusive) are unassigned so re-addressing works.
+    `namespace` places it outside the lab's own address space (the acquired company's overlapping prefix)."""
+    nsid = (namespace or ns).id
+    ip = nb.ipam.ip_addresses.get(address=cidr, namespace=nsid) or nb.ipam.ip_addresses.get(address=cidr.split("/")[0], namespace=nsid)
+    if ip is None: ip = nb.ipam.ip_addresses.create(address=cidr, namespace=nsid, status=active.id); created.append(f"ip:{cidr}" + (f" ({namespace.name})" if namespace else ""))
     if str(ip.address) != cidr: ip.update({"address": cidr})
     if exclusive:
         for x in nb.ipam.ip_address_to_interface.filter(interface=itf.id):
@@ -332,9 +346,10 @@ for r in ROUTERS:
     # extra loopbacks: prefixes the router originates besides its LAN (the acquired company's service prefix)
     for lo in intent_mod.extra_loopbacks(I, r):
         itf = ensure_iface(dev, lo["name"], "virtual", lo.get("description", ""))
-        pf = ensure_prefix(str(ipaddress.IPv4Interface(lo["address"]).network), prole["service"], f"{r} {lo.get('description') or lo['name']}")
+        lns = ensure_namespace(lo["namespace"]) if lo.get("namespace") else None   # an overlapping prefix lives in its own namespace
+        pf = ensure_prefix(str(ipaddress.IPv4Interface(lo["address"]).network), prole["service"], f"{r} {lo.get('description') or lo['name']}", namespace=lns)
         if lo.get("advertise", True): tag(pf)
-        ensure_ip(itf, lo["address"])
+        ensure_ip(itf, lo["address"], namespace=lns)
     for itf in nb.dcim.interfaces.filter(device=dev.id, type="virtual"):   # a loopback the intent no longer has
         if itf.name != "Loopback0" and itf.name not in {lo["name"] for lo in intent_mod.extra_loopbacks(I, r)}:
             itf.delete(); created.append(f"removed {r}/{itf.name} (not in the intent)")
@@ -501,6 +516,13 @@ for dp in intent_mod.direct_peerings(I):
     for r, ep in eps.items():
         if bgp.peer_endpoint_address_families.get(peer_endpoint=ep.id, afi_safi="ipv4_unicast") is None:
             bgp.peer_endpoint_address_families.create(peer_endpoint=ep.id, afi_safi="ipv4_unicast"); created.append(f"bgp-endpoint-af:{r}/{dp['prefix']}")
+
+# the DCI's twice-NAT and ACME's DNS zone: per-device config contexts, and the translated ranges modelled as prefixes
+for r in ROUTERS:
+    nat_cfg = intent_mod.nat(I, r)
+    for ov in (nat_cfg or {}).get("overlaps", []):
+        ensure_prefix(ov["inside_global"], prole["nat"], f"{r}: the acquired company's {ov['prefix']} as ACME sees it (NAT inside global)")
+        ensure_prefix(ov["outside_local"], prole["nat"], f"{r}: ACME's {ov['prefix']} as the acquired company sees it (NAT outside local)")
 
 # unused autonomous systems (after an AS change) are removed
 for x in bgp.autonomous_systems.all():

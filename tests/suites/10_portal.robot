@@ -139,6 +139,20 @@ The Compliance page reports Nautobot's Golden Config verdict for every router an
     Should Be Equal    ${after}[history][-1][at]    ${after}[summary][last_compliance]    msg=the run was not recorded in the drift history
     Should Be Equal As Integers    ${after}[history][-1][devices_ok]    ${after}[history][-1][devices]
 
+The API describes every field of the intent: a round trip through it loses nothing
+    [Documentation]    Several run modes save the intent the caller posted, and the portal serialises it through the REST schema —
+    ...    a field the schema does not know is silently dropped and the model loses it (that is how the DCI's NAT and DNS settings
+    ...    disappeared once). Whatever is in lab-intent.json must survive GET /api/intent.
+    ${api}=    Portal Get    /api/intent
+    ${disk}=    Evaluate    json.load(open($INTENT_FILE))    modules=json
+    ${served}=    Evaluate    {d['name']: d for d in $api['intent']['devices']}
+    FOR    ${d}    IN    @{disk}[devices]
+        ${lost}=    Evaluate    sorted(set($d) - set($served[$d['name']]))
+        Should Be Empty    ${lost}    msg=${d}[name]: the API drops ${lost} — add the field to webapp/schemas.py
+    END
+    ${top}=    Evaluate    sorted(set($disk) - set($api['intent']))
+    Should Be Empty    ${top}    msg=the API drops the top-level keys ${top}
+
 Provisioning a new router can register it in lab.conf: every array the pipeline rewrites is found and reads back
     [Documentation]    The first step of a spoke / headend run writes the new router into lab.conf's arrays. They are wrapped over
     ...    several lines (every router has a LAN host), so the rewriter has to span lines — this is a dry run of that rewrite on

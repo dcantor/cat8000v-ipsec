@@ -200,6 +200,27 @@ def direct_peerings(I):
     return out
 
 
+def nat(I, name):
+    """The NAT the router performs, when it does any: which interface faces the acquired company (inside) and which ACME (outside),
+    and one entry per overlapping prefix — what the inside hosts look like to ACME (inside_global) and what ACME's hosts look like to
+    the inside (outside_local). `dns_fixup` lets the NAT rewrite the addresses inside DNS replies as well."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("nat")
+
+
+def dns(I, name):
+    """The DNS zone this router serves (ACME's own names), or None."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("dns")
+
+
+def dns_client(I, name):
+    """Where this router sends its DNS queries and which interface it sources them from (the acquired company asks ACME's server
+    through the DCI, so the NAT can rewrite the addresses in the replies)."""
+    d = next((x for x in I["devices"] if x["name"] == name), None) or {}
+    return d.get("dns_client")
+
+
 def extra_loopbacks(I, name):
     """Loopbacks a router carries besides Loopback0 (the acquisition's advertised service prefix)."""
     d = next((x for x in I["devices"] if x["name"] == name), None) or {}

@@ -83,7 +83,12 @@ I = intent_mod.load(); pki = I["profile"].get("pki") or {}
 CRYPTO = "crypto ikev2 proposal\ncrypto ikev2 policy\ncrypto ikev2 profile\ncrypto ipsec transform-set\ncrypto ipsec profile"
 if (I["profile"].get("ike") or {}).get("authentication") == "certificate":   # the trustpoint and the certificate map join the crypto feature (never the keyring: the template holds no secrets)
     CRYPTO += f"\ncrypto pki trustpoint {pki.get('trustpoint', 'LAB-CA')}\ncrypto pki certificate map {pki.get('certificate_map', 'LAB-CERT-MAP')}"
-for slug, fname, match in (("wan-interface", "WAN interface", "interface GigabitEthernet2\ninterface GigabitEthernet3"), ("crypto", "Crypto", CRYPTO)):
+# the DCI's twice-NAT for the overlapping prefix and the DNS that goes with it (the zone ACME answers for, the resolver the
+# acquired company asks through the NAT): compared like everything else, so a hand-edit shows up as drift
+NAT = "\n".join(["ip nat inside source", "ip nat outside source", "ip prefix-list OVERLAP", "route-map NO-OVERLAP"])
+DNS = "\n".join(["ip dns server", "ip host", "ip name-server", "ip domain lookup"])
+for slug, fname, match in (("wan-interface", "WAN interface", "interface GigabitEthernet2\ninterface GigabitEthernet3"), ("crypto", "Crypto", CRYPTO),
+                           ("nat", "NAT (DCI)", NAT), ("dns", "DNS", DNS)):
     feat = gc.compliance_feature.get(slug=slug) or gc.compliance_feature.create(slug=slug, name=fname, description=f"{fname} (from Nautobot)")
     rule = gc.compliance_rule.get(feature=feat.id, platform=plat.id)
     if rule is None:

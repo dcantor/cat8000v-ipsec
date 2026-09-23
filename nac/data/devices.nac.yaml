@@ -3,6 +3,22 @@
 # Source of truth: http://10.0.0.10:8080 (location c8000v-ipsec-lab, saved GraphQL query nac-c8000v-ipsec-model)
 iosxe:
   templates:
+  - name: dns_client_ACME-acquisition
+    type: cli
+    content: 'ip name-server 192.168.16.1
+
+      ip domain lookup source-interface Loopback2
+
+      '
+  - name: nat_DCI
+    type: cli
+    content: 'ip nat inside source static network 192.168.12.0 172.31.12.0 /24
+
+      ip nat outside source static network 192.168.12.0 172.30.12.0 /24
+
+      ip nat service all-algs
+
+      '
   - name: mss_central-headend_tunnel4
     type: cli
     content: "interface Tunnel4\n ip tcp adjust-mss 1360\n"
@@ -83,13 +99,29 @@ iosxe:
     type: cli
     content: "crypto ikev2 profile VPN-IKEV2\n match certificate LAB-CERT-MAP\n identity local dn\n authentication remote\
       \ rsa-sig\n authentication local rsa-sig\n pki trustpoint LAB-CA\n"
+  - name: dns_west-headend
+    type: cli
+    content: 'ip dns server
+
+      ip domain name acme.local
+
+      ip host host-spoke1.acme.local 192.168.12.2
+
+      ip host host-west.acme.local 192.168.16.2
+
+      ip host spoke1.acme.local 192.168.12.1
+
+      ip host west-headend.acme.local 192.168.16.1
+
+      '
   devices:
   - name: ACME-acquisition
     host: 10.2.0.20
     protocol: restconf
     device_groups:
     - IPSEC_VPN
-    templates: []
+    templates:
+    - dns_client_ACME-acquisition
     variables:
       router_id: 10.255.1.9
       bgp_asn: 65209
@@ -97,6 +129,7 @@ iosxe:
       system:
         hostname: ACME-acquisition
         ip_domain_name: lab.local
+        ip_domain_lookup: true
       interfaces:
         ethernets:
         - type: GigabitEthernet
@@ -132,6 +165,11 @@ iosxe:
           ipv4:
             address: 10.60.0.1
             address_mask: 255.255.255.0
+        - id: 2
+          description: acquisition server on an overlapping prefix (same address as ACME's host-spoke1)
+          ipv4:
+            address: 192.168.12.2
+            address_mask: 255.255.255.0
         tunnels: []
       routing:
         bgp:
@@ -152,13 +190,15 @@ iosxe:
                 mask: 255.255.255.255
               - network: 10.60.0.0
                 mask: 255.255.255.0
+              - network: 192.168.12.0
               - network: 192.168.30.0
   - name: DCI
     host: 10.2.0.19
     protocol: restconf
     device_groups:
     - IPSEC_VPN
-    templates: []
+    templates:
+    - nat_DCI
     variables:
       router_id: 10.255.1.8
       bgp_asn: 65208
@@ -176,6 +216,7 @@ iosxe:
           ipv4:
             address: 100.64.20.2
             address_mask: 255.255.255.252
+            nat_outside: true
         - type: GigabitEthernet
           id: '3'
           description: WAN to ACME-acquisition GigabitEthernet2
@@ -184,6 +225,7 @@ iosxe:
           ipv4:
             address: 100.64.21.1
             address_mask: 255.255.255.252
+            nat_inside: true
         - type: GigabitEthernet
           id: '4'
           shutdown: true
@@ -202,6 +244,25 @@ iosxe:
             address: 10.255.1.8
             address_mask: 255.255.255.255
         tunnels: []
+      prefix_lists:
+      - name: OVERLAP
+        description: 'prefixes that exist on both sides of the DCI: translated, not advertised'
+        seqs:
+        - seq: 5
+          action: permit
+          prefix: 192.168.12.0/24
+      route_maps:
+      - name: NO-OVERLAP
+        entries:
+        - seq: 10
+          operation: deny
+          description: the overlapping prefixes stay on their own side of the NAT
+          match:
+            ipv4_address_prefix_lists:
+            - OVERLAP
+        - seq: 20
+          operation: permit
+          description: everything else is advertised normally
       routing:
         bgp:
           as_number: 65208
@@ -219,12 +280,36 @@ iosxe:
               neighbors:
               - ip: 100.64.20.1
                 activate: true
+                route_maps:
+                - direction: out
+                  name: NO-OVERLAP
+                - direction: in
+                  name: NO-OVERLAP
               - ip: 100.64.21.2
                 activate: true
+                route_maps:
+                - direction: out
+                  name: NO-OVERLAP
               networks:
               - network: 10.255.1.8
                 mask: 255.255.255.255
+              - network: 172.30.12.0
+                mask: 255.255.255.0
+              - network: 172.31.12.0
+                mask: 255.255.255.0
               - network: 192.168.31.0
+        static_routes:
+        - prefix: 172.31.12.0
+          mask: 255.255.255.0
+          next_hops:
+          - interface_type: 'Null'
+            interface_id: '0'
+            name: nat-inside-global
+        - prefix: 172.30.12.0
+          mask: 255.255.255.0
+          next_hops:
+          - ip: 100.64.20.1
+            name: nat-outside-local
   - name: central-headend
     host: 10.2.0.15
     protocol: restconf
@@ -1467,6 +1552,7 @@ iosxe:
     - mss_west-headend_tunnel10
     - mss_west-headend_tunnel11
     - ikev2_cert_auth_west-headend
+    - dns_west-headend
     variables:
       router_id: 10.255.1.7
       bgp_asn: 65206

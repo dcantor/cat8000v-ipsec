@@ -1,0 +1,322 @@
+! spoke2 (10.2.0.13) show startup-config captured 2026-09-22 17:47:13
+Using 6230 out of 33554432 bytes
+!
+! Last configuration change at 15:46:32 UTC Tue Sep 22 2026 by admin
+!
+version 17.15
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+platform qfp utilization monitor load 80
+platform sslvpn use-pd
+platform console serial
+!
+hostname spoke2
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+!
+logging buffered 64000 informational
+aaa new-model
+!
+!
+aaa authentication login default local
+aaa authorization exec default local 
+!
+!
+aaa session-id common
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+no ip domain lookup
+ip domain name lab.local
+!
+!
+!
+login on-failure log
+login on-success log
+!
+!
+subscriber templating
+!
+! 
+! 
+! 
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+crypto pki trustpoint TP-self-signed-1794135035
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-1794135035
+ revocation-check none
+ rsakeypair TP-self-signed-1794135035
+ hash sha512
+!
+crypto pki trustpoint SLA-TrustPoint
+ enrollment pkcs12
+ revocation-check crl
+ hash sha512
+!
+!
+crypto pki certificate chain TP-self-signed-1794135035
+ certificate self-signed 01 nvram:IOS-Self-Sig#1.cer
+crypto pki certificate chain SLA-TrustPoint
+ certificate ca 01 nvram:CiscoLicensi#1CA.cer
+!
+!
+!
+!
+!
+!
+!
+!
+!
+license udi pid C8000V sn 98LHKUH591K
+license boot level network-advantage addon dna-advantage
+memory free low-watermark processor 31774
+diagnostic bootup level minimal
+!
+!
+spanning-tree extend system-id
+!
+!
+enable secret 9 $9$0Q4o1OyhaoZ9TU$sOqw2W60ulmN3KZ6zckANceLwUudxN6RX34iTRyXaec
+!
+username admin privilege 15 secret 9 $9$QWBIPSn4X1JQuU$nRJccToUvjNEj82ZwZsMOWnP0s5pPfBPbvMzwZI9YkQ
+!
+redundancy
+!
+!
+!
+crypto ikev2 proposal VPN-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy VPN-POL 
+ proposal VPN-PROP
+!
+crypto ikev2 keyring VPN-KEYRING
+ peer central-headend
+  address 100.64.2.2
+  pre-shared-key 7Dqu11eNUIWIx5OAWpA5nPzv
+ !
+ peer west-headend
+  address 100.64.3.2
+  pre-shared-key 7Dqu11eNUIWIx5OAWpA5nPzv
+ !
+!
+!
+crypto ikev2 profile VPN-IKEV2-PSK
+ match identity remote address 100.64.2.2 255.255.255.255 
+ match identity remote address 100.64.3.2 255.255.255.255 
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local VPN-KEYRING
+ dpd 20 3 on-demand
+!
+!
+!
+cdp run
+!
+lldp run
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+crypto ipsec transform-set VPN-TS esp-aes 256 esp-sha256-hmac 
+ mode tunnel
+!
+crypto ipsec profile VPN-IPSEC-PSK
+ set transform-set VPN-TS 
+ set ikev2-profile VPN-IKEV2-PSK
+!
+!
+!
+!
+!
+!
+! 
+! 
+!
+!
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.3 255.255.255.255
+!
+interface Tunnel5
+ description IPsec VTI to central-headend
+ ip address 172.17.5.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet3
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.2.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface Tunnel9
+ description IPsec VTI to west-headend
+ ip address 172.17.9.2 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet4
+ tunnel mode ipsec ipv4
+ tunnel destination 100.64.3.2
+ tunnel protection ipsec profile VPN-IPSEC-PSK
+!
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.13 255.255.255.0
+ negotiation auto
+!
+interface GigabitEthernet2
+ no ip address
+ shutdown
+ negotiation auto
+!
+interface GigabitEthernet3
+ description WAN to fw-central eth3
+ ip address 100.65.5.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet4
+ description WAN to fw-west eth2
+ ip address 100.65.9.2 255.255.255.252
+ negotiation auto
+ cdp enable
+!
+interface GigabitEthernet5
+ description site LAN 192.168.23.0/24 (host-spoke2 eth1)
+ ip address 192.168.23.1 255.255.255.0
+ negotiation auto
+ cdp enable
+!
+router bgp 65202
+ bgp router-id 10.255.1.3
+ bgp log-neighbor-changes
+ neighbor 172.17.5.1 remote-as 65204
+ neighbor 172.17.5.1 description eBGP central-headend (Tunnel5)
+ neighbor 172.17.9.1 remote-as 65206
+ neighbor 172.17.9.1 description eBGP west-headend (Tunnel9)
+ !
+ address-family ipv4
+  network 10.255.1.3 mask 255.255.255.255
+  network 192.168.23.0
+  neighbor 172.17.5.1 activate
+  neighbor 172.17.5.1 route-map BREAKOUT-central-headend in
+  neighbor 172.17.9.1 activate
+  neighbor 172.17.9.1 route-map BREAKOUT-west-headend in
+ exit-address-family
+!
+ip forward-protocol nd
+!
+no ip http server
+ip http authentication local
+ip http secure-server
+ip route 100.64.2.2 255.255.255.255 100.65.5.1 name via-fw-central
+ip route 100.64.3.2 255.255.255.255 100.65.9.1 name via-fw-west
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+ip ssh bulk-mode 131072
+ip ssh time-out 60
+ip ssh rsa keypair-name SSH-KEY
+!
+ip prefix-list DEFAULT-ROUTE description the default route the headends originate (internet breakout)
+ip prefix-list DEFAULT-ROUTE seq 5 permit 0.0.0.0/0
+!
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log
+!
+route-map BREAKOUT-central-headend permit 10 
+ description default route from central-headend (internet breakout; the nearest headend wins on local-preference)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference 200
+!
+route-map BREAKOUT-central-headend permit 20 
+ description everything else unchanged
+!
+route-map BREAKOUT-west-headend permit 10 
+ description default route from west-headend (internet breakout; the nearest headend wins on local-preference)
+ match ip address prefix-list DEFAULT-ROUTE
+ set local-preference 150
+!
+route-map BREAKOUT-west-headend permit 20 
+ description everything else unchanged
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+mgcp behavior rsip-range tgcp-only
+mgcp behavior comedia-role none
+mgcp behavior comedia-check-media-src disable
+mgcp behavior comedia-sdp-force disable
+!
+mgcp profile default
+!
+!
+!
+!
+!
+banner motd ^CC8000v IPsec VTI lab - managed by Network-as-Code (Terraform).^C
+!
+line con 0
+ exec-timeout 0 0
+ activation-character 13
+ logging synchronous
+ stopbits 1
+line aux 0
+ activation-character 13
+line vty 0 4
+ access-class MGMT-ACCESS in vrf-also
+ activation-character 13
+ logging synchronous
+ transport input ssh
+!
+!
+!
+!
+!
+!
+!
+netconf-yang
+restconf
+end
+

@@ -115,6 +115,34 @@ def cert_auth_cli(prof):
     return (f"crypto ikev2 profile {ios['ikev2_profile']}\n match certificate {ios['certificate_map']}\n identity local dn\n"
             f" authentication remote rsa-sig\n authentication local rsa-sig\n pki trustpoint {ios['trustpoint']}\n")
 
+def nat_cli(cfg, peer_ip):
+    """The twice-NAT the iosxe provider cannot express (its nat resource knows interface overload only): one pair of static network
+    translations per overlapping prefix — the inside hosts as ACME sees them (inside global) and ACME's hosts as the inside sees them
+    (outside local) — plus the DNS ALG, which rewrites the addresses inside DNS replies that cross the NAT (`dns_fixup`)."""
+    out = []
+    for ov in cfg.get("overlaps", []):
+        ilocal = ipaddress.IPv4Network(ov["prefix"]); iglobal = ipaddress.IPv4Network(ov["inside_global"]); olocal = ipaddress.IPv4Network(ov["outside_local"])
+        out += [f"ip nat inside source static network {ilocal.network_address} {iglobal.network_address} /{ilocal.prefixlen}",
+                f"ip nat outside source static network {ilocal.network_address} {olocal.network_address} /{ilocal.prefixlen} no-payload" if not cfg.get("dns_fixup", True)
+                else f"ip nat outside source static network {ilocal.network_address} {olocal.network_address} /{ilocal.prefixlen}"]
+    out.append("ip nat service all-algs" if cfg.get("dns_fixup", True) else "no ip nat service dns tcp\nno ip nat service dns udp")
+    return "\n".join(out) + "\n"
+
+
+def dns_client_cli(cfg):
+    """The resolver settings of a router that looks ACME's names up through the DCI (its queries are sourced from the address the
+    NAT translates, so the replies come back doctored)."""
+    return "\n".join([f"ip name-server {cfg['server']}", f"ip domain lookup source-interface {cfg['source_interface']}"]) + "\n"
+
+
+def dns_cli(cfg):
+    """ACME's own names, answered by this router (the acquired company resolves them through the DCI, whose NAT doctors the replies)."""
+    out = ["ip dns server", f"ip domain name {cfg.get('domain', 'lab.local')}"]
+    for host, addr in sorted((cfg.get("hosts") or {}).items()):
+        out.append(f"ip host {host}.{cfg.get('domain', 'lab.local')} {addr}")
+    return "\n".join(out) + "\n"
+
+
 def crypto_model(profiles, dev):
     """NAC crypto: block from the VPN profiles this router's tunnels use (one per IKE authentication method; each has one Phase 1 and one
     Phase 2 policy, the proposal / policy / transform-set names are shared). PSK profile: a keyring with one entry per far end on it and a
@@ -145,6 +173,7 @@ def crypto_model(profiles, dev):
 def render(dev):
     name, ctx = dev["name"], dev["config_context"] or {}
     ethernets, loopbacks, tunnels, networks, templates, router_id, profiles, templates_vpn = [], [], [], [], [], None, {}, []
+    nat_cfg = (ctx.get("nat") or {}).get(name); dns_cfg = (ctx.get("dns") or {}).get(name); dnsc_cfg = (ctx.get("dns_client") or {}).get(name)
     for i in dev["interfaces"]:
         ips = i["ip_addresses"]
         n = i["name"]
@@ -158,8 +187,10 @@ def render(dev):
             classful = pfx.prefixlen == 24 and 192 <= int(str(pfx.network_address).split(".")[0]) <= 223
             networks.append({"network": str(pfx.network_address)} if classful else {"network": str(pfx.network_address), "mask": str(pfx.netmask)})
         if n.startswith("GigabitEthernet") and n != "GigabitEthernet1":
+            # the DCI's two sides: the acquired company is "inside", ACME is "outside" (config context `nat`)
+            natflags = {"nat_inside": True} if n == (nat_cfg or {}).get("inside_interface") else ({"nat_outside": True} if n == (nat_cfg or {}).get("outside_interface") else {})
             ethernets.append({"type": "GigabitEthernet", "id": n[15:], "description": i["description"], "shutdown": not i["enabled"], "cdp": True,
-                              "ipv4": {"address": ip, "address_mask": mask}})
+                              "ipv4": {"address": ip, "address_mask": mask, **natflags}})
         elif n.startswith("Loopback"):
             loopbacks.append({"id": int(n[8:]), "description": i["description"], "ipv4": {"address": ip, "address_mask": mask}})
             if n == "Loopback0": router_id = ip
@@ -176,11 +207,23 @@ def render(dev):
     inet = ctx.get("internet") or {}; breakout = bool(inet.get("enabled")); is_hub = norm((dev.get("role") or {}).get("name", "")) == "VPN_HUB"
     pref_order = (inet.get("preference") or {}).get(name) or []
     neighbors, afn, route_maps, prefix_lists = [], [], [], []
+    # the DCI's two sides, by the subnet each session runs on: the acquired company (inside) and ACME (outside)
+    def side_peer(side):
+        i2 = next((x for x in dev["interfaces"] if x["name"] == (nat_cfg or {}).get(side) and x.get("ip_addresses")), None)
+        if not i2: return None
+        net = ipaddress.IPv4Interface(i2["ip_addresses"][0]["address"]).network
+        return next((ep["peer"]["source_ip"]["address"].split("/")[0] for ep in ri["endpoints"]
+                     if ep.get("peer") and ipaddress.IPv4Address(ep["peer"]["source_ip"]["address"].split("/")[0]) in net), None)
+    inside_peer, outside_peer = (side_peer("inside_interface"), side_peer("outside_interface")) if nat_cfg else (None, None)
     for ep in sorted(ri["endpoints"], key=lambda e: e["peer"]["source_ip"]["address"] if e["peer"] else ""):
         if not ep["enabled"] or not ep["peer"]: continue
         peer_ip = ep["peer"]["source_ip"]["address"].split("/")[0]; peer_dev = ((ep["peer"].get("routing_instance") or {}).get("device") or {}).get("name")
         neighbors.append({"ip": peer_ip, "remote_as": ep["peer"]["autonomous_system"]["asn"], "description": ep["description"]})
         af = {"ip": peer_ip, "activate": True}
+        if nat_cfg and peer_ip in (inside_peer, outside_peer):
+            # neither side may learn the other's copy of the overlapping prefix: it is filtered out and the translated range
+            # (advertised below) is announced instead, so every router keeps exactly one path per prefix
+            af["route_maps"] = [{"direction": "out", "name": "NO-OVERLAP"}] + ([{"direction": "in", "name": "NO-OVERLAP"}] if peer_ip == outside_peer else [])
         if breakout and is_hub: af["default_originate"] = True
         if breakout and not is_hub and peer_dev in pref_order:
             rm = f"BREAKOUT-{peer_dev}"; af["route_maps"] = [{"direction": "in", "name": rm}]
@@ -191,11 +234,32 @@ def render(dev):
                                                         "match": {"ipv4_address_prefix_lists": ["DEFAULT-ROUTE"]}, "set": {"local_preference": 200 - 50 * pref_order.index(peer_dev)}},
                                                        {"seq": 20, "operation": "permit", "description": "everything else unchanged"}]})
         afn.append(af)
-    if route_maps: prefix_lists.append({"name": "DEFAULT-ROUTE", "description": "the default route the headends originate (internet breakout)", "seqs": [{"seq": 5, "action": "permit", "prefix": "0.0.0.0/0"}]})
+    nat_statics = []
+    if nat_cfg:
+        templates.append({"name": f"nat_{name}", "type": "cli", "content": nat_cli(nat_cfg, outside_peer)})
+        ov_prefixes = [ipaddress.IPv4Network(ov["prefix"]) for ov in nat_cfg.get("overlaps", [])]
+        prefix_lists.append({"name": "OVERLAP", "description": "prefixes that exist on both sides of the DCI: translated, not advertised",
+                             "seqs": [{"seq": 5 + 5 * i, "action": "permit", "prefix": str(p2)} for i, p2 in enumerate(ov_prefixes)]})
+        route_maps.append({"name": "NO-OVERLAP", "entries": [{"seq": 10, "operation": "deny", "description": "the overlapping prefixes stay on their own side of the NAT",
+                                                              "match": {"ipv4_address_prefix_lists": ["OVERLAP"]}},
+                                                             {"seq": 20, "operation": "permit", "description": "everything else is advertised normally"}]})
+        for ov in nat_cfg.get("overlaps", []):
+            ig, ol = ipaddress.IPv4Network(ov["inside_global"]), ipaddress.IPv4Network(ov["outside_local"])
+            # inside global: advertised to ACME; the packets themselves are translated before the routing lookup, so a Null0 route is enough
+            nat_statics.append({"prefix": str(ig.network_address), "mask": str(ig.netmask), "next_hops": [{"interface_type": "Null", "interface_id": "0", "name": "nat-inside-global"}]})
+            # outside local: a packet from the inside is routed *before* it is translated, so this one points at ACME
+            if outside_peer: nat_statics.append({"prefix": str(ol.network_address), "mask": str(ol.netmask), "next_hops": [{"ip": outside_peer, "name": "nat-outside-local"}]})
+            networks += [{"network": str(ig.network_address), "mask": str(ig.netmask)}, {"network": str(ol.network_address), "mask": str(ol.netmask)}]
+    if dns_cfg: templates.append({"name": f"dns_{name}", "type": "cli", "content": dns_cli(dns_cfg)})
+    if dnsc_cfg: templates.append({"name": f"dns_client_{name}", "type": "cli", "content": dns_client_cli(dnsc_cfg)})
+    if breakout and not is_hub and pref_order: prefix_lists.append({"name": "DEFAULT-ROUTE", "description": "the default route the headends originate (internet breakout)", "seqs": [{"seq": 5, "action": "permit", "prefix": "0.0.0.0/0"}]})
     bgp = {"as_number": ri["autonomous_system"]["asn"], "router_id": ri["router_id"]["address"].split("/")[0],
            "log_neighbor_changes": bool((ri["extra_attributes"] or {}).get("log_neighbor_changes", True)), "neighbors": neighbors,
            "address_family": {"ipv4_unicast": {"neighbors": afn, "networks": sorted(networks, key=lambda x: (x.get("mask") != "255.255.255.255", ipaddress.IPv4Address(x["network"])))}}}
-    statics = static_routes(dev)
+    # the DCI's twice-NAT: the CLI template, the routes the translated ranges need, and the filters that keep each side's copy of the
+    # overlapping prefix at home (ACME must not learn the acquired company's 192.168.12.0/24 and the other way round — each side is
+    # given the translated range instead, so neither router ever has two paths for one prefix)
+    statics = static_routes(dev) + nat_statics
     if breakout and is_hub:   # the headend's own default: via its firewall (the far end of its WAN link), which NATs
         wan = next((i for i in dev["interfaces"] if (i.get("connected_interface") or {}).get("device", {}).get("role", {}).get("name") == "vpn-firewall" and i.get("ip_addresses")), None)
         if wan: statics.append({"prefix": "0.0.0.0", "mask": "0.0.0.0", "next_hops": [{"ip": wan["connected_interface"]["ip_addresses"][0]["address"].split("/")[0], "name": f"internet-via-{wan['connected_interface']['device']['name']}"}]})
@@ -203,7 +267,7 @@ def render(dev):
     return {"name": name, "host": dev["primary_ip4"]["address"].split("/")[0], "protocol": "restconf", "device_groups": [group],
             "templates": [t["name"] for t in templates], "_templates": templates,
             "variables": {"router_id": router_id, "bgp_asn": ri["autonomous_system"]["asn"]},
-            "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name")},
+            "configuration": {"system": {"hostname": name, "ip_domain_name": ctx.get("domain_name"), **({"ip_domain_lookup": True} if dnsc_cfg else {})},
                               **({"crypto": crypto_model(profiles, dev)} if profiles else {}),
                               "interfaces": {"ethernets": sorted(ethernets, key=lambda e: e["id"]), "loopbacks": loopbacks, "tunnels": sorted(tunnels, key=lambda t: int(t["name"]))},
                               **({"prefix_lists": prefix_lists} if prefix_lists else {}), **({"route_maps": route_maps} if route_maps else {}),

@@ -378,6 +378,31 @@ renders them from the same file — both are **17/17 compliant** like every othe
 The portal draws the chain in both topology views — on the map at its cities (San Jose, Portland) and in the schematic as its own
 row — with **dashed links** and the AS pair, so it reads differently from an IPsec tunnel at a glance:
 
+### Overlapping address space: twice-NAT and DNS fix-up on the DCI
+
+An acquired company brings its own addressing, and some of it collides with ACME's. The lab models that: `ACME-acquisition` runs a
+server on **192.168.12.2/24** — the same prefix *and* the same address as ACME's branch-1 LAN and the host behind spoke1. The
+overlapping prefix lives in its own **Nautobot namespace** (`acquisition`), because it is not ACME's address space.
+
+The DCI hides the collision with a **twice-NAT** (`ip nat inside` towards the acquisition, `ip nat outside` towards ACME):
+
+| Seen from | Address | Translated on the DCI to |
+|---|---|---|
+| ACME | the acquisition's server | `172.31.12.2` (inside global) → `192.168.12.2` |
+| the acquisition | ACME's host-spoke1 | `172.30.12.2` (outside local) → `192.168.12.2` |
+
+Neither side ever learns the other's copy: a prefix-list `OVERLAP` and route-map `NO-OVERLAP` filter it **in and out** on the ACME
+session and out on the acquisition's, and the DCI advertises the two translated /24s instead (a `Null0` route for the inside-global
+range, which NAT translates before the routing lookup, and a route towards ACME for the outside-local one, which it translates
+after). So every router keeps exactly one path per prefix and both directions work end to end — branch host to acquisition server
+and back.
+
+**DNS fix-up** completes the illusion: west-headend answers for `acme.local` (`ip dns server`, one `ip host` record per ACME host),
+and the acquisition resolves through the DCI sourced from its overlapping address. `ping host-spoke1.acme.local` on
+`ACME-acquisition` comes back as **172.30.12.2**, not the 192.168.12.2 in the record — the NAT rewrote the answer on its way
+through. Both the NaC renderer and the Golden Config template render all of this from one config context keyed by hostname, and two
+new compliance features (**NAT (DCI)**, **DNS**) keep it honest: 171/171 rows compliant.
+
 ![Topology with the DCI chain](docs/screenshots/portal-topology-schematic.png)
 ![Branches with the DCI chain](docs/screenshots/portal-branches.png)
 
@@ -417,7 +442,7 @@ compliant; and suite 08 — the CA pinned on every router with a certificate tun
 own name and not near expiry, rsa-sig on those tunnels and keys only where a spoke chose one, Nautobot's record of it, a real
 renewal and a real PSK ↔ certificate switch of a spoke through the portal; and suite 09 — the LAN hosts, their Nautobot model, the full host-to-host ping mesh and the path over the tunnels; suite 10 — the portal itself (run queue and cancel, every
 router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow);
-suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
+suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up, Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
 Each run keeps pre/post config backups and a diff under `results/`.
 

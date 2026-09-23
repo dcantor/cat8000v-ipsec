@@ -110,6 +110,9 @@ A branch reaches the acquisition's LAN and its service prefix, and the acquisiti
         END
     END
     FOR    ${s}    IN    @{SPOKES}
+        # a branch whose LAN the acquired company also uses is reached through the NAT instead (the next test) — its real
+        # address is not routable from here, and that is the point of the translation
+        Continue For Loop If    '${ROUTERS}[${s}][lan]' in ${{ [o['prefix'] for o in $OVERLAPS] }}
         ${ping}=    Show    ${acq}    ping ${ROUTERS}[${s}][lan_ip] source ${EDGE_ROUTERS}[${acq}][lan_if] repeat 3
         Should Match Regexp    ${ping}    Success rate is (100|66) percent    msg=${acq} cannot reach ${s}'s LAN
     END
@@ -141,3 +144,73 @@ Golden Config renders the DCI chain from the same template and reports it compli
         Should Be True    ${d}[ok]    msg=${r} is not compliant: ${{ [f for f, v in $d['features'].items() if not v['compliant']] }}
         Should Be Equal As Integers    ${d}[compliant]    ${d}[total]
     END
+
+The overlapping prefix exists on both sides of the DCI and neither side learns the other's copy
+    [Documentation]    The acquired company runs a server on a prefix ACME already uses (a branch LAN). The DCI filters that prefix in
+    ...    both directions — each side keeps exactly one path for it, its own — and advertises the translated range instead.
+    Skip If    not $OVERLAPS    no overlapping prefix is modelled
+    ${ov}=    Set Variable    ${OVERLAPS}[0]
+    ${acq}=    Evaluate    [n for n, r in $EDGE_ROUTERS.items() if r['role'] == 'partner'][0]
+    # both sides really do use the same prefix
+    ${run}=    Show    ${acq}    show running-config | section interface Loopback2
+    Should Contain    ${run}    ip address ${{ str(__import__('ipaddress').ip_network($ov['prefix'])[2]) }}    msg=the acquisition has no server on the overlapping prefix
+    ${own}=    Evaluate    [n for n, r in $ROUTERS.items() if r['lan'] == $ov['prefix']][0]
+    Should Be Equal    ${ROUTERS}[${own}][lan]    ${ov}[prefix]    msg=${ov}[prefix] must be an ACME branch LAN as well
+    # the DCI keeps one path for it: the acquisition's, because ACME's copy is filtered inbound
+    ${rt}=    Show    ${NAT_ROUTER}    show ip route ${{ $ov['prefix'].split('/')[0] }} ${{ str(__import__('ipaddress').ip_network($ov['prefix']).netmask) }}
+    ${inside_peer}=    Evaluate    [p['b_ip'] for p in $DIRECT_PEERINGS if p['a'] == $NAT_ROUTER][0]
+    Should Contain    ${rt}    ${inside_peer}    msg=the DCI must reach ${ov}[prefix] through the acquisition, not through ACME: ${rt}
+    ${run}=    Show    ${NAT_ROUTER}    show running-config | include ^ip prefix-list OVERLAP|route-map NO-OVERLAP
+    Should Contain    ${run}    ip prefix-list OVERLAP seq 5 permit ${ov}[prefix]
+    # ACME never hears the acquisition's copy, and the acquisition never hears ACME's
+    FOR    ${s}    IN    @{SPOKES}
+        ${b}=    Show    ${s}    show ip bgp ${ov}[prefix]
+        Should Not Contain    ${b}    ${{ [p['b_ip'] for p in $DIRECT_PEERINGS if p['a'] == 'DCI'][0] }}    msg=${s} learned the acquisition's copy of ${ov}[prefix]
+    END
+    ${b}=    Show    ${acq}    show ip route ${{ $ov['prefix'].split('/')[0] }} ${{ str(__import__('ipaddress').ip_network($ov['prefix']).netmask) }}
+    Should Contain    ${b}    directly connected    msg=${acq} must only know its own ${ov}[prefix]: ${b}
+
+The DCI translates in both directions: each side reaches the other through the range it was given
+    [Documentation]    ACME reaches the acquisition's server at the inside-global address and the acquisition reaches ACME's host at the
+    ...    outside-local one; the translations show up in the NAT table with both halves.
+    Skip If    not $OVERLAPS    no overlapping prefix is modelled
+    ${ov}=    Set Variable    ${OVERLAPS}[0]
+    ${acq}=    Evaluate    [n for n, r in $EDGE_ROUTERS.items() if r['role'] == 'partner'][0]
+    ${own}=    Evaluate    [n for n, r in $ROUTERS.items() if r['lan'] == $ov['prefix']][0]
+    ${acq_as_acme_sees_it}=    Evaluate    str(__import__('ipaddress').ip_network($ov['inside_global'])[2])
+    ${acme_as_acq_sees_it}=    Evaluate    str(__import__('ipaddress').ip_network($ov['outside_local'])[2])
+    # ACME -> the acquisition (the branch router and the host behind it)
+    ${p}=    Show    ${own}    ping ${acq_as_acme_sees_it} source ${ROUTERS}[${own}][lan_if] repeat 3
+    Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${own} cannot reach the acquisition at ${acq_as_acme_sees_it}
+    ${rc}    ${out}=    Run    ${LAN_HOSTS}[${HOST_OF}[${own}]][host]    ping -c 3 -W 2 ${acq_as_acme_sees_it}
+    Should Contain    ${out}    3 packets received    msg=${HOST_OF}[${own}] cannot reach the acquisition at ${acq_as_acme_sees_it}: ${out}
+    # the acquisition -> ACME
+    ${p}=    Show    ${acq}    ping ${acme_as_acq_sees_it} source Loopback2 repeat 3
+    Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${acq} cannot reach ACME's ${own} host at ${acme_as_acq_sees_it}
+    # and the NAT table holds both halves of the translation
+    ${t}=    Show    ${NAT_ROUTER}    show ip nat translations
+    Should Contain    ${t}    ${acq_as_acme_sees_it}    msg=no inside-global entry for the acquisition's server
+    Should Contain    ${t}    ${acme_as_acq_sees_it}    msg=no outside-local entry for ACME's host
+    ${run}=    Show    ${NAT_ROUTER}    show running-config | include ^ip nat (inside|outside) source
+    Should Contain    ${run}    ip nat inside source static network ${{ $ov['prefix'].split('/')[0] }} ${{ $ov['inside_global'].split('/')[0] }}
+    Should Contain    ${run}    ip nat outside source static network ${{ $ov['prefix'].split('/')[0] }} ${{ $ov['outside_local'].split('/')[0] }}
+
+DNS is fixed up on the way through the NAT: a name that resolves to an overlapping address comes back translated
+    [Documentation]    ACME's headend answers for its own zone; the acquisition resolves a name whose A record is an address that exists
+    ...    on both sides, and the DCI's NAT rewrites the answer to the range the acquisition can actually reach.
+    Skip If    not $DNS_SERVER or not $DNS_CLIENT    no DNS zone or resolver is modelled
+    ${acq}=    Evaluate    [n for n in $DNS_CLIENT][0]
+    ${ov}=    Set Variable    ${OVERLAPS}[0]
+    # the server answers for the zone, and holds a record that points into the overlapping prefix
+    ${run}=    Show    ${DNS_SERVER}    show running-config | include ^ip dns server|^ip host
+    Should Contain    ${run}    ip dns server
+    ${name}=    Evaluate    [h for h, a in $DNS_ZONE['hosts'].items() if __import__('ipaddress').ip_address(a) in __import__('ipaddress').ip_network($ov['prefix'])][0]
+    ${real}=    Set Variable    ${DNS_ZONE}[hosts][${name}]
+    Should Contain    ${run}    ip host ${name}.${DNS_ZONE}[domain] ${real}
+    # the client asks through the NAT and gets the translated address back
+    ${cfg}=    Show    ${acq}    show running-config | include ^ip name-server|^ip domain lookup source
+    Should Contain    ${cfg}    ip name-server ${DNS_CLIENT}[${acq}][server]
+    ${translated}=    Evaluate    str(__import__('ipaddress').ip_network($ov['outside_local'])[int($real.split('.')[-1])])
+    ${p}=    Show    ${acq}    ping ${name}.${DNS_ZONE}[domain] source ${DNS_CLIENT}[${acq}][source_interface] repeat 3
+    Should Contain    ${p}    ${translated}    msg=the DNS answer was not fixed up: the name should resolve to ${translated}, not ${real} — ${p}
+    Should Match Regexp    ${p}    Success rate is (100|66) percent    msg=${acq} resolved the name but could not reach it: ${p}

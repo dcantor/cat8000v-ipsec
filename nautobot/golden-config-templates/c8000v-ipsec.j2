@@ -47,8 +47,19 @@ ip route vrf {{ config_context.oob.vrf }} 0.0.0.0 0.0.0.0 {{ config_context.oob.
 {%-     if line not in routes %}{% set _ = routes.append(line) %}{% endif %}
 {%-   endif %}
 {%- endfor +%}
+{%- set nat = (config_context.nat or {}).get(hostname) %}
+{%- set dns = (config_context.dns or {}).get(hostname) %}
+{%- set dnsc = (config_context.dns_client or {}).get(hostname) %}
 {%- set inet = config_context.internet or {} %}
 {%- set is_hub = device_role.name == 'vpn-hub' if device_role else False %}
+{%- for ov in (nat.overlaps if nat else []) %}
+{%-   set ig = ov.inside_global | ipaddress_network('network_address') ~ ' ' ~ masks[ov.inside_global.split('/')[1]] %}
+{%-   set ol = ov.outside_local | ipaddress_network('network_address') ~ ' ' ~ masks[ov.outside_local.split('/')[1]] %}
+{%-   set _ = routes.append('ip route ' ~ ig ~ ' Null0 name nat-inside-global') %}
+{%-   for i in interfaces if i.name == nat.outside_interface and i.connected_interface and i.connected_interface.ip_addresses %}
+{%-     set _ = routes.append('ip route ' ~ ol ~ ' ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name nat-outside-local') %}
+{%-   endfor %}
+{%- endfor %}
 {%- if inet.enabled and is_hub %}
 {%-   for i in interfaces if i.connected_interface and i.connected_interface.device.role.name == 'vpn-firewall' and i.connected_interface.ip_addresses %}
 {%-     if loop.first %}{% set _ = routes.append('ip route 0.0.0.0 0.0.0.0 ' ~ i.connected_interface.ip_addresses[0].address.split('/')[0] ~ ' name internet-via-' ~ i.connected_interface.device.name) %}{% endif %}
@@ -90,7 +101,9 @@ interface {{ i.name }}
 {% if i.enabled and i.ip_addresses %}
  description {{ i.description }}
  ip address {{ i.ip_addresses[0].address.split('/')[0] }} {{ masks[i.ip_addresses[0].address.split('/')[1]] }}
- negotiation auto
+{% if nat and i.name == nat.inside_interface %} ip nat inside
+{% elif nat and i.name == nat.outside_interface %} ip nat outside
+{% endif %} negotiation auto
  cdp enable
 {% else %}
  no ip address
@@ -179,6 +192,37 @@ crypto ipsec profile {{ pios.ipsec_profile }}
 {% endfor %}
 {% endif %}
 {#- a router without tunnels (ACME's DCI and the acquired company's edge: plain eBGP over a direct link) has no crypto at all -#}
+{% if nat %}
+{% for ov in nat.overlaps %}
+ip nat inside source static network {{ ov.prefix | ipaddress_network('network_address') }} {{ ov.inside_global | ipaddress_network('network_address') }} /{{ ov.prefix.split('/')[1] }}
+ip nat outside source static network {{ ov.prefix | ipaddress_network('network_address') }} {{ ov.outside_local | ipaddress_network('network_address') }} /{{ ov.prefix.split('/')[1] }}
+{% endfor %}
+!
+ip prefix-list OVERLAP description prefixes that exist on both sides of the DCI: translated, not advertised
+{% for ov in nat.overlaps %}
+ip prefix-list OVERLAP seq {{ 5 + 5 * loop.index0 }} permit {{ ov.prefix }}
+{% endfor %}
+!
+route-map NO-OVERLAP deny 10
+ description the overlapping prefixes stay on their own side of the NAT
+ match ip address prefix-list OVERLAP
+!
+route-map NO-OVERLAP permit 20
+ description everything else is advertised normally
+!
+{% endif %}
+{% if dns %}
+ip dns server
+{% for h, a in (dns.hosts or {}) | dictsort %}
+ip host {{ h }}.{{ dns.domain }} {{ a }}
+{% endfor %}
+!
+{% endif %}
+{% if dnsc %}
+ip name-server {{ dnsc.server }}
+ip domain lookup source-interface {{ dnsc.source_interface }}
+!
+{% endif %}
 {% set own = [] %}
 {% for i in interfaces %}{% for ip in i.ip_addresses if ip.parent %}{% for t in ip.parent.tags if t.name == 'bgp:advertise' and ip.parent.prefix not in own %}{% set _ = own.append(ip.parent.prefix) %}{% endfor %}{% endfor %}{% endfor %}
 {% for ri in bgp_routing_instances %}
@@ -193,7 +237,9 @@ router bgp {{ ri.autonomous_system.asn }}
  address-family ipv4
 {% set lo = [] %}{% set nets = [] %}
 {% for p in own %}{% if p.endswith('/32') %}{% set _ = lo.append(p) %}{% else %}{% set _ = nets.append(p) %}{% endif %}{% endfor %}
-{% for p in lo + (nets | sort) %}
+{% set natnets = [] %}
+{% for ov in (nat.overlaps if nat else []) %}{% set _ = natnets.append(ov.inside_global) %}{% set _ = natnets.append(ov.outside_local) %}{% endfor %}
+{% for p in lo + ((nets + natnets) | sort) %}
 {% if p.endswith('/24') and p.startswith('192.') %}
   network {{ p.split('/')[0] }}
 {% else %}
@@ -206,6 +252,15 @@ router bgp {{ ri.autonomous_system.asn }}
   neighbor {{ ep.peer.source_ip.address.split('/')[0] }} default-originate
 {% elif pref and ep.peer.routing_instance and ep.peer.routing_instance.device.name in pref %}
   neighbor {{ ep.peer.source_ip.address.split('/')[0] }} route-map BREAKOUT-{{ ep.peer.routing_instance.device.name }} in
+{% endif %}
+{% if nat %}
+{% set peer = ep.peer.source_ip.address.split('/')[0] %}
+{#- the session towards ACME (the outside interface's own /30) is filtered inbound as well: ACME's copy of the overlapping prefix never enters -#}
+{% set outside_net = (interfaces | selectattr('name', 'equalto', nat.outside_interface) | list | first) %}
+{% if outside_net and outside_net.ip_addresses and peer.rsplit('.', 1)[0] == outside_net.ip_addresses[0].address.split('/')[0].rsplit('.', 1)[0] %}
+  neighbor {{ peer }} route-map NO-OVERLAP in
+{% endif %}
+  neighbor {{ peer }} route-map NO-OVERLAP out
 {% endif %}
 {% endfor %}
  exit-address-family
