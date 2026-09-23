@@ -16,6 +16,8 @@
   .warn { border-left-color: #b26a00; background: #fffbeb } .brk { page-break-before: always } .small { font-size: 9pt }
   .pill { display: inline-block; padding: 0 6px; border-radius: 8px; background: #e9edf3; font-size: 8.5pt }
   .ok { color: #15803d; font-weight: 600 } ol.steps li { margin: 3pt 0 }
+  pre.term .el { color: #b26a00; font-style: italic }
+  pre.cfg { font-size: 7.6pt; page-break-inside: auto }          /* a full configuration is allowed to run over a page */
   pre.topo .mermaid svg, .topo svg { max-height: 142mm }
 </style></head><body>
 
@@ -34,6 +36,7 @@ document was taken from the running lab; the test results are from run <code>res
 <li>How DNS is fixed up</li>
 <li>How the test is run and validated</li>
 <li>Where every line of this comes from</li>
+<li>Appendix — the configuration behind it (host-spoke1, the DCI, the acquisition's DNS server)</li>
 </ol>
 
 <h2>1. What the DCI is, and the problem it solves</h2>
@@ -87,7 +90,7 @@ flowchart TB
 <table>
 <tr><th style="width:17%">Device</th><th style="width:11%">Nautobot role</th><th style="width:16%">Tenant</th><th style="width:8%">AS</th><th>Interfaces that matter</th></tr>
 <tr><td><code>west-headend</code></td><td>vpn-hub</td><td>ACME Networks</td><td>65206</td><td><code>Gi3</code> 100.64.20.1 → the DCI · <code>Gi9</code> LAN · <code>Loopback900</code> 10.128.N.1 ×1000</td></tr>
-<tr><td><code>DCI</code></td><td>vpn-dci</td><td>ACME Networks</td><td>65208</td><td><code>Gi2</code> 100.64.20.2 <span class="pill">nat outside</span> · <code>Gi3</code> 100.64.21.1 <span class="pill">nat inside</span> · <code>Gi9</code> LAN 192.168.31.0/24</td></tr>
+<tr><td><code>DCI</code></td><td>vpn-dci</td><td>ACME Networks</td><td>65208</td><td><code>Gi2</code> 100.64.20.2 <span class="pill">nat outside</span> · <code>Gi3</code> 100.64.21.1 <span class="pill">nat inside</span> · <code>Gi5</code> LAN 192.168.31.0/24</td></tr>
 <tr><td><code>ACME-acquisition</code></td><td>partner-edge</td><td>(its own customer tenant)</td><td>65209</td><td><code>Gi2</code> 100.64.21.2 · <code>Gi5</code> LAN 192.168.30.1 · <code>Lo1</code> 10.60.0.1/24 · <code>Lo2</code> 192.168.12.2 · <code>Loopback900</code> 10.128.N.2 ×1000</td></tr>
 </table>
 <p class="small">Both links are cables between router ports in Nautobot — no firewall between them — and neither router carries a tunnel, a
@@ -376,6 +379,212 @@ flowchart TB
 <tr><td><code>tests/suites/12_dci.robot</code>, <code>tests/resources/lab_vars.py</code></td><td>the twelve tests and the values they expect, derived from the intent</td></tr>
 <tr><td><code>tests/report_pdf.py</code>, <code>tests/run.sh</code></td><td>the evidence PDF each run produces</td></tr>
 </table>
+
+<h2 class="brk">Appendix — the configuration behind it</h2>
+<p>Taken from the lab: the routers from the configuration backup of run <code>results/2026-09-23_02-08-05</code>
+(<code>configs/post-run/</code>, captured by <code>tests/capture_configs.py</code>), the host live over SSH. The routers' excerpts leave
+out platform boilerplate — AAA, licensing, the self-signed PKI, console and VTY lines, NTP/SNMP/syslog and the unwired ports, which
+are shut — and collapse the runs of a thousand generated lines, marked <span style="color:#b26a00"><i>like this</i></span>.
+Everything else is verbatim.</p>
+
+<h3>A · <code>host-spoke1</code> — the branch host that resolves through the DCI</h3>
+<p class="small">An Alpine VM behind <code>spoke1</code>: <code>eth0</code> on the out-of-band network, <code>eth1</code> on the branch
+LAN. Its addressing and its resolver come from <code>lab-intent.json</code> through the cloud-init seed
+(<code>lab.sh</code> writes <code>network-config</code>, <code>user-data</code> and the <code>resolv.conf.head</code> below; the
+instance-id is a hash of that seed, so a changed resolver is applied on the next boot).</p>
+<pre class="term cfg"><span class="c">### hostname</span>
+host-spoke1
+<span class="c">### /etc/network/interfaces</span>
+# This file is generated from information provided by the datasource. Changes
+# to it will not persist across an instance reboot. To disable cloud-init&#x27;s
+# network configuration capabilities, write a file
+# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
+# network: {config: disabled}
+auto lo
+iface lo inet loopback
+auto eth0
+iface eth0 inet static
+    address 10.2.0.34/24
+    post-up route add -net 10.0.0.0/8 gw 10.2.0.1 || true
+    pre-down route del -net 10.0.0.0/8 gw 10.2.0.1 || true
+auto eth1
+iface eth1 inet static
+    address 192.168.12.2/24
+    dns-nameservers 100.96.0.2
+    dns-search acquisition.local
+    dns {&#x27;nameservers&#x27;: [&#x27;100.96.0.2&#x27;], &#x27;search&#x27;: [&#x27;acquisition.local&#x27;]}
+    post-up route add default gw 192.168.12.1 || true
+    pre-down route del default gw 192.168.12.1 || true
+<span class="c">### ip -br addr</span>
+lo               UNKNOWN        127.0.0.1/8 ::1/128
+eth0             UP             10.2.0.34/24 fe80::5054:ff:fec7:f00/64
+eth1             UP             192.168.12.2/24 fe80::5054:ff:fec7:f01/64
+<span class="c">### ip route</span>
+default via 192.168.12.1 dev eth1
+10.0.0.0/8 via 10.2.0.1 dev eth0
+10.2.0.0/24 dev eth0 proto kernel scope link src 10.2.0.34
+192.168.12.0/24 dev eth1 proto kernel scope link src 192.168.12.2
+<span class="c">### /etc/resolv.conf</span>
+search acquisition.local
+nameserver 100.96.0.2
+<span class="c">### /etc/resolv.conf.head</span>
+# resolver from lab-intent.json (dns_client): a server on the far side of the DCI
+search acquisition.local
+nameserver 100.96.0.2
+<span class="c">### cloud-init instance-id</span>
+host-spoke1-86de66e5</pre>
+<div class="box small"><b>Two things to notice.</b> The nameserver is <code>100.96.0.2</code> — the acquired company's DNS server at
+the address ACME sees it on, never its real <code>10.128.0.2</code>. And <code>10.0.0.0/8</code> is routed out of the management
+interface (<code>via 10.2.0.1 dev eth0</code>), which is why every address this host must reach through the lab lives outside 10/8:
+the translated ranges are <code>100.96.0.0/14</code> and <code>100.100.0.0/14</code>. The stray <code>dns {…}</code> line in
+<code>/etc/network/interfaces</code> is cloud-init echoing the netplan block it converted; <code>ifupdown</code> ignores it and the
+two <code>dns-</code> lines above it are what resolvconf uses.</p></div>
+
+<h3>B · <code>DCI</code> — the interconnect router</h3>
+<p class="small">Rendered entirely from Nautobot: the interfaces and BGP by the Network-as-Code provider, the NAT, the prefix-list
+and the route-map as CLI templates (in 400-line chunks). 2002 static translations, of which four are shown at each end of the two
+runs.</p>
+<pre class="term cfg">hostname DCI
+vrf definition Mgmt-vrf
+ address-family ipv4
+ exit-address-family
+ip domain name lab.local
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.8 255.255.255.255
+interface GigabitEthernet1
+ description OOB management
+ vrf forwarding Mgmt-vrf
+ ip address 10.2.0.19 255.255.255.0
+ negotiation auto
+interface GigabitEthernet2
+ description WAN to west-headend GigabitEthernet3
+ ip address 100.64.20.2 255.255.255.252
+ ip nat outside
+ negotiation auto
+ cdp enable
+interface GigabitEthernet3
+ description WAN to ACME-acquisition GigabitEthernet2
+ ip address 100.64.21.1 255.255.255.252
+ ip nat inside
+ negotiation auto
+ cdp enable
+interface GigabitEthernet5
+ description site LAN 192.168.31.0/24 (no host)
+ ip address 192.168.31.1 255.255.255.0
+ negotiation auto
+ cdp enable
+ip nat inside source static network 10.128.0.0 100.96.0.0 /24
+ip nat inside source static network 10.128.1.0 100.96.1.0 /24
+<span class="el">… 996 more lines, one inside-source static per scale prefix …</span>
+ip nat inside source static network 10.131.230.0 100.99.230.0 /24
+ip nat inside source static network 10.131.231.0 100.99.231.0 /24
+ip nat inside source static network 192.168.12.0 172.31.12.0 /24
+ip nat outside source static network 10.128.0.0 100.100.0.0 /24
+ip nat outside source static network 10.128.1.0 100.100.1.0 /24
+<span class="el">… 996 more lines, one outside-source static per scale prefix …</span>
+ip nat outside source static network 10.131.230.0 100.103.230.0 /24
+ip nat outside source static network 10.131.231.0 100.103.231.0 /24
+ip nat outside source static network 192.168.12.0 172.30.12.0 /24
+ip prefix-list OVERLAP description prefixes that exist on both sides of the DCI: translated, not advertised
+ip prefix-list OVERLAP seq 5 permit 192.168.12.0/24
+ip prefix-list OVERLAP seq 10 permit 10.128.0.0/14
+route-map NO-OVERLAP deny 10
+ description the overlapping prefixes stay on their own side of the NAT
+ match ip address prefix-list OVERLAP
+route-map NO-OVERLAP permit 20
+ description everything else is advertised normally
+ip route 100.96.0.0 255.252.0.0 Null0 name nat-inside-global
+ip route 100.100.0.0 255.252.0.0 100.64.20.1 name nat-outside-local
+ip route 172.30.12.0 255.255.255.0 100.64.20.1 name nat-outside-local
+ip route 172.31.12.0 255.255.255.0 Null0 name nat-inside-global
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+router bgp 65208
+ bgp router-id 10.255.1.8
+ bgp log-neighbor-changes
+ neighbor 100.64.20.1 remote-as 65206
+ neighbor 100.64.20.1 description eBGP west-headend (100.64.20.0/30)
+ neighbor 100.64.21.2 remote-as 65209
+ neighbor 100.64.21.2 description eBGP ACME-acquisition (100.64.21.0/30)
+ address-family ipv4
+  network 10.255.1.8 mask 255.255.255.255
+  network 100.96.0.0 mask 255.252.0.0
+  network 100.100.0.0 mask 255.252.0.0
+  network 172.30.12.0 mask 255.255.255.0
+  network 172.31.12.0 mask 255.255.255.0
+  network 192.168.31.0
+  neighbor 100.64.20.1 activate
+  neighbor 100.64.20.1 route-map NO-OVERLAP in
+  neighbor 100.64.20.1 route-map NO-OVERLAP out
+  neighbor 100.64.21.2 activate
+  neighbor 100.64.21.2 route-map NO-OVERLAP out
+ exit-address-family
+ip access-list standard MGMT-ACCESS
+ 10 remark OOB management network
+ 20 permit 10.2.0.0 0.0.0.255
+ 30 deny any log</pre>
+
+<h3>C · <code>ACME-acquisition</code> — the DNS server and the addresses it answers for</h3>
+<p class="small">The zone (<code>ip dns server</code> + 1001 <code>ip host</code> records), the resolver it uses for ACME's own zone
+(sourced from <code>Loopback2</code>, the overlapping address, so its queries are translated too), the thousand addresses the records
+point at — all on one loopback as secondaries — and the aggregate it originates for them.</p>
+<pre class="term cfg">hostname ACME-acquisition
+ip dns server
+ip name-server 192.168.16.1
+ip domain lookup source-interface Loopback2
+ip host acq0.acquisition.local 10.128.0.2
+ip host acq1.acquisition.local 10.128.1.2
+ip host acq10.acquisition.local 10.128.10.2
+<span class="el">… 994 more lines, one record per scale prefix …</span>
+ip host acq997.acquisition.local 10.131.229.2
+ip host acq998.acquisition.local 10.131.230.2
+ip host acq999.acquisition.local 10.131.231.2
+ip host server.acquisition.local 10.128.0.2
+interface Loopback0
+ description Router ID
+ ip address 10.255.1.9 255.255.255.255
+interface Loopback1
+ description acquisition services
+ ip address 10.60.0.1 255.255.255.0
+interface Loopback2
+ description acquisition server on an overlapping prefix (same address as ACME&#x27;s host-spoke1)
+ ip address 192.168.12.2 255.255.255.0
+interface Loopback900
+ description scale overlap 10.128.0.0/24 .. 10.131.231.0/24 (1000 prefixes)
+ ip address 10.128.1.2 255.255.255.0 secondary
+ ip address 10.128.2.2 255.255.255.0 secondary
+<span class="el">… 995 more lines, one secondary per scale prefix …</span>
+ ip address 10.131.230.2 255.255.255.0 secondary
+ ip address 10.131.231.2 255.255.255.0 secondary
+ ip address 10.128.0.2 255.255.255.0
+interface GigabitEthernet2
+ description WAN to DCI GigabitEthernet3
+ ip address 100.64.21.2 255.255.255.252
+ negotiation auto
+ cdp enable
+interface GigabitEthernet5
+ description site LAN 192.168.30.0/24 (host-acquisition eth1)
+ ip address 192.168.30.1 255.255.255.0
+ negotiation auto
+ cdp enable
+ip route 10.128.0.0 255.252.0.0 Null0 name scale-overlap-aggregate
+ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 10.2.0.1
+router bgp 65209
+ bgp router-id 10.255.1.9
+ bgp log-neighbor-changes
+ neighbor 100.64.21.1 remote-as 65208
+ neighbor 100.64.21.1 description eBGP DCI (100.64.21.0/30)
+ address-family ipv4
+  network 10.60.0.0 mask 255.255.255.0
+  network 10.128.0.0 mask 255.252.0.0
+  network 10.255.1.9 mask 255.255.255.255
+  network 192.168.12.0
+  network 192.168.30.0
+  neighbor 100.64.21.1 activate
+ exit-address-family</pre>
+<div class="box small">IOS lists a loopback's secondary addresses first and its primary last, which is why
+<code>10.128.0.2</code> appears at the end of <code>Loopback900</code>. The Golden Config template renders the primary first (the
+order a router must be configured in) and compliance compares the two as sets, so the difference is not drift.</p></div>
 
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
