@@ -65,6 +65,16 @@
   input, select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px; font:inherit; background:var(--input); color:var(--ink) }
   input[readonly] { background:var(--input-ro); color:var(--input-ro-ink) }
   .grid { display:grid; gap:10px } .g2 { grid-template-columns:1fr 1fr } .g3 { grid-template-columns:1fr 1fr 1fr } .g4 { grid-template-columns:repeat(4,1fr) }
+  /* the workflow launcher: one card per thing you can do */
+  .tasks { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px }
+  .taskgroup { grid-column:1/-1; margin:6px 0 -2px; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em }
+  .task { text-align:left; display:flex; flex-direction:column; gap:4px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--card); cursor:pointer; font:inherit; color:inherit }
+  .task:hover:not(:disabled) { border-color:var(--accent); box-shadow:0 1px 6px rgba(0,0,0,.08) }
+  .task:disabled { opacity:.5; cursor:not-allowed }
+  .task .t { font-weight:600; font-size:14px } .task .w { font-size:12px; color:var(--muted); line-height:1.4 }
+  .task .m { font-size:11px; color:var(--muted); margin-top:auto; padding-top:6px }
+  .picklist button { display:flex; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:9px 12px; margin-bottom:6px; border:1px solid var(--line); border-radius:8px; background:var(--card); cursor:pointer; font:inherit; color:inherit }
+  .picklist button:hover { border-color:var(--accent) } .picklist .h { color:var(--muted); font-size:12px }
   table { width:100%; border-collapse:collapse; font-size:13px } th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); vertical-align:top }
   th { color:var(--muted); font-weight:500; font-size:12px } td input, td select { padding:4px 6px }
   .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; background:var(--pill); color:var(--pill-ink) }
@@ -115,6 +125,10 @@
 </header>
 <main>
 <section>
+  <div class="card" id="launcher">
+    <h2>What do you want to do? <small>every change is a job: pick one, review what it will do, then watch it run on its own page</small></h2>
+    <div class="tasks" id="tasks"></div>
+  </div>
   <form id="f" onsubmit="return false">
     <div class="card">
       <h2>Site <small>location in Nautobot; metadata stored as custom fields</small></h2>
@@ -127,7 +141,7 @@
     </div>
 
     <div class="card">
-      <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button></h2>
+      <h2>Routers <small>discovered by Nautobot onboarding; role and ports follow the physical wiring</small><button type="button" id="add-spoke">＋ Add spoke…</button><button type="button" id="add-hub" style="margin-left:6px">＋ Add headend…</button></h2>
       <table id="devices"><thead><tr><th>Hostname</th><th>Mgmt IP</th><th>Role</th><th>Region</th><th>Site</th><th>AS number</th><th>Router-id (Lo0)</th><th>Site LAN (/24, LAN port)</th><th id="th-auth">IKE auth</th><th id="th-psk">PSK</th><th id="th-cert">Certificate</th><th>Comments</th><th></th></tr></thead><tbody></tbody></table>
       <div class="hint">Each spoke has its own pre-shared key (used on all of its tunnels); headends hold one keyring entry per spoke. Keys live in the intent and the NAC device group, never in Nautobot.</div>
       <div class="hint">Renaming a router changes its hostname and the Nautobot device name; the management address is fixed by the VM's day-0 config.</div>
@@ -220,6 +234,43 @@
   </form>
 </section>
 </main>
+
+<div class="modal-bg" id="pick" hidden>
+  <div class="modal" style="width:min(560px,100%)">
+    <h2 id="pick-title" style="margin:0 0 6px;font-size:16px">Pick a router</h2>
+    <div class="hint" id="pick-what" style="margin-bottom:12px"></div>
+    <div id="pick-list" class="picklist"></div>
+    <div class="actions" style="margin-top:14px"><button type="button" id="pick-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="hub" hidden>
+  <div class="modal" style="width:min(820px,100%)">
+    <h2 style="margin:0 0 6px;font-size:16px">Add a headend</h2>
+    <div class="hint" style="margin-bottom:12px">A new ACME headend: it is registered in <code>lab.conf</code>, its VM is created and bootstrapped, onboarded into Nautobot, linked to
+      every branch you tick below (a WAN port and a tunnel each), and then both sides are configured in one Terraform run. Every value is suggested and editable.</div>
+    <div class="grid g4">
+      <div><label>Hostname</label><input id="hub-name"></div>
+      <div><label>Region</label><select id="hub-region"></select></div>
+      <div><label>City</label><input id="hub-city" list="city-list" autocomplete="off"></div>
+      <div><label>Management IP (OOB)</label><input id="hub-mgmt_ip"></div>
+      <div><label>AS number</label><input id="hub-asn" type="number"></div>
+      <div><label>Router-id (Loopback0)</label><input id="hub-router_id"></div>
+      <div><label>Site LAN (/24)</label><input id="hub-lan"></div>
+      <div><label>Site name</label><input id="hub-site"></div>
+      <div><label>Site code</label><input id="hub-site_code"></div>
+      <div><label>Contact</label><input id="hub-contact"></div>
+      <div><label>Change ticket</label><input id="hub-change_ticket"></div>
+      <div><label>RAM (MiB)</label><input id="hub-ram_mib" type="number"></div>
+    </div>
+    <div style="margin-top:12px"><label>Branches to connect <span class="hint">each one gets a WAN link to this headend and a tunnel; they are re-defined for the new port and rebooted</span></label>
+      <div id="hub-spokes" class="picklist" style="display:flex;flex-wrap:wrap;gap:12px"></div></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px"><input type="checkbox" id="hub-golden" checked style="width:auto"> Golden Config backup + compliance afterwards</label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px"><input type="checkbox" id="hub-test" style="width:auto"> run the Robot Framework suites afterwards (≈15 min)</label>
+    <div id="hub-problems" class="problems" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:16px"><button type="button" id="hub-cancel">Cancel</button><button type="button" class="primary" id="hub-go" style="margin-left:auto">Provision headend</button></div>
+  </div>
+</div>
 
 <div class="modal-bg" id="login" hidden>
   <div class="modal" style="width:min(420px,100%)">
@@ -509,6 +560,11 @@ $('theme-toggle').onclick = e => { e.preventDefault(); try { localStorage.setIte
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { try { if (!localStorage.getItem('portal-theme')) applyTheme(); } catch (e) { } });
 let base = null, wiring = [], nodes = {}, current = null, pollTimer = null, logCount = 0;
 
+// how a branch authenticates: its own choice, else the lab default; a headend holds a certificate while any of its branches uses one
+const spokeAuthOf = (I, d) => d.ike_authentication || ((I.profile || {}).ike || {}).authentication || 'psk';
+const usesCertOf = (I, d) => d.role === 'spoke' ? spokeAuthOf(I, d) === 'certificate'
+  : d.role === 'hub' && (I.tunnels || []).some(t => t.hub === d.name && spokeAuthOf(I, (I.devices || []).find(x => x.name === t.spoke) || {}) === 'certificate');
+
 const get = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 const set = (o, p, v) => { const ks = p.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = (t[k] = t[k] || {}); t[ks.at(-1)] = v; };
 const fmtT = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : '';
@@ -518,7 +574,7 @@ async function load() {
   const r = await (await fetch('/api/intent')).json();
   base = r.intent; wiring = r.wiring; nodes = r.nodes;
   $('nb-link').href = r.nautobot_url;
-  await loadPki(); fill(base);
+  await loadPki(); fill(base); renderTasks();
   fetch('/api/inventory').then(x => x.json()).then(inv => {
     $('inv-note').textContent = inv.ok ? `${inv.devices.length} routers onboarded` : 'Nautobot unreachable: ' + inv.error;
     if (inv.vpn_url) $('nb-link').href = inv.vpn_url;
@@ -535,9 +591,7 @@ function fill(I) {
   $('internet.preference').textContent = (PKI.preference ? Object.entries(PKI.preference).map(([s, hs]) => `${s} → ${hs[0] || '-'}`).join(' · ') : 'computed from the regions');
   const tb = $('devices').querySelector('tbody'); tb.innerHTML = '';
   // per-spoke IKE authentication: the spoke's own choice, else the lab default; a headend holds a certificate while any of its spokes uses one
-  const defAuth = ((I.profile || {}).ike || {}).authentication || 'psk';
-  const spokeAuth = d => d.ike_authentication || defAuth;
-  const usesCert = d => d.role === 'spoke' ? spokeAuth(d) === 'certificate' : d.role === 'hub' && I.tunnels.some(t => t.hub === d.name && spokeAuth(I.devices.find(x => x.name === t.spoke) || {}) === 'certificate');
+  const spokeAuth = d => spokeAuthOf(I, d), usesCert = d => usesCertOf(I, d);
   const authCell = d => d.role === 'spoke' ? `<span class="pill ${spokeAuth(d) === 'certificate' ? 'hub' : ''}" title="${d.ike_authentication ? 'chosen for this branch' : 'lab default'}">${spokeAuth(d) === 'certificate' ? 'certificate' : 'PSK'}</span>${d.ike_authentication ? '' : ' <span class="hint">(default)</span>'}`
                      : d.role === 'hub' ? `<span class="hint">${[...new Set(I.tunnels.filter(t => t.hub === d.name).map(t => spokeAuth(I.devices.find(x => x.name === t.spoke) || {})))].map(a => a === 'certificate' ? 'certificate' : 'PSK').sort().join(' + ') || '-'}</span>` : '';
   const certCell = d => { const c = (PKI.devices || {})[d.name]; if (!usesCert(d)) return '<span class="hint">n/a</span>'; if (!c) return '<span class="hint">not enrolled</span>';
@@ -1017,6 +1071,138 @@ function renderJob(r) {
   if (r.tests) { $('job-testcard').hidden = false; renderTests(r, 'job-test-summary', 'job-test-links', 'job-test-suites'); }
 }
 
+// ---- the workflow launcher: the page opens on what you can do, not on a form ---------------------------------------
+// Each task either opens its dialog straight away, or asks which router it is for first (PICKS). The model form below
+// stays where it was: "Edit the service model" scrolls to it.
+const PICKS = {
+  auth: { title: 'Change IKE authentication', what: 'Which branch should move between its pre-shared key and a certificate?',
+          eligible: d => d.role === 'spoke', hint: d => spokeAuthOf(base, d) === 'certificate' ? 'certificate → pre-shared key' : 'pre-shared key → certificate',
+          open: d => openAuth(d.name, spokeAuthOf(base, d)) },
+  rotate: { title: 'Rotate a pre-shared key', what: 'Which branch gets a new key? Its headends are re-keyed in the same run.',
+            eligible: d => d.role === 'spoke' && spokeAuthOf(base, d) === 'psk', hint: d => `key rotated ${(d.psk_rotated || '').slice(0, 10) || 'never'}`,
+            open: d => openRotate(d.name), none: 'every branch authenticates with a certificate — there is no key to rotate' },
+  renew: { title: 'Renew a certificate', what: 'Which router gets a new certificate from the lab CA?',
+           eligible: d => usesCertOf(base, d), hint: d => { const c = (PKI.devices || {})[d.name]; return c ? `${Math.floor(c.days_left)} days left` : 'not enrolled yet'; },
+           open: d => openRenew(d.name), none: 'no router authenticates with a certificate from the lab CA' },
+  rehome: { title: 'Re-home a branch', what: 'Which branch should connect to a different set of headends?',
+            eligible: d => d.role === 'spoke', hint: d => 'now: ' + (base.tunnels.filter(t => t.spoke === d.name).map(t => t.hub).join(', ') || 'none'),
+            open: d => openRehome(d.name) },
+  remove: { title: 'Remove a branch', what: 'Which branch is being decommissioned? You will see exactly what is released before anything happens.',
+            eligible: d => d.role === 'spoke', hint: d => d.site || '', open: d => openRemove(d.name) },
+};
+
+const TASKS = [
+  { group: 'Build', title: 'Add a branch', role: 'operator', meta: 'guided wizard · about 15 minutes',
+    what: 'A new customer site: its VM is created and bootstrapped, onboarded into Nautobot, then the branch and its headends are configured in one Terraform run.',
+    go: () => openWizard() },
+  { group: 'Build', title: 'Add a headend', role: 'operator', meta: 'about 20 minutes',
+    what: 'A new ACME headend linked to every branch you choose: its VM, a WAN link and a tunnel per branch, then both sides applied.',
+    go: () => openHub() },
+  { group: 'Change a branch', title: 'Change IKE authentication', role: 'operator', meta: 'about 6 minutes', pick: 'auth',
+    what: 'Move a branch between its pre-shared key and a certificate from the lab CA — profiles, keyring, trustpoint and the SAs follow.' },
+  { group: 'Change a branch', title: 'Rotate a pre-shared key', role: 'operator', meta: 'about 5 minutes', pick: 'rotate',
+    what: 'A new key for one branch, pushed to it and to every headend that keys for it, then its SAs are cleared and the tunnels verified.' },
+  { group: 'Change a branch', title: 'Renew a certificate', role: 'operator', meta: 'about 4 minutes', pick: 'renew',
+    what: 'A fresh CSR signed by the lab CA and imported; the router re-authenticates every tunnel with the new certificate.' },
+  { group: 'Change a branch', title: 'Re-home a branch', role: 'operator', meta: 'about 12 minutes', pick: 'rehome',
+    what: 'Change which headends a branch connects to: new links and tunnels are allocated, dropped ones removed everywhere.' },
+  { group: 'Change a branch', title: 'Remove a branch', role: 'approver', meta: 'approver · about 10 minutes', pick: 'remove',
+    what: 'Decommission a branch: powered off, cleaned out of Nautobot, the intent, lab.conf and Terraform state, and its VM deleted.' },
+  { group: 'The whole service', title: 'Deploy the model', role: 'operator', meta: 'Nautobot → NaC → Terraform → Golden Config',
+    what: 'Push what the model says to every router: seed Nautobot, render the NaC data from it, plan and apply.', go: () => $('deploy').click() },
+  { group: 'The whole service', title: 'Dry run', role: 'operator', meta: 'nothing is pushed',
+    what: 'The same pipeline, stopping after the Terraform plan — what would change, and nothing more.', go: () => $('plan').click() },
+  { group: 'The whole service', title: 'Run the tests', role: 'operator', meta: 'about 55 minutes',
+    what: 'The Robot Framework suites against the live lab, ending with an evidence report.', go: () => $('testonly').click() },
+  { group: 'The whole service', title: 'Edit the service model', meta: 'the form below',
+    what: 'Site, VPN service, crypto profile, internet breakout, capacity and the routers table — everything a deploy pushes.',
+    go: () => { const f = $('f'); f.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+  { group: 'Configuration', title: 'Check for drift', meta: 'Compliance page',
+    what: "Golden Config backs up every router, renders the intended configuration from Nautobot and compares them — then remediate or re-apply what drifted.",
+    go: () => { location.hash = '#compliance'; } },
+  { group: 'Configuration', title: 'See what is running', meta: 'Jobs page',
+    what: 'Every job this portal has run, newest first, with its steps, its log and its test report.', go: () => { location.hash = '#jobs'; } },
+];
+
+function renderTasks() {
+  const el = $('tasks'); if (!el) return;
+  let out = '', group = null;
+  TASKS.forEach((task, i) => {
+    if (task.group !== group) { group = task.group; out += `<div class="taskgroup">${esc(group)}</div>`; }
+    const pick = task.pick ? PICKS[task.pick] : null;
+    const targets = pick && base ? (base.devices || []).filter(pick.eligible) : null;
+    const allowed = !task.role || can(task.role);
+    const why = !allowed ? `${task.role} role required` : (targets && !targets.length ? (pick.none || 'nothing to do') : '');
+    out += `<button type="button" class="task" data-task="${i}"${task.id ? ` id="${task.id}"` : ''}${why ? ` disabled title="${esc(why)}"` : ''}>
+      <span class="t">${esc(task.title)}</span><span class="w">${esc(task.what)}</span><span class="m">${esc(why || task.meta || '')}</span></button>`;
+  });
+  el.innerHTML = out;
+  el.querySelectorAll('button.task').forEach(b => b.onclick = () => {
+    const task = TASKS[b.dataset.task];
+    if (task.pick) return pickRouter(task.pick);
+    task.go();
+  });
+}
+
+function pickRouter(kind) {
+  const p = PICKS[kind], list = (base.devices || []).filter(p.eligible);
+  $('pick-title').textContent = p.title; $('pick-what').textContent = p.what;
+  $('pick-list').innerHTML = list.map(d => `<button type="button" data-name="${esc(d.name)}"><span>${esc(d.name)}</span><span class="h">${esc(p.hint(d) || '')}</span></button>`).join('')
+    || `<div class="hint">${esc(p.none || 'no router qualifies')}</div>`;
+  $('pick-list').querySelectorAll('button').forEach(b => b.onclick = () => {
+    $('pick').hidden = true;
+    p.open((base.devices || []).find(d => d.name === b.dataset.name));
+  });
+  $('pick').hidden = false;
+}
+$('pick-cancel').onclick = () => { $('pick').hidden = true; };
+
+// ---- add a headend ------------------------------------------------------------------------------------------------
+const HUB_FIELDS = ['name', 'city', 'mgmt_ip', 'asn', 'router_id', 'lan', 'site', 'site_code', 'contact', 'change_ticket', 'ram_mib'];
+let HUB_SUGGEST = null;                 // node index, console port and coordinates ride along: allocations, not decisions
+
+// a refusal from the API: our own {problems: [...]}, FastAPI's field errors, or a plain string
+function problemText(detail) {
+  if (!detail) return 'the request was refused';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) return detail.map(e => `${(e.loc || []).slice(-1)[0] || 'field'}: ${e.msg}`).join('\n');
+  if (detail.problems) return detail.problems.join('\n');
+  return JSON.stringify(detail);
+}
+
+async function openHub() {
+  $('hub-problems').textContent = ''; $('hub-go').disabled = true;
+  $('hub').hidden = false; loadCities();
+  const s = await (await fetch('/api/hubs/suggest')).json();
+  if (s.detail) { $('hub-problems').textContent = problemText(s.detail); return; }
+  HUB_SUGGEST = s;
+  HUB_FIELDS.forEach(k => { const el = $('hub-' + k); if (el) el.value = s[k] == null ? '' : s[k]; });
+  const regions = (s.context || {}).regions || [];
+  $('hub-region').innerHTML = regions.map(r => `<option${r === s.region ? ' selected' : ''}>${esc(r)}</option>`).join('');
+  $('hub-spokes').innerHTML = ((s.context || {}).spokes || []).map(n =>
+    `<label style="display:inline-flex;align-items:center;gap:6px;margin:0"><input type="checkbox" value="${esc(n)}" style="width:auto"${(s.connect_spokes || []).includes(n) ? ' checked' : ''}> ${esc(n)}</label>`).join('')
+    || '<span class="hint">no branches yet — the headend is provisioned on its own</span>';
+  $('hub-go').disabled = false;
+}
+$('hub-cancel').onclick = () => { $('hub').hidden = true; };
+$('add-hub').onclick = () => openHub();
+$('hub-go').onclick = async () => {
+  const city = $('hub-city').value.trim(), known = CITIES.find(c => c.city === city);
+  const hub = { role: 'hub', region: $('hub-region').value,
+                node_idx: HUB_SUGGEST.node_idx, console_port: HUB_SUGGEST.console_port,
+                lat: known ? known.lat : (city === HUB_SUGGEST.city ? HUB_SUGGEST.lat : null),
+                lon: known ? known.lon : (city === HUB_SUGGEST.city ? HUB_SUGGEST.lon : null),
+                connect_spokes: [...$('hub-spokes').querySelectorAll('input:checked')].map(i => i.value) };
+  HUB_FIELDS.forEach(k => { const el = $('hub-' + k); if (el) hub[k] = el.type === 'number' ? Number(el.value) : el.value.trim(); });
+  $('hub-problems').textContent = ''; $('hub-go').disabled = true;
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'content-type': 'application/json' },
+                                       body: JSON.stringify({ mode: 'hub', hub, options: { golden: $('hub-golden').checked, test: $('hub-test').checked } }) });
+  $('hub-go').disabled = false;
+  if (!r.ok) { $('hub-problems').textContent = problemText((await r.json().catch(() => ({}))).detail); return; }
+  const run = await r.json(); $('hub').hidden = true; watch(run.id);
+};
+
+
 // ---- views ----------------------------------------------------------------
 function showView() {
   const h = (location.hash || '#home').slice(1);
@@ -1229,6 +1415,7 @@ function applyRoles() {
   const hb = $('add-hub'); if (hb) { hb.disabled = !op; }
   document.querySelectorAll('button.rot, button.rh, button.renew, button.auth, button.remed, button.reapply').forEach(b => { if (b.title === 'no remediation lines') return; b.disabled = !op; if (!op) b.title = 'operator role required'; });
   document.querySelectorAll('button.rm').forEach(b => { b.disabled = !ap; if (!ap) b.title = 'approver role required'; });
+  renderTasks();
   $('who').innerHTML = ME ? `<b>${esc(ME.name)}</b> <span class="pill">${esc(ME.role)}</span>${ME.via === 'oidc' ? ' <span class="hint">SSO</span>' : ''} <a href="#" onclick="logout();return false">sign out</a>` : `<a href="#" onclick="$('login').hidden=false;return false">sign in</a>`;
 }
 async function whoami() {

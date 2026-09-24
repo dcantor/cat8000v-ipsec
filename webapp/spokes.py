@@ -58,7 +58,7 @@ def suggest_identity(I, C, role):
     while f"{role}{n}" in C["ROLE"] or f"{role}{n}" in {d["name"] for d in I["devices"]} or (role == "hub" and n == 1 and "hub" in C["ROLE"]): n += 1
     oob = ipaddress.IPv4Network(I["oob"]["prefix"]); used_ips = set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}
     mgmt_ip = _next_free((str(h) for h in list(oob.hosts())[10:]), used_ips)
-    routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke")]
+    routers = [d for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES]   # the DCI chain holds router-ids, LANs and AS numbers too
     rids = {d["router_id"] for d in routers}; rid = _next_free((f"10.255.1.{k}" for k in range(1, 255)), rids)
     lans = {ipaddress.IPv4Network(d["lan"]) for d in routers}; lan = _next_free((ipaddress.IPv4Network(f"192.168.{k}.0/24") for k in range(11, 255)), lans)
     asns = {int(d["asn"]) for d in routers}; base = min(int(d["asn"]) for d in routers); asn = _next_free(range(base + 1, base + 1000), asns)
@@ -110,7 +110,7 @@ def validate(spec):
         if str(ip) in set(C["MGMT_IP"].values()) | {I["oob"]["gateway"], "10.2.0.10"}: errs.append(f"management IP {ip} is in use")
     except ValueError: errs.append("management IP is not an IPv4 address")
     if spec.get("ike_authentication") not in (None, "", "psk", "certificate"): errs.append("ike_authentication: psk or certificate")
-    routers = [d for d in I["devices"] if d["role"] in ("hub", "spoke")]
+    routers = [d for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES]   # a new router must not collide with the DCI chain either
     try:
         if ipaddress.IPv4Address(spec.get("router_id", "")) in {ipaddress.IPv4Address(d["router_id"]) for d in routers}: errs.append("router-id in use")
     except ValueError: errs.append("router-id is not an IPv4 address")

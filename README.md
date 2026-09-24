@@ -96,6 +96,23 @@ and the portal streams each step's status and log.
 ![Provision page](docs/screenshots/portal-provision.png)
 
 ### Provision page
+The page opens on **What do you want to do?** — one card per thing this portal can do, grouped by what it is for, each
+saying what will happen and roughly how long it takes. Pick one and it opens the right dialog; the ones that act on a
+single router ask which one first, listing only those that qualify (a key rotation offers the branches on a pre-shared
+key and when each was last rotated, a renewal the routers that hold a certificate and their days left). Cards you may not
+use are greyed with the reason (`approver role required`, or `every branch authenticates with a certificate — there is
+no key to rotate`).
+
+| | |
+|---|---|
+| **Build** | Add a branch · Add a headend |
+| **Change a branch** | Change IKE authentication · Rotate a pre-shared key · Renew a certificate · Re-home · Remove |
+| **The whole service** | Deploy the model · Dry run · Run the tests · Edit the service model |
+| **Configuration** | Check for drift (Compliance) · See what is running (Jobs) |
+
+![What do you want to do?](docs/screenshots/portal-provision.png)
+
+Underneath, the model itself is still a form — that is what a deploy pushes:
 - **Site / Routers / VPN service / Crypto profile** — the whole intent is a form: site metadata, every
   router (hostname, region, branch site, AS, router-id, LAN, **its own pre-shared key** for spokes,
   comments), the VPN service (name, change ticket, owner) and its tunnels, the IKEv2/IPsec suite.
@@ -168,8 +185,10 @@ intent, then runs the pipeline — **headends and the new spoke are configured i
 | ![](docs/screenshots/portal-wizard-1.png) | ![](docs/screenshots/portal-wizard-2.png) | ![](docs/screenshots/portal-wizard-3.png) |
 
 ### Add a headend / remove a spoke
-- A new headend (`POST /api/runs {"mode":"hub"}`) is linked to every existing spoke — the run
-  re-defines the spokes for their new WAN port, brings the headend up, and applies both sides.
+- **Add a headend** (the Build card, or the button on the Routers table) suggests the whole identity — hostname, region,
+  city, management IP, AS, router-id, site LAN — and lists the branches to link it to, each ticked by default. The run
+  re-defines those spokes for their new WAN port, brings the headend up, and applies both sides
+  (`POST /api/runs {"mode":"hub"}`).
 - **Remove…** on a spoke shows exactly what is released and what every headend loses, then powers
   off, cleans Nautobot, drops the router from the intent / `lab.conf` / Terraform state, destroys the
   headend-side tunnel and BGP neighbour, deletes the VM, and re-tests.
