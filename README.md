@@ -89,11 +89,12 @@ shows up in VictoriaLogs and through the portal.
 
 ## The VPN provisioning portal
 
-One form, one button, a source of truth kept honest. Every change goes
+Pick what you want to do, and watch it happen. Every change goes
 **intent → Nautobot seed → NAC data rendered *from Nautobot* → Terraform plan/apply → Golden Config → Robot tests**,
-and the portal streams each step's status and log.
+and the portal streams each step's status and log on the job's own page. It opens on **Home**, the live picture of the
+service:
 
-![Provision page](docs/screenshots/portal-provision.png)
+![Home](docs/screenshots/portal-inventory.png)
 
 ### Provision page
 The page opens on **What do you want to do?** — one card per thing this portal can do, grouped by what it is for, each
@@ -111,6 +112,7 @@ no key to rotate`).
 | **Configuration** | Check for drift (Compliance) · See what is running (Jobs) |
 
 ![What do you want to do?](docs/screenshots/portal-provision.png)
+![Which branch?](docs/screenshots/portal-task-pick.png)
 
 Underneath, the model itself is still a form — that is what a deploy pushes:
 - **Site / Routers / VPN service / Crypto profile** — the whole intent is a form: site metadata, every
@@ -189,6 +191,8 @@ intent, then runs the pipeline — **headends and the new spoke are configured i
   city, management IP, AS, router-id, site LAN — and lists the branches to link it to, each ticked by default. The run
   re-defines those spokes for their new WAN port, brings the headend up, and applies both sides
   (`POST /api/runs {"mode":"hub"}`).
+
+![Add a headend](docs/screenshots/portal-add-headend.png)
 - **Remove…** on a spoke shows exactly what is released and what every headend loses, then powers
   off, cleans Nautobot, drops the router from the intent / `lab.conf` / Terraform state, destroys the
   headend-side tunnel and BGP neighbour, deletes the VM, and re-tests.
@@ -205,25 +209,14 @@ tunnel commits `capacity.bandwidth_per_tunnel_mbps` = 8 Mbps) — plus the live 
 headend (`show platform resources`, against the platform's warning threshold; data-plane QFP CPU and DRAM
 alongside) — with an **aggregate** bar showing the tightest of the three and the effective free slots (the
 model constraints set the slots, the wizard and deploy validation check them; a headend at its CPU threshold
-has none), and a
-per-tunnel report joining the Nautobot model with live IKEv2 / VTI / eBGP / ESP state collected from the
-headends; **Export CSV** (tunnels plus a headend-capacity block).
+has none). The per-tunnel report and the LAN hosts moved to the **Inventory** tab.
 
-![Inventory](docs/screenshots/portal-inventory.png)
 ![Topology](docs/screenshots/portal-topology.png)
 
 The topology is drawn on a map of the USA — headends in New York, Chicago and Los Angeles, branches in Boston,
 Dallas, Seattle, Denver and Phoenix (Nautobot Location coordinates, from `lab-intent.json`) — with a spoke filter and a
 schematic view as the alternative.
 ![Headend capacity](docs/screenshots/portal-capacity.png)
-![Tunnel report](docs/screenshots/portal-tunnels.png)
-
-The **LAN hosts** card lists the Alpine VM behind every router; **Ping mesh** runs the full host-to-host matrix over the tunnels,
-plus two more columns per host — its **own router** (the LAN gateway) and the **internet** (1.1.1.1 through its headend's breakout) —
-every check green with its round-trip time, red when it fails; **▶ Live** keeps probing every check every 5 seconds with the
-latencies updating in place (■ Stop ends it; the SSH sessions to the hosts stay open between probes).
-
-![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
 
 ### Inventory tab and the router page
 Every branch is a **customer** of **ACME Networks**, the provider that sells the VPN service and owns the headends and their
@@ -250,9 +243,15 @@ diff, the backup history from Gitea with per-commit diffs. The whole portal has 
 follows the OS setting until chosen); the code panes have their own on top.
 
 Below the table, the same page carries the **per-tunnel report** (model from Nautobot joined with live IKEv2 / VTI / eBGP /
-ESP state, with CSV export) and the **LAN hosts** with their **ping mesh** — both were on the landing page before.
+ESP state, with CSV export) and the **LAN hosts** card — the Alpine VM behind every router, where **Ping mesh** runs the full
+host-to-host matrix over the tunnels plus two more columns per host, its **own router** (the LAN gateway) and the **internet**
+(1.1.1.1 through its headend's breakout): every check green with its round-trip time, red when it fails. **▶ Live** keeps
+probing every check every 5 seconds with the latencies updating in place (■ Stop ends it; the SSH sessions to the hosts stay
+open between probes). Both cards were on the landing page before.
 
 ![Inventory](docs/screenshots/portal-branches.png)
+![Tunnel report](docs/screenshots/portal-tunnels.png)
+![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
 ![Router page](docs/screenshots/portal-branch.png)
 ![Router configuration, dark mode](docs/screenshots/portal-branch-config.png)
 
@@ -524,7 +523,7 @@ The host's resolver comes from the intent too (`dns_client` on the host; cloud-i
 hash of the seed so a changed resolver is actually applied on the next boot).
 
 ![Topology with the DCI chain](docs/screenshots/portal-topology-schematic.png)
-![Branches with the DCI chain](docs/screenshots/portal-branches.png)
+![The DCI chain in the Inventory](docs/screenshots/portal-branches.png)
 
 ## Network-as-Code
 
