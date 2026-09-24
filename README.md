@@ -55,7 +55,7 @@ gateway; the LAN used to be Loopback10) — its eth0 is on the OOB network (10.2
 addresses it. The hosts are Nautobot devices (role `lan-host`, platform `alpine`, at their router's site, eth1 addressed
 and cabled to the LAN port), and the intent lists them (role `host`, `router`); the LAN link is the only `/24` link.
 `./lab.sh hosts` prints the **ping matrix** — every host pings every other host over the tunnels (branch ↔ headend, branch ↔
-branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Inventory page has the
+branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Home page has the
 same under **LAN hosts → Ping mesh** (`GET /api/hosts?ping=true`), and Robot suite 09 asserts the full mesh and the path.
 
 ### Internet breakout — per region, nearest headend
@@ -176,8 +176,9 @@ intent, then runs the pipeline — **headends and the new spoke are configured i
 
 ![Remove spoke](docs/screenshots/portal-remove.png)
 
-### Inventory page
-KPIs, a **rendered topology** (headends on top, spokes grouped by region, one line per tunnel coloured
+### Home page (the landing page)
+Opening the portal lands here — the live picture of the service. (It is the inventory; `#home` and the older `#inventory`
+both resolve to it.) KPIs, a **rendered topology** (headends on top, spokes grouped by region, one line per tunnel coloured
 by live health, tooltips, links into Nautobot), **headend capacity** with two constraints per headend —
 tunnels terminated (50, custom field `vpn_tunnel_capacity` on the hub) and the **bandwidth of the firewall
 in front of it** (custom field `firewall_bandwidth_mbps`: fw-east 40, fw-central 50, fw-west 90 Mbps; every
