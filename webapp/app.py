@@ -192,6 +192,9 @@ def nautobot_token():
     return tok
 
 
+PLAN_PARALLELISM = os.environ.get("NAC_PLAN_PARALLELISM", "8")   # terraform plan reads every resource over RESTCONF: do it in parallel
+
+
 class Run(RunBase):
     LAB = "cat8000v-ipsec"
     STEP_TITLES = STEP_TITLES
@@ -213,6 +216,36 @@ class Run(RunBase):
 
     def sh(self, cmd, cwd=None, env=None, timeout=3600, check=False):   # this portal inspects exit codes itself (terraform's -detailed-exitcode)
         return super().sh(cmd, cwd=cwd, env=env, timeout=timeout, check=check)
+
+    # the day-2 jobs below change one branch and the headends it is tunnelled to — nothing else in the model can move. Planning
+    # the whole lab for them costs about a hundred seconds of RESTCONF reads per plan (and each job plans several times), so they
+    # are scoped: every plan and apply is targeted at those routers' resources. A job that can touch anything (deploy, spoke, hub,
+    # remove, rehome) is not scoped.
+    SCOPED = ("auth", "rotate", "renew")
+
+    def scope(self):
+        """The routers a scoped job may change, as nac_apply.py --device arguments; [] when the job is not scoped."""
+        if self.mode not in self.SCOPED: return []
+        name = (self.spoke or {}).get("name")
+        if not name: return []
+        hubs = sorted({t["hub"] for t in self.intent.get("tunnels", []) if t["spoke"] == name}
+                      | {t["spoke"] for t in self.intent.get("tunnels", []) if t["hub"] == name})
+        return [name] + hubs
+
+    def scope_args(self):
+        return [x for d in self.scope() for x in ("--device", d)]
+
+    def scope_targets(self):
+        """`-target` addresses for the scoped routers, read from Terraform's state (no refresh, no device contact); [] when
+        the job is not scoped, so a full plan is used."""
+        scope = self.scope()
+        if not scope: return []
+        if getattr(self, "_targets", None) is None:
+            out = subprocess.run(["./lab.sh", "nac", "state", "list"], cwd=LAB, capture_output=True, text=True, timeout=300).stdout
+            self._targets = [a.strip() for a in out.splitlines()
+                             if any(f'["{d}"]' in a or f'["{d}/' in a for d in scope)]
+            self.say(f"scoped to {', '.join(scope)}: {len(self._targets)} of {len(out.splitlines())} resources")
+        return self._targets
 
     def plan(self):
         if self.mode == "test": return ["validate", "test"]
@@ -579,7 +612,15 @@ class Run(RunBase):
         s["summary"] = "; ".join(x.split(" (")[0] for x in done[-8:]) or "no firewalls"
 
     def do_plan(self, s):
-        rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", "-parallelism=1"])
+        scope = self.scope()
+        if scope:
+            rc = self.sh([sys.executable, "tools/nac_apply.py", *self.scope_args(), "--dry-run"])
+            if rc: raise RuntimeError(f"terraform plan failed (rc={rc})")
+            lines = [l["line"] for l in self.log if l["line"].startswith("staged apply:") or l["line"].startswith("No changes")]
+            self.plan_rc = 0 if (lines and lines[-1].startswith("No changes")) else 2
+            s["summary"] = (lines[-1] if lines else "no changes") + f" · scoped to {', '.join(scope)}"
+            return
+        rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", f"-parallelism={PLAN_PARALLELISM}"])
         if rc == 1: raise RuntimeError("terraform plan failed")
         summary = [l["line"] for l in self.log if l["line"].startswith("Plan:") or l["line"].startswith("No changes")]
         s["summary"] = summary[-1] if summary else ("changes pending" if rc == 2 else "no changes")
@@ -591,16 +632,17 @@ class Run(RunBase):
         # the NAC module has no dependency from tunnel interfaces to the IPsec / IKEv2 profile they reference: a VTI could be pushed
         # before its new profile exists, or an old profile deleted while a tunnel still uses it — tools/nac_apply.py applies the plan in
         # stages (creates, then in-place updates, then the rest), each a saved plan
-        rc = self.sh([sys.executable, "tools/nac_apply.py"])
+        rc = self.sh([sys.executable, "tools/nac_apply.py", *self.scope_args()])
         if rc: raise RuntimeError(f"staged terraform apply failed (rc={rc})")
         summary = [l["line"] for l in self.log if l["line"].startswith("Apply complete")]
         s["summary"] = "; ".join(x.replace("Apply complete! Resources: ", "") for x in summary) or "applied"
         # IOS-XE re-syncs its YANG datastore after interface deletions/reloads and then elides some values (e.g. the
         # transform-set key size), which reads back as drift: converge with one more apply instead of failing later
-        rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", "-parallelism=1"])
+        targets = [f"-target={t}" for t in self.scope_targets()]
+        rc = self.sh(["./lab.sh", "nac", "plan", "-no-color", "-input=false", "-detailed-exitcode", f"-parallelism={PLAN_PARALLELISM}", *targets])
         if rc == 2:
             self.say("post-apply drift (DMI re-sync) — re-asserting once")
-            if self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1"]): raise RuntimeError("convergence apply failed")
+            if self.sh(["./lab.sh", "nac", "apply", "-auto-approve", "-no-color", "-input=false", "-parallelism=1", *targets]): raise RuntimeError("convergence apply failed")
             s["summary"] += " (+1 convergence apply)"
 
     # ---- compliance remediation ---------------------------------------------------

@@ -10,6 +10,27 @@ set -uo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 [[ -x .venv/bin/robot ]] || { echo "error: run tests/setup.sh first" >&2; exit 1; }
 
+# Runs execute one at a time (one Terraform state, one intent): a suite started while the portal is mid-run fails every test
+# that needs the run queue. Wait for the queue to drain — unless these tests *are* the portal's test step (PORTAL_RUN_ID), or
+# the caller says not to (QUEUE_WAIT=0).
+wait_for_queue() {
+  local wait_s="${QUEUE_WAIT:-1800}" said=""
+  [[ "$wait_s" == "0" ]] && return 0
+  local deadline=$(( SECONDS + wait_s ))
+  while :; do
+    busy="$(.venv/bin/python queue_state.py 2>/dev/null)" || return 0
+    [[ -z "$busy" ]] && { [[ -n "$said" ]] && echo "==> the run queue is free"; return 0; }
+    if (( SECONDS >= deadline )); then
+      echo "error: the portal is still running $busy" >&2
+      echo "       these tests need the run queue; start them when it is free, or set QUEUE_WAIT=0 to run anyway" >&2
+      exit 3
+    fi
+    [[ -z "$said" ]] && { echo "==> waiting for the portal's run queue: $busy"; said=1; }
+    sleep 15
+  done
+}
+wait_for_queue
+
 ts="$(date +%Y-%m-%d_%H-%M-%S)"
 out="$(cd .. && pwd)/results/$ts"
 mkdir -p "$out/configs"

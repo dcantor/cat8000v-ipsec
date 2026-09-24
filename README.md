@@ -129,6 +129,21 @@ remediation — opens that job's page, and every job id in the Branches, Complia
 ![Jobs](docs/screenshots/portal-jobs.png)
 ![A job's page](docs/screenshots/portal-job.png)
 
+### How long a job takes — and why
+Planning, not pushing, is what costs the time: a full `terraform plan` refreshes every resource of every router over
+RESTCONF (about 100 s for this lab at `-parallelism=1`), and a day-2 job plans several times. Two things follow from that:
+
+- **Plans read in parallel** (`-parallelism=8`, `NAC_PLAN_PARALLELISM`); applies stay serial, because writes to one router
+  must not race. A full plan drops from ~100 s to ~50 s.
+- **Day-2 jobs are scoped**. An authentication switch, a key rotation or a certificate renewal can only change one branch
+  and the headends it is tunnelled to, so every plan and apply is targeted at those routers' resources
+  (`tools/nac_apply.py --device …`, the same mechanism as *Re-apply from the model*), and the plan that discovers the
+  changes compares the model with Terraform's state instead of re-reading every router. Golden Config, which runs at the
+  end of the pipeline, is what notices a router that drifted behind Terraform's back.
+
+Measured on this lab, one authentication switch (`spoke1`, PSK ↔ certificate, no tests): **699 s → 338 s**, of which the
+plan step went 99 s → 9 s and the staged apply 361 s → 89 s. The Nautobot seed (169 s) is now the longest step of every job.
+
 ### Routers table — per-branch authentication and day-2 actions
 Every router row shows its **IKE authentication** (each branch chooses pre-shared key or certificate; a headend shows the
 methods its spokes use), the **certificate** it holds (days left), and the actions: **Change auth…**, **Renew cert…**,
@@ -503,6 +518,11 @@ renewal and a real PSK ↔ certificate switch of a spoke through the portal; and
 router's page, the compliance report and its scheduled run, drift detected → remediated with Nautobot's lines and re-applied from the model, the single sign-on flow);
 suite 12 — the DCI chain (model, links, eBGP per hop, the acquisition's prefixes routable from every branch, its host in the mesh and on the internet, the overlapping prefix translated in both directions and DNS fixed up — a thousand prefixes and a thousand records at once, and the fix-up captured on both sides of the DCI — Golden Config compliant); and suite 11 — the internet breakout (NAT, return routes, default origination, nearest-headend
 preference, every host on the internet through its region's headend).
+A suite **waits for the portal's run queue** before it starts (`tests/queue_state.py`): jobs execute one at a time, so a
+suite started while a deployment is mid-flight would fail every test that needs the queue. It waits up to `QUEUE_WAIT`
+seconds (default 1800, `QUEUE_WAIT=0` to skip the check) and names the job it is waiting for; the portal's own test step
+is exempt. The scheduled Golden Config run skips its cycle for the same reason.
+
 Each run keeps pre/post config backups and a diff under `results/`, plus **`report.pdf`** — a one-file evidence report built
 from `output.xml` (`tests/report_pdf.py`): every suite and test with its result, its duration and the numbers it measured
 (the NAT and DNS sweeps, the compliance rows, the IKEv2 SAs), so a run can be read without opening `log.html`.
