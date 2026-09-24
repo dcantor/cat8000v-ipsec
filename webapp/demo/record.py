@@ -126,9 +126,9 @@ with sync_playwright() as pw:
     page.mouse.wheel(0, 500); time.sleep(0.5); hold(page, 2.5)
     page.evaluate("window.scrollTo(0, 0)"); time.sleep(0.3)
 
-    # ---- 5. inventory ---------------------------------------------------------------------------------------------------
-    page.goto(a.url + "/#inventory"); wait_for(page, "document.querySelectorAll('#inv-tunnels tbody tr').length > 0", 180000); time.sleep(1)
-    caption(page, "Inventory: every tunnel, live", "Nautobot's VPN model joined with IKEv2 SA / VTI / eBGP / ESP state collected from the headends — KPIs on top")
+    # ---- 5. home ---------------------------------------------------------------------------------------------------------
+    page.goto(a.url + "/#home"); wait_for(page, "document.querySelectorAll('#inv-kpis .kpi').length > 0", 180000); time.sleep(1)
+    caption(page, "Home: the service at a glance", "Nautobot's VPN model joined with IKEv2 SA / VTI / eBGP / ESP state collected from the headends — KPIs, the topology and headend capacity")
     hold(page, 3.5)
     scroll_to(page, "#inv-topo")
     caption(page, "Rendered topology and map: headends on top, branches below, one line per tunnel coloured by health", "hover a tunnel for ports, addresses and counters; click anything to open it in Nautobot")
@@ -136,6 +136,17 @@ with sync_playwright() as pw:
     scroll_to(page, "#inv-capacity", "center")
     caption(page, "Headend capacity: tunnel slots and the firewall's bandwidth, live CPU — the binding constraint per headend", "modelled in Nautobot (vpn_tunnel_capacity, firewall_bandwidth_mbps), enforced when a spoke is provisioned")
     hold(page, 3.5)
+
+    # ---- 6. inventory ----------------------------------------------------------------------------------------------------
+    page.goto(a.url + "/#inventory"); wait_for(page, "document.querySelectorAll('#brs-table tbody tr').length > 0"); time.sleep(1)
+    caption(page, "Inventory: every node in the lab", "headends, customer branches, the DCI chain, the VyOS firewalls and the Alpine LAN hosts — every branch is a customer of ACME Networks, the provider that owns the headends")
+    hold(page, 3.5)
+    note(page, "#brs-table tbody tr:nth-child(4) td:nth-child(5)", "ACME-DH: two tunnels → dual headend (resilient); ACME-MH: three or more → any-region"); hold(page, 3); note_off(page)
+    caption(page, "Filter the list: free text, role, region, design pattern, service tier, industry, IKE auth, health, VM state", "remembered per browser; the pattern legend below the table filters too")
+    page.select_option("#bf-tier", "Gold"); page.evaluate("renderBranches()"); time.sleep(0.5); note(page, "#bf-tier", "service tier Gold"); hold(page, 2.5); note_off(page)
+    page.select_option("#bf-pattern", "Multi headend (any-region)"); page.evaluate("renderBranches()"); time.sleep(0.5); note(page, "#bf-pattern", "and the multi-headend pattern"); hold(page, 2.5); note_off(page)
+    type_into(page, "#bf-q", "Seattle"); hold(page, 2)
+    page.evaluate("clearBranchFilters()"); time.sleep(0.5); hold(page, 1.5)
     scroll_to(page, "#inv-tunnels")
     caption(page, "Per-tunnel report: model + live state, IKE authentication per tunnel · Export CSV", "")
     hold(page, 3); page.mouse.wheel(0, 300); time.sleep(0.5); hold(page, 2)
@@ -146,17 +157,6 @@ with sync_playwright() as pw:
         note(page, "#hosts-live", "▶ Live: one probe per pair every 5 s, round-trip time in the cell — green ok, red loss"); hold(page, 2); note_off(page)
         click(page, "#hosts-live", settle=1); hold(page, 9); click(page, "#hosts-live", settle=0.5)
     else: hold(page, 3)
-
-    # ---- 6. branches ----------------------------------------------------------------------------------------------------
-    page.goto(a.url + "/#branches"); wait_for(page, "document.querySelectorAll('#brs-table tbody tr').length > 0"); time.sleep(1)
-    caption(page, "Branches: every branch is a customer of ACME Networks, the provider that owns the headends", "company, address, industry, account, service tier — Nautobot tenants and custom fields; the ACME design pattern follows from the number of tunnels a branch has")
-    hold(page, 3.5)
-    note(page, "#brs-table tbody tr:nth-child(4) td:nth-child(5)", "ACME-DH: two tunnels → dual headend (resilient); ACME-MH: three or more → any-region"); hold(page, 3); note_off(page)
-    caption(page, "Filter the list: free text, role, region, design pattern, service tier, industry, IKE auth, health, VM state", "remembered per browser; the pattern legend below the table filters too")
-    page.select_option("#bf-tier", "Gold"); page.evaluate("renderBranches()"); time.sleep(0.5); note(page, "#bf-tier", "service tier Gold"); hold(page, 2.5); note_off(page)
-    page.select_option("#bf-pattern", "Multi headend (any-region)"); page.evaluate("renderBranches()"); time.sleep(0.5); note(page, "#bf-pattern", "and the multi-headend pattern"); hold(page, 2.5); note_off(page)
-    type_into(page, "#bf-q", "Seattle"); hold(page, 2)
-    page.evaluate("clearBranchFilters()"); time.sleep(0.5); hold(page, 1.5)
 
     # ---- 7. a router's page ---------------------------------------------------------------------------------------------
     page.goto(a.url + "/#branch/spoke3"); wait_for(page, "document.querySelectorAll('#br-tunnels tbody tr').length > 0"); time.sleep(1)
@@ -213,7 +213,7 @@ with sync_playwright() as pw:
     caption(page, "Audit: who did what — logins (local and SSO), every run start / resume / cancel, denied requests, the scheduler's runs", "")
     hold(page, 3.5)
     page.evaluate("localStorage.setItem('portal-theme', 'dark'); applyTheme()"); time.sleep(0.5)
-    page.goto(a.url + "/#inventory"); wait_for(page, "document.querySelectorAll('#inv-tunnels tbody tr').length > 0", 180000); time.sleep(1)
+    page.goto(a.url + "/#home"); wait_for(page, "document.querySelectorAll('#inv-kpis .kpi').length > 0", 180000); time.sleep(1)
     caption(page, "Dark mode for the whole portal — from the header, or following the OS setting", "")
     hold(page, 3.5); page.evaluate("localStorage.removeItem('portal-theme'); applyTheme()")
     page.goto(a.url + "/docs"); time.sleep(3)

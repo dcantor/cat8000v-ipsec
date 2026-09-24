@@ -55,7 +55,7 @@ gateway; the LAN used to be Loopback10) — its eth0 is on the OOB network (10.2
 addresses it. The hosts are Nautobot devices (role `lan-host`, platform `alpine`, at their router's site, eth1 addressed
 and cabled to the LAN port), and the intent lists them (role `host`, `router`); the LAN link is the only `/24` link.
 `./lab.sh hosts` prints the **ping matrix** — every host pings every other host over the tunnels (branch ↔ headend, branch ↔
-branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Home page has the
+branch through a shared headend, headend ↔ headend through a spoke homed on both): 42 / 42 pairs. The Inventory page has the
 same under **LAN hosts → Ping mesh** (`GET /api/hosts?ping=true`), and Robot suite 09 asserts the full mesh and the path.
 
 ### Internet breakout — per region, nearest headend
@@ -196,8 +196,8 @@ intent, then runs the pipeline — **headends and the new spoke are configured i
 ![Remove spoke](docs/screenshots/portal-remove.png)
 
 ### Home page (the landing page)
-Opening the portal lands here — the live picture of the service. (It is the inventory; `#home` and the older `#inventory`
-both resolve to it.) KPIs, a **rendered topology** (headends on top, spokes grouped by region, one line per tunnel coloured
+Opening the portal lands here — the live picture of the service: KPIs, the topology and every headend's capacity.
+(Every node of the lab, the per-tunnel report and the LAN hosts are on the **Inventory** tab.) A **rendered topology** (headends on top, spokes grouped by region, one line per tunnel coloured
 by live health, tooltips, links into Nautobot), **headend capacity** with two constraints per headend —
 tunnels terminated (50, custom field `vpn_tunnel_capacity` on the hub) and the **bandwidth of the firewall
 in front of it** (custom field `firewall_bandwidth_mbps`: fw-east 40, fw-central 50, fw-west 90 Mbps; every
@@ -225,7 +225,7 @@ latencies updating in place (■ Stop ends it; the SSH sessions to the hosts sta
 
 ![LAN hosts and the ping mesh](docs/screenshots/portal-hosts.png)
 
-### Branches tab and the router page
+### Inventory tab and the router page
 Every branch is a **customer** of **ACME Networks**, the provider that sells the VPN service and owns the headends and their
 firewalls. Each customer has a company name, street address, industry, ACME account, service tier (Bronze / Silver / Gold) and
 contract start (generated deterministically for the lab, editable in the spoke wizard) and is a **Nautobot tenant** (group
@@ -234,10 +234,13 @@ address; the ACME custom fields carry account / tier / industry / contract on th
 router and its location. The pattern is not chosen — it **follows from the number of tunnels** the branch has: `ACME-SH` single
 headend (1), `ACME-DH` dual headend, resilient (2), `ACME-MH` multi headend, any-region (3+); headends show `ACME-HE`.
 
-**Branches** lists every branch and headend — customer / owner, site and address, design pattern, tier, VM state, tunnels up,
-IKE method, certificate days left, LAN host, free slots, last run — with a **filter bar**: free-text search (router, company,
-city, address, account, site…) and selects for role, region, design pattern, service tier, industry, IKE authentication, tunnel
-health and VM state (remembered per browser; the pattern legend below the table filters too). Each row opens the router's page,
+**Inventory** lists **every node of the lab** — the three headends, the customer branches, the DCI chain, the three VyOS
+firewalls and the eight Alpine LAN hosts (20 rows) — with customer / owner, site and address, design pattern, tier, address,
+VM state, tunnels up, IKE method, certificate days left, what each node is attached to, free slots and last run. A **filter
+bar** narrows it: free-text search (node, company, city, address, account, site…) and selects for kind (headends, branches,
+DCI, acquisition edge, firewalls, LAN hosts), region, design pattern, service tier, industry, IKE authentication, tunnel health
+and VM state (remembered per browser; the pattern legend below the table filters too). A firewall's row opens the Firewalls
+page and a host's row its router's page; a router's row opens the router's page,
 which starts with the customer (or owner) box: company, address, industry, account, tier, contract, design pattern, and the
 tenant in Nautobot; then identity, authentication and certificate, the internet breakout preference,
 the day-2 actions, its tunnels with live IKE / VTI / eBGP / ESP state, the firewall rules and log lines touching it, its LAN
@@ -246,7 +249,10 @@ intended config and last backup from Nautobot's Golden Config with the complianc
 diff, the backup history from Gitea with per-commit diffs. The whole portal has a **dark / light** toggle in the header (it
 follows the OS setting until chosen); the code panes have their own on top.
 
-![Branches](docs/screenshots/portal-branches.png)
+Below the table, the same page carries the **per-tunnel report** (model from Nautobot joined with live IKEv2 / VTI / eBGP /
+ESP state, with CSV export) and the **LAN hosts** with their **ping mesh** — both were on the landing page before.
+
+![Inventory](docs/screenshots/portal-branches.png)
 ![Router page](docs/screenshots/portal-branch.png)
 ![Router configuration, dark mode](docs/screenshots/portal-branch-config.png)
 

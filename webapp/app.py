@@ -1284,7 +1284,15 @@ def branches(refresh: bool = Query(False, description="re-collect the tunnels' l
                     "authentication": intent_mod.spoke_auth(I, d["name"]) if d["role"] == "spoke" else None, "methods": sorted(intent_mod.router_auths(I, d["name"])),
                     "cert_days": cert and cert.get("days_left"), "cert_expired": bool(cert and cert.get("expired")), "host": (hosts.get(d["name"]) or {}).get("name"), "host_state": (hosts.get(d["name"]) or {}).get("state"),
                     "free_slots": he and he.get("effective_free"), "last_run": last and {"id": last["id"], "mode": last["mode"], "status": last["status"], "started": last["started"], "user": last.get("user")}})
-    return {"generated": time.time(), "routers": out, "inventory_error": inv_d.get("error"), "provider": provider,
+    # the rest of the lab, so the Inventory page can list every node: the firewalls in front of the headends and the Alpine LAN hosts
+    fws = [{"name": d["name"], "role": "firewall", "site": d.get("site"), "region": d.get("region"), "mgmt_ip": d["mgmt_ip"],
+            "state": vms.get((d["name"], "firewall"), "undefined"), "headend": intent_mod.headend_of_firewall(I, d["name"]) if hasattr(intent_mod, "headend_of_firewall") else
+            next((h["name"] for h in I["devices"] if h["role"] == "hub" and intent_mod.firewall_of(I, h["name"]) == d["name"]), None),
+            "bandwidth_mbps": d.get("bandwidth_mbps")} for d in I["devices"] if d["role"] == "firewall"]
+    lan = [{"name": h["name"], "role": "host", "site": h.get("site"), "region": h.get("region"), "mgmt_ip": h.get("mgmt_ip"), "state": h.get("state"),
+            "router": h.get("router"), "lan_ip": h.get("lan_ip"), "gateway": h.get("gateway"), "lan_if": h.get("lan_if"), "lan": h.get("lan")}
+           for h in lan_hosts(False)["hosts"]]
+    return {"generated": time.time(), "routers": out, "firewalls": fws, "hosts": lan, "inventory_error": inv_d.get("error"), "provider": provider,
             "patterns": [{**pt, "count": sum(1 for r in out if r["pattern"]["code"] == pt["code"])} for pt in intent_mod.PATTERNS.values()], "tiers": list(intent_mod.TIERS), "regions": I["regions"],
             "nautobot": {"tenants": f"{NAUTOBOT_PUBLIC_URL}/tenancy/tenants/?tenant_group=Customers", "devices": f"{NAUTOBOT_PUBLIC_URL}/dcim/devices/?location={I['site']['name']}"}}
 

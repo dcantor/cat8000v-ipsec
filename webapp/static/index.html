@@ -79,6 +79,7 @@
   th { color:var(--muted); font-weight:500; font-size:12px } td input, td select { padding:4px 6px }
   .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; background:var(--pill); color:var(--pill-ink) }
   .pill.hub { background:var(--hub-bg); color:var(--hub-ink) } .pill.spoke { background:var(--spoke-bg); color:var(--spoke-ink) }
+  .pill.firewall { background:var(--warn-bg); color:var(--ink) } .pill.host { background:var(--chip); color:var(--muted) }
   .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap }
   button { padding:8px 14px; border-radius:6px; border:1px solid var(--line); background:var(--input); color:var(--ink); font:inherit; cursor:pointer }
   button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600 }
@@ -120,7 +121,7 @@
 <body>
 <header>
   <div><h1>VPN Provisioning Portal</h1><div class="sub">C8000v IPsec VTI + eBGP · Nautobot source of truth · Network-as-Code (Terraform) · Robot Framework validation</div></div>
-  <nav><a href="#home" data-view="inventory">Home</a><a href="#provision" data-view="provision">Provision</a><a href="#branches" data-view="branch">Branches</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#jobs" data-view="jobs">Jobs</a><a href="#compliance" data-view="compliance">Compliance</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
+  <nav><a href="#home" data-view="home">Home</a><a href="#provision" data-view="provision">Provision</a><a href="#inventory" data-view="branches">Inventory</a><a href="#firewalls" data-view="firewalls">Firewalls</a><a href="#tools" data-view="tools">Tools</a><a href="#jobs" data-view="jobs">Jobs</a><a href="#compliance" data-view="compliance">Compliance</a><a href="#audit" data-view="audit">Audit</a><a href="/docs" target="_blank" title="REST API (Swagger UI)">API</a></nav>
   <div style="margin-left:auto" class="sub">Nautobot: <a id="nb-link" href="#" target="_blank">open</a> · <span id="inv-note"></span> · <span id="who"></span> · <a href="#" id="theme-toggle" title="dark / light (follows the OS setting until chosen)">☾ dark</a></div>
 </header>
 <main>
@@ -296,11 +297,11 @@
 </main>
 <main id="view-branches" hidden style="grid-template-columns:1fr">
   <div class="card">
-    <h2>Branches and headends <small id="brs-note">every branch is a customer of ACME; the headends are ACME's — each router with its page: tunnels, authentication, certificate, firewall rules, LAN host, runs — click a row</small>
+    <h2>Inventory <small id="brs-note">every node in the lab — headends, customer branches, the DCI chain, the VyOS firewalls and the Alpine LAN hosts; a router's row opens its page (tunnels, authentication, certificate, firewall rules, host, runs)</small>
       <span style="float:right;display:inline-flex;gap:6px;align-items:center"><a id="brs-nb" href="#" target="_blank" class="hint">customers in Nautobot</a><button type="button" onclick="loadBranches(true)">Refresh live</button></span></h2>
     <div class="filters" id="brs-filters">
-      <input id="bf-q" placeholder="search: router, company, city, address, account, site…" style="width:300px" oninput="renderBranches()">
-      <select id="bf-role" onchange="renderBranches()"><option value="">any role</option><option value="spoke">branches (customers)</option><option value="hub">headends (ACME)</option><option value="dci">DCI (interconnect)</option><option value="partner">acquisition edge</option></select>
+      <input id="bf-q" placeholder="search: node, company, city, address, account, site…" style="width:300px" oninput="renderBranches()">
+      <select id="bf-role" onchange="renderBranches()"><option value="">anything</option><option value="hub">headends (ACME)</option><option value="spoke">branches (customers)</option><option value="dci">DCI (interconnect)</option><option value="partner">acquisition edge</option><option value="firewall">firewalls (VyOS)</option><option value="host">LAN hosts (Linux VMs)</option></select>
       <select id="bf-region" onchange="renderBranches()"><option value="">any region</option></select>
       <select id="bf-pattern" onchange="renderBranches()"><option value="">any design pattern</option></select>
       <select id="bf-tier" onchange="renderBranches()"><option value="">any service tier</option></select>
@@ -310,8 +311,23 @@
       <select id="bf-state" onchange="renderBranches()"><option value="">any VM state</option><option value="running">running</option><option value="shut off">shut off</option></select>
       <button type="button" class="small" onclick="clearBranchFilters()">Clear</button><span class="hint" id="bf-count"></span>
     </div>
-    <div class="wide"><table id="brs-table"><thead><tr><th>Router</th><th>Role</th><th>Customer / owner</th><th>Site</th><th>Design pattern</th><th>Tier</th><th>AS</th><th>Site LAN</th><th>VM</th><th>Tunnels</th><th>IKE auth</th><th>Certificate</th><th>LAN host</th><th>Free slots</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="wide"><table id="brs-table"><thead><tr><th>Node</th><th>Kind</th><th>Customer / owner</th><th>Site</th><th>Design pattern</th><th>Tier</th><th>AS</th><th>Address</th><th>VM</th><th>Tunnels</th><th>IKE auth</th><th>Certificate</th><th>Attached to</th><th>Free slots</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="hint" id="brs-patterns" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>LAN hosts <small>one small Alpine VM behind every router (eth1 = .2 of the site LAN, the router's LAN port .1 as gateway; OOB eth0, lab / lab) — every host must reach every other host over the tunnels, its own router, and the internet through its headend's breakout</small>
+      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" id="hosts-ping">Ping mesh</button><button type="button" id="hosts-live" title="ping every pair once every 5 seconds and show the round-trip time live">▶ Live</button></span></h2>
+    <div class="hint" id="hosts-note"></div>
+    <div class="grid" style="grid-template-columns:1fr;gap:16px;align-items:start">
+      <div class="wide"><table id="inv-hosts"><thead><tr><th>Host</th><th>Behind</th><th>LAN address</th><th>Gateway</th><th>OOB</th><th>VM</th></tr></thead><tbody></tbody></table></div>
+      <div id="hosts-matrix" class="hint wide">no ping run yet — <b>Ping mesh</b> pings every host from every other host (~15 s)</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Tunnels <small>model from Nautobot's VPN app · live state from the headend (IKEv2 SA, VTI, eBGP, ESP counters)</small></h2>
+    <div class="wide"><table id="inv-tunnels"><thead><tr>
+      <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Region / site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
+    </tr></thead><tbody></tbody></table></div>
   </div>
 </main>
 <main id="view-branch" hidden style="grid-template-columns:1fr">
@@ -424,21 +440,6 @@
   <div class="card">
     <h2>Headend capacity <small>two constraints per headend: tunnels terminated (custom field <code>vpn_tunnel_capacity</code> on the hub) and the bandwidth of the firewall in front of it (custom field <code>firewall_bandwidth_mbps</code>; every tunnel commits <span id="inv-per-tunnel">?</span> Mbps) — plus the live control-plane <b>CPU</b> of the headend (<code>show platform resources</code>, measured against the platform's warning threshold). The aggregate is the tightest of the three; the model constraints set the free slots, a headend at or above its CPU threshold has none.</small></h2>
     <div id="inv-capacity"></div>
-  </div>
-  <div class="card">
-    <h2>LAN hosts <small>one small Alpine VM behind every router (eth1 = .2 of the site LAN, the router's LAN port .1 as gateway; OOB eth0, lab / lab) — every host must reach every other host over the tunnels, its own router, and the internet through its headend's breakout</small>
-      <span style="float:right;display:inline-flex;gap:6px;align-items:center"><button type="button" id="hosts-ping">Ping mesh</button><button type="button" id="hosts-live" title="ping every pair once every 5 seconds and show the round-trip time live">▶ Live</button></span></h2>
-    <div class="hint" id="hosts-note"></div>
-    <div class="grid" style="grid-template-columns:1fr;gap:16px;align-items:start">
-      <div class="wide"><table id="inv-hosts"><thead><tr><th>Host</th><th>Behind</th><th>LAN address</th><th>Gateway</th><th>OOB</th><th>VM</th></tr></thead><tbody></tbody></table></div>
-      <div id="hosts-matrix" class="hint wide">no ping run yet — <b>Ping mesh</b> pings every host from every other host (~15 s)</div>
-    </div>
-  </div>
-  <div class="card">
-    <h2>Tunnels <small>model from Nautobot's VPN app · live state from the headend (IKEv2 SA, VTI, eBGP, ESP counters)</small></h2>
-    <div class="wide"><table id="inv-tunnels"><thead><tr>
-      <th>Health</th><th>Tunnel</th><th>VPN</th><th>Headend</th><th>Headend WAN → Spoke WAN</th><th>Spoke</th><th>Region / site</th><th>Tunnel subnet</th><th>Encap / profile</th><th>IKE SA</th><th>SA age</th><th>VTI</th><th>eBGP</th><th class="num">ESP encaps</th><th class="num">ESP decaps</th><th class="num">Errors</th><th>Rate in/out</th><th>Last I/O</th><th>Protected prefixes</th><th>Ticket / owner</th><th>Model status</th>
-    </tr></thead><tbody></tbody></table></div>
   </div>
 </section>
 </main>
@@ -1206,13 +1207,15 @@ $('hub-go').onclick = async () => {
 // ---- views ----------------------------------------------------------------
 function showView() {
   const h = (location.hash || '#home').slice(1);
-  const v = h.startsWith('branch/') ? 'branch' : h.startsWith('job/') ? 'job' : h === 'home' ? 'inventory' : h;   // #home is the landing page: the inventory
+  // #home is the landing page (the dashboard, element view-inventory); #inventory is every node in the lab (view-branches,
+  // the old #branches, which still resolves); #branch/<name> is one router's page
+  const v = h.startsWith('branch/') ? 'branch' : h.startsWith('job/') ? 'job' : (h === 'inventory' || h === 'branches') ? 'branches' : h === '' ? 'home' : h;
   document.querySelector('main:not([id])').hidden = v !== 'provision';
-  $('view-inventory').hidden = v !== 'inventory'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches'; $('view-compliance').hidden = v !== 'compliance'; $('view-jobs').hidden = v !== 'jobs'; $('view-job').hidden = v !== 'job';
-  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branch' && v === 'branches') || (a.dataset.view === 'jobs' && v === 'job')));
-  if (v !== 'inventory' && typeof stopLive === 'function') stopLive();
+  $('view-inventory').hidden = v !== 'home'; $('view-tools').hidden = v !== 'tools'; $('view-audit').hidden = v !== 'audit'; $('view-firewalls').hidden = v !== 'firewalls'; $('view-branch').hidden = v !== 'branch'; $('view-branches').hidden = v !== 'branches'; $('view-compliance').hidden = v !== 'compliance'; $('view-jobs').hidden = v !== 'jobs'; $('view-job').hidden = v !== 'job';
+  document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('active', a.dataset.view === v || (a.dataset.view === 'branches' && v === 'branch') || (a.dataset.view === 'jobs' && v === 'job')));
+  if (v !== 'branches' && typeof stopLive === 'function') stopLive();   // the live ping mesh lives on the Inventory page
   if (v !== 'jobs') { clearInterval(jobsTimer); jobsTimer = null; }
-  if (v === 'inventory') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') loadBranches(false); if (v === 'compliance') loadCompliance(false);
+  if (v === 'home') loadInventory(false); if (v === 'tools') loadTools(); if (v === 'audit') loadAudit(); if (v === 'firewalls') loadFirewalls(false); if (v === 'branch') loadBranch(decodeURIComponent(h.slice(7)), false); if (v === 'branches') { loadBranches(false); loadHosts(false); loadTunnels(); } if (v === 'compliance') loadCompliance(false);
   if (v === 'jobs') { loadJobs(); jobsTimer = setInterval(loadJobs, 5000); }
   if (v === 'job') loadJob(decodeURIComponent(h.slice(4)));
 }
@@ -1220,7 +1223,7 @@ const branchLink = n => `<a href="#branch/${encodeURIComponent(n)}" title="open 
 
 // ---- compliance report ----------------------------------------------------------------------------------------------
 let CMP = null;
-const roleName = r => ({ hub: 'headend', spoke: 'branch', dci: 'DCI', partner: 'acquisition' })[r] || r;
+const roleName = r => ({ hub: 'headend', spoke: 'branch', dci: 'DCI', partner: 'acquisition', firewall: 'firewall', host: 'LAN host' })[r] || r;
 const histDots = h => h.map(x => `<span class="dot ${x.ok ? 'ok' : 'fail'}" title="${esc(x.at)}: ${x.ok ? 'compliant' : 'drifted — ' + x.drifted.join(', ')}"></span>`).join('');
 async function loadCompliance(refresh) {
   $('cmp-note').textContent = 'loading…';
@@ -1282,7 +1285,10 @@ async function loadBranches(refresh) {
   const r = await fetch('/api/branches' + (refresh ? '?refresh=true' : '')); if (!r.ok) { $('brs-note').textContent = `HTTP ${r.status}`; return; }
   BRS = await r.json(); const d = BRS;
   const edge = d.routers.filter(b => b.role === 'dci' || b.role === 'partner').length;
-  $('brs-note').textContent = `${d.routers.length} routers · ${d.routers.filter(b => b.role === 'spoke').length} customer branches, ${d.routers.filter(b => b.role === 'hub').length} ${d.provider.name} headends` + (edge ? `, ${edge} on the DCI (interconnect + acquisition, plain eBGP)` : '') + ` · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
+  const nodes = d.routers.length + (d.firewalls || []).length + (d.hosts || []).length;
+  $('brs-note').textContent = `${nodes} nodes · ${d.routers.filter(b => b.role === 'spoke').length} customer branches, ${d.routers.filter(b => b.role === 'hub').length} ${d.provider.name} headends`
+    + (edge ? `, ${edge} on the DCI (interconnect + acquisition, plain eBGP)` : '') + `, ${(d.firewalls || []).length} VyOS firewalls, ${(d.hosts || []).length} Alpine LAN hosts`
+    + ` · ${new Date(d.generated * 1000).toLocaleTimeString()}${d.inventory_error ? ' · live state unavailable: ' + d.inventory_error : ''}`;
   $('brs-nb').href = d.nautobot.tenants;
   try { const f = JSON.parse(localStorage.getItem('brs-filters') || '{}'); BF.forEach(k => { if (f[k] != null && !$('bf-' + k).value) $('bf-' + k).value = f[k]; }); } catch (e) { }
   fillSelect('bf-region', d.regions, 'any region'); fillSelect('bf-pattern', [...new Set(d.routers.map(b => b.pattern.name))], 'any design pattern');
@@ -1290,26 +1296,70 @@ async function loadBranches(refresh) {
   $('brs-patterns').innerHTML = 'ACME design patterns (from the number of tunnels a branch has): ' + d.patterns.filter(pt => pt.code !== 'ACME-NC' || pt.count).map(pt => `<a onclick="$('bf-pattern').value='${esc(pt.name)}';renderBranches()" title="${esc(pt.description)}"><b>${esc(pt.code)}</b> ${esc(pt.name)}</a> <span class="pill">${pt.count}</span>`).join(' · ');
   renderBranches();
 }
+// every node of the lab as one list: the routers as the API returns them, plus the firewalls and the Alpine LAN hosts, which
+// borrow the customer and region of the router they belong to so the filters and the search work the same way for them
+function inventoryNodes() {
+  const routers = BRS.routers.map(b => ({ ...b, kind: b.role }));
+  const of = n => BRS.routers.find(b => b.name === n) || {};
+  const fws = (BRS.firewalls || []).map(x => { const h = of(x.headend); return { ...x, kind: 'firewall', owner: BRS.provider.name, region: x.region || h.region,
+    city: h.city, attached: x.headend, detail: x.bandwidth_mbps ? x.bandwidth_mbps + ' Mbps' : '' }; });
+  const hosts = (BRS.hosts || []).map(x => { const r = of(x.router); return { ...x, kind: 'host', customer: r.customer, owner: (r.customer || {}).company || BRS.provider.name,
+    region: x.region || r.region, city: r.city, attached: x.router, service_tier: (r.customer || {}).service_tier, industry: (r.customer || {}).industry }; });
+  return [...routers, ...fws, ...hosts];
+}
+
 function renderBranches() {
   if (!BRS) return; const f = {}; BF.forEach(k => f[k] = $('bf-' + k).value); try { localStorage.setItem('brs-filters', JSON.stringify(f)); } catch (e) { }
   const q = f.q.trim().toLowerCase(); const nm = a => a === 'certificate' ? 'certificate' : 'PSK';
-  const rows = BRS.routers.filter(b => (!f.role || b.role === f.role) && (!f.region || b.region === f.region) && (!f.pattern || b.pattern.name === f.pattern) && (!f.tier || b.service_tier === f.tier)
-    && (!f.industry || b.industry === f.industry) && (!f.auth || (b.role === 'spoke' ? b.authentication === f.auth : b.methods.includes(f.auth))) && (!f.health || b.health === f.health) && (!f.state || b.state === f.state)
-    && (!q || [b.name, b.owner, b.city, b.site, b.address, b.region, b.lan, b.mgmt_ip, b.industry, b.pattern.code, b.pattern.name, (b.customer || {}).account_id, b.comments].filter(Boolean).some(x => String(x).toLowerCase().includes(q))));
-  $('bf-count').textContent = rows.length === BRS.routers.length ? `${rows.length} routers` : `${rows.length} of ${BRS.routers.length} routers match`;
-  $('brs-table').querySelector('tbody').innerHTML = rows.map(b => `<tr style="cursor:pointer" onclick="location.hash='branch/${encodeURIComponent(b.name)}'">
-    <td><b>${branchLink(b.name)}</b><div class="hint">${esc(b.mgmt_ip)}</div></td><td><span class="pill ${b.role}">${roleName(b.role)}</span></td>
-    <td style="white-space:nowrap">${b.customer ? `<b>${esc(b.customer.company)}</b><div class="hint">${esc(b.customer.industry)} · ${esc(b.customer.account_id)}${b.customer.contract_start ? ' · since ' + esc(b.customer.contract_start) : ''}</div>` : `<b>${esc(b.owner)}</b><div class="hint">service provider</div>`}</td>
-    <td style="white-space:nowrap">${esc(b.city || b.site || '')} <span class="hint">· ${esc(b.region || '')}</span><div class="hint">${esc(b.address || '')}</div></td>
-    <td style="white-space:nowrap"><span class="pill ${b.role === 'hub' ? '' : b.pattern.tunnels >= 3 ? 'ok' : b.pattern.tunnels === 2 ? '' : 'warn'}" title="${esc(b.pattern.description)}">${esc(b.pattern.code)}</span> <span class="hint">${esc(b.pattern.name)}</span></td>
-    <td>${b.service_tier ? `<span class="pill tier-${esc(b.service_tier.toLowerCase())}">${esc(b.service_tier)}</span>` : '<span class="hint">-</span>'}</td>
-    <td class="cred">${esc(b.asn)}</td><td class="cred">${esc(b.lan || '')}</td>
-    <td><span class="pill ${b.state === 'running' ? '' : 'fail'}">${esc(b.state)}</span></td><td style="white-space:nowrap"><span class="health ${esc(b.health)}"></span> ${b.tunnels_up}/${b.tunnels} up</td>
-    <td style="white-space:nowrap">${b.role === 'spoke' ? `<span class="pill ${b.authentication === 'certificate' ? 'hub' : ''}">${nm(b.authentication)}</span>` : `<span class="hint">${b.methods.map(nm).join(' + ') || '-'}</span>`}</td>
-    <td>${b.cert_days == null ? '<span class="hint">-</span>' : `<span class="pill ${b.cert_expired ? 'fail' : b.cert_days < 30 ? 'warn' : ''}">${b.cert_expired ? 'expired' : Math.floor(b.cert_days) + ' d'}</span>`}</td>
-    <td>${b.host ? `${esc(b.host)} <span class="pill ${b.host_state === 'running' ? '' : 'fail'}">${esc(b.host_state)}</span>` : '<span class="hint">none</span>'}</td><td class="num">${b.free_slots ?? ''}</td>
-    <td>${b.last_run ? `<span class="status ${b.last_run.status}">${esc(b.last_run.mode)}</span> <span class="hint">${new Date(b.last_run.started * 1000).toLocaleDateString()}${b.last_run.user ? ' · ' + esc(b.last_run.user) : ''}</span>` : '<span class="hint">-</span>'}</td>
-    <td><a href="#branch/${encodeURIComponent(b.name)}"><button type="button" class="small">Open</button></a></td></tr>`).join('') || '<tr><td colspan="16" class="hint">no router matches the filters</td></tr>';
+  const all = inventoryNodes();
+  const rows = all.filter(b => (!f.role || b.kind === f.role) && (!f.region || b.region === f.region) && (!f.pattern || (b.pattern || {}).name === f.pattern) && (!f.tier || b.service_tier === f.tier)
+    && (!f.industry || b.industry === f.industry) && (!f.auth || (b.kind === 'spoke' ? b.authentication === f.auth : (b.methods || []).includes(f.auth))) && (!f.health || b.health === f.health) && (!f.state || b.state === f.state)
+    && (!q || [b.name, b.owner, b.city, b.site, b.address, b.region, b.lan, b.lan_ip, b.mgmt_ip, b.kind, b.industry, (b.pattern || {}).code, (b.pattern || {}).name, b.attached, (b.customer || {}).account_id, b.comments].filter(Boolean).some(x => String(x).toLowerCase().includes(q))));
+  const kinds = k => all.filter(b => b.kind === k).length;
+  $('bf-count').textContent = (rows.length === all.length ? `${rows.length} nodes` : `${rows.length} of ${all.length} nodes match`)
+    + ` · ${kinds('hub')} headends, ${kinds('spoke')} branches, ${kinds('dci') + kinds('partner')} on the interconnect, ${kinds('firewall')} firewalls, ${kinds('host')} LAN hosts`;
+  $('brs-table').querySelector('tbody').innerHTML = rows.map(b => {
+    const router = !['firewall', 'host'].includes(b.kind);       // only a router has a page of its own
+    const open = b.kind === 'firewall' ? '#firewalls' : `#branch/${encodeURIComponent(router ? b.name : b.attached)}`;
+    const dash = '<span class="hint">-</span>';
+    return `<tr style="cursor:pointer" onclick="location.hash='${open.slice(1)}'">
+    <td><b>${router ? branchLink(b.name) : esc(b.name)}</b><div class="hint">${esc(b.mgmt_ip || '')}</div></td>
+    <td><span class="pill ${esc(b.kind)}">${esc(roleName(b.kind))}</span></td>
+    <td style="white-space:nowrap">${b.customer ? `<b>${esc(b.customer.company)}</b><div class="hint">${esc(b.customer.industry)} · ${esc(b.customer.account_id)}${b.customer.contract_start ? ' · since ' + esc(b.customer.contract_start) : ''}</div>` : `<b>${esc(b.owner || '')}</b><div class="hint">${b.kind === 'host' ? 'lab host' : 'service provider'}</div>`}</td>
+    <td style="white-space:nowrap">${esc(b.city || b.site || '')} <span class="hint">· ${esc(b.region || '')}</span><div class="hint">${esc(b.address_line || b.address || '')}</div></td>
+    <td style="white-space:nowrap">${router && b.pattern ? `<span class="pill ${b.kind === 'hub' ? '' : b.pattern.tunnels >= 3 ? 'ok' : b.pattern.tunnels === 2 ? '' : 'warn'}" title="${esc(b.pattern.description)}">${esc(b.pattern.code)}</span> <span class="hint">${esc(b.pattern.name)}</span>` : dash}</td>
+    <td>${b.service_tier ? `<span class="pill tier-${esc(String(b.service_tier).toLowerCase())}">${esc(b.service_tier)}</span>` : dash}</td>
+    <td class="cred">${esc(b.asn || '')}</td>
+    <td class="cred">${esc(b.kind === 'host' ? b.lan_ip : b.kind === 'firewall' ? b.mgmt_ip : (b.lan || ''))}${b.kind === 'host' ? `<div class="hint">via ${esc(b.gateway || '')}</div>` : ''}</td>
+    <td><span class="pill ${b.state === 'running' ? '' : 'fail'}">${esc(b.state || '')}</span></td>
+    <td style="white-space:nowrap">${router ? `<span class="health ${esc(b.health)}"></span> ${b.tunnels_up}/${b.tunnels} up` : b.kind === 'firewall' ? `<span class="hint">${esc(b.detail || 'no tunnels')}</span>` : dash}</td>
+    <td style="white-space:nowrap">${b.kind === 'spoke' ? `<span class="pill ${b.authentication === 'certificate' ? 'hub' : ''}">${nm(b.authentication)}</span>` : router ? `<span class="hint">${(b.methods || []).map(nm).join(' + ') || '-'}</span>` : dash}</td>
+    <td>${b.cert_days == null ? dash : `<span class="pill ${b.cert_expired ? 'fail' : b.cert_days < 30 ? 'warn' : ''}">${b.cert_expired ? 'expired' : Math.floor(b.cert_days) + ' d'}</span>`}</td>
+    <td>${router ? (b.host ? `${esc(b.host)} <span class="pill ${b.host_state === 'running' ? '' : 'fail'}">${esc(b.host_state)}</span>` : dash) : `${branchLink(b.attached)}${b.kind === 'host' ? ` <span class="hint">${esc(b.lan_if || '')}</span>` : ''}`}</td>
+    <td class="num">${b.free_slots ?? ''}</td>
+    <td>${b.last_run ? `<span class="status ${b.last_run.status}">${esc(b.last_run.mode)}</span> <span class="hint">${new Date(b.last_run.started * 1000).toLocaleDateString()}${b.last_run.user ? ' · ' + esc(b.last_run.user) : ''}</span>` : dash}</td>
+    <td><a href="${open}"><button type="button" class="small">Open</button></a></td></tr>`; }).join('') || '<tr><td colspan="16" class="hint">nothing matches the filters</td></tr>';
+}
+
+// the tunnel report lives on the Inventory page now (every node in the lab); it reads the same cached inventory as the dashboard
+async function loadTunnels() {
+  const r = await fetch('/api/vpn-inventory');
+  if (!r.ok) return;
+  const d = await r.json();
+  $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
+    <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
+    <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
+    <td>${esc(t.vpn)}</td><td>${branchLink(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
+    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${t.spoke ? branchLink(t.spoke) : ''}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_region || '')}<div class="hint">${esc(t.spoke_site || '')}</div></td>
+    <td>${esc(t.headend_tunnel_ip)}<div class="hint">${esc(t.spoke_tunnel_ip)}</div></td>
+    <td>${esc(t.encapsulation || '')}<div class="hint">${esc(t.profile || '')}: ${esc(t.ike)}, ${esc(t.ipsec)}, DPD ${esc(t.dpd)}</div></td>
+    <td class="${l.ike_status === 'READY' ? 'test-pass' : 'test-fail'}">${esc(l.ike_status || '')}</td><td>${age(l.ike_active_s)}</td>
+    <td class="${l.line_protocol === 'up' ? 'test-pass' : 'test-fail'}">${esc(l.line_protocol || '')}</td>
+    <td>${/^\d+$/.test(l.bgp_state || '') ? `<span class="test-pass">Established</span> · ${l.bgp_state} pfx` : `<span class="test-fail">${esc(l.bgp_state || 'no session')}</span>`}<div class="hint">${esc(l.bgp_updown || '')}</div></td>
+    <td class="num">${l.encaps ?? ''}</td><td class="num">${l.decaps ?? ''}</td><td class="num ${(l.send_errors || l.recv_errors) ? 'test-fail' : ''}">${l.send_errors ?? ''} / ${l.recv_errors ?? ''}</td>
+    <td>${bps(l.in_rate_bps)} / ${bps(l.out_rate_bps)}</td><td>${esc(l.last_input || '')} / ${esc(l.last_output || '')}</td>
+    <td>${(t.protected_prefixes || []).map(esc).join('<br>')}</td><td>${esc(t.change_ticket || '')}<div class="hint">${esc(t.owner || '')}</div></td>
+    <td>${esc(t.model_status || '')}<div class="hint">${t.last_updated ? new Date(t.last_updated).toLocaleDateString() : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="21" class="hint">no tunnels modelled</td></tr>';
 }
 
 // ---- per-branch page: configuration ----------------------------------------------------------------------------------
@@ -1392,7 +1442,7 @@ async function loadBranch(name, refresh) {
     ${f.rules.length ? `<table><thead><tr><th>Rule</th><th>Action</th><th>Source</th><th>Destination</th><th>Proto / ports</th><th class="num">Packets</th><th>Description</th></tr></thead><tbody>${f.rules.map(r => `<tr><td class="cred">${esc(r.rule)}</td><td><span class="pill ${r.action === 'accept' ? '' : 'fail'}">${esc(r.action)}</span></td><td class="cred">${esc(r.source)}</td><td class="cred">${esc(r.destination)}</td><td class="cred">${esc(r.protocol)}${r.destination_port !== 'any' ? ' → ' + esc(r.destination_port) : ''}</td><td class="num">${r.packets.toLocaleString()}</td><td>${esc(r.description)}</td></tr>`).join('')}</tbody></table>` : '<div class="hint">no rule names this router\'s addresses</div>'}
     ${f.flows.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Flows in the last 3 h (${f.flows.length}) · ${f.log.length} log line${f.log.length === 1 ? '' : 's'} shown</summary><table><thead><tr><th>Verdict</th><th>Source</th><th>Destination</th><th>Service</th><th class="num">Hits</th><th>Last</th></tr></thead><tbody>${f.flows.map(x => `<tr><td><span class="pill ${x.verdict === 'drop' ? 'fail' : ''}">${esc(x.verdict)}</span></td><td>${who(x)}</td><td>${whom(x)}</td><td class="cred">${port(x)}</td><td class="num">${x.hits}</td><td class="cred">${esc(x.last.slice(11))}</td></tr>`).join('')}</tbody></table></details>` : '<div class="hint">nothing logged for it in the last 3 h</div>'}`).join('') || '<div class="hint">no firewall in the path of this router</div>';
   const h = d.host;
-  $('br-host').innerHTML = h ? `<dl class="review"><div class="box"><dl><dt>Host</dt><dd class="cred">${esc(h.name)} <span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></dd><dt>LAN</dt><dd class="cred">${esc(h.lan_ip)}/24 via ${esc(h.gateway)} (${esc(h.lan_if)})</dd><dt>OOB</dt><dd class="cred">${esc(h.mgmt_ip)} <span class="hint">ssh lab@ (lab)</span></dd></dl></div></dl><div class="hint" style="margin-top:6px">The full host-to-host ping mesh is on the <a href="#home">Home</a> page (LAN hosts → Ping mesh).</div>` : '<div class="hint">no LAN host behind this router</div>';
+  $('br-host').innerHTML = h ? `<dl class="review"><div class="box"><dl><dt>Host</dt><dd class="cred">${esc(h.name)} <span class="pill ${h.state === 'running' ? '' : 'fail'}">${esc(h.state)}</span></dd><dt>LAN</dt><dd class="cred">${esc(h.lan_ip)}/24 via ${esc(h.gateway)} (${esc(h.lan_if)})</dd><dt>OOB</dt><dd class="cred">${esc(h.mgmt_ip)} <span class="hint">ssh lab@ (lab)</span></dd></dl></div></dl><div class="hint" style="margin-top:6px">The full host-to-host ping mesh is on the <a href="#inventory">Inventory</a> page (LAN hosts → Ping mesh).</div>` : '<div class="hint">no LAN host behind this router</div>';
   CFG = null; loadConfig(refresh);
   $('br-show-btns').innerHTML = SHOWS.map(([k, l]) => `<button type="button" class="small" data-what="${k}" onclick="loadShow('${k}', false)">${l}</button>`).join(' ') + ` <button type="button" class="small" onclick="const b = document.querySelector('#br-show-btns button.primary'); if (b) loadShow(b.dataset.what, true)" title="run the selected command again">↻</button>`;
   $('br-show').className = 'code hint'; $('br-show').textContent = 'pick a command'; loadShow('ike', false);
@@ -1556,20 +1606,6 @@ async function loadInventory(refresh) {
       <div class="cap-r"><b>${h.cpu_pct}%</b> (${h.cpu_utilisation}% of the ${h.cpu_warning_pct}% warning threshold) · ${esc(h.live.cpu_state || '')}${h.qfp_cpu_pct != null ? ' · data plane (QFP) ' + h.qfp_cpu_pct + '%' : ''}${h.dram_pct != null ? ' · DRAM ' + h.dram_pct + '%' : ''}</div></div>`
                          : `<div class="cap sub"><div class="cap-l">CPU <span class="hint">(control plane, live)</span></div><div class="hint">no live data${h.live && h.live.error ? ': ' + esc(h.live.error) : ' (refresh live data)'}</div></div>`}
       ${bar('aggregate', h.tunnels, h.effective_capacity, 'tunnels', h.aggregate_utilisation, `<b>${h.effective_free}</b> free slot${h.effective_free === 1 ? '' : 's'} once all constraints apply`, true)}</div>`; }).join('') || '<div class="hint">no headends</div>';
-  $('inv-tunnels').querySelector('tbody').innerHTML = d.tunnels.map(t => { const l = t.live || {}; return `<tr>
-    <td><span class="health ${l.health || ''}"></span>${esc(l.health || (l.error ? 'unknown' : ''))}${l.error ? `<div class="msg">${esc(l.error)}</div>` : ''}</td>
-    <td><a href="${t.url}" target="_blank">${esc(t.name)}</a><div class="hint">id ${esc(t.tunnel_id || '')} · ${esc(t.headend_if || '')} ↔ ${esc(t.spoke_if || '')}</div></td>
-    <td>${esc(t.vpn)}</td><td>${branchLink(t.headend)}<div class="hint">${esc(t.headend_src_if || '')}</div></td>
-    <td>${esc(t.headend_src_ip)} → ${esc(t.spoke_src_ip)}</td><td>${t.spoke ? branchLink(t.spoke) : ''}<div class="hint">${esc(t.spoke_mgmt_ip || '')}</div></td><td>${esc(t.spoke_region || '')}<div class="hint">${esc(t.spoke_site || '')}</div></td>
-    <td>${esc(t.headend_tunnel_ip)}<div class="hint">${esc(t.spoke_tunnel_ip)}</div></td>
-    <td>${esc(t.encapsulation || '')}<div class="hint">${esc(t.profile || '')}: ${esc(t.ike)}, ${esc(t.ipsec)}, DPD ${esc(t.dpd)}</div></td>
-    <td class="${l.ike_status === 'READY' ? 'test-pass' : 'test-fail'}">${esc(l.ike_status || '')}</td><td>${age(l.ike_active_s)}</td>
-    <td class="${l.line_protocol === 'up' ? 'test-pass' : 'test-fail'}">${esc(l.line_protocol || '')}</td>
-    <td>${/^\d+$/.test(l.bgp_state || '') ? `<span class="test-pass">Established</span> · ${l.bgp_state} pfx` : `<span class="test-fail">${esc(l.bgp_state || 'no session')}</span>`}<div class="hint">${esc(l.bgp_updown || '')}</div></td>
-    <td class="num">${l.encaps ?? ''}</td><td class="num">${l.decaps ?? ''}</td><td class="num ${(l.send_errors || l.recv_errors) ? 'test-fail' : ''}">${l.send_errors ?? ''} / ${l.recv_errors ?? ''}</td>
-    <td>${bps(l.in_rate_bps)} / ${bps(l.out_rate_bps)}</td><td>${esc(l.last_input || '')} / ${esc(l.last_output || '')}</td>
-    <td>${(t.protected_prefixes || []).map(esc).join('<br>')}</td><td>${esc(t.change_ticket || '')}<div class="hint">${esc(t.owner || '')}</div></td>
-    <td>${esc(t.model_status || '')}<div class="hint">${t.last_updated ? new Date(t.last_updated).toLocaleDateString() : ''}</div></td></tr>`; }).join('') || '<tr><td colspan="21" class="hint">no tunnels modelled</td></tr>';
 }
 $('inv-refresh').onclick = () => loadInventory(true);
 
