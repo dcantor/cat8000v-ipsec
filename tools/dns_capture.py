@@ -12,6 +12,7 @@ GigabitEthernet3 (the acquired company) with the real ones — same transaction 
 The capture points are removed again, so the router is left exactly as it was found.
 """
 import argparse
+import json
 import re
 import struct
 import subprocess
@@ -185,6 +186,7 @@ for out in [d for d in result["acme"]["dns"] if d["qr"] and d["answers"]]:
 if not pairs:
     sys.exit("no answer was seen on both sides — was the lookup made through the DCI?")
 ok = True
+records = []
 for out, ins in pairs:
     entry = next((e for e in ENTRIES if e["acquisition_ip"] == ins["answers"][0]), None)
     want = entry["acquisition_as_acme_sees_it"] if entry else None
@@ -193,5 +195,10 @@ for out, ins in pairs:
     print(f"{out['question']}: the server answered {ins['answers'][0]} on the inside, ACME received {out['answers'][0]}"
           + (f" — the inside-global form of it ({entry['prefix']} -> {entry['inside_global']})" if good else f" — expected {want}"))
     print(f"   same transaction 0x{out['id']:04x}; the DCI rewrote the header ({ins['src']} -> {out['src']}) and the A record inside the payload")
+    records.append({"name": out["question"], "transaction": f"0x{out['id']:04x}", "inside": ins["answers"][0],
+                    "outside": out["answers"][0], "expected_outside": want, "ok": bool(good)})
+# the verdict, where the portal's /metrics (and so the dashboard and the alerts) can read it
+(out_dir / "verdict.json").write_text(json.dumps({"ok": bool(ok), "at": time.time(), "router": nat_router,
+                                                  "captures": {k: r["path"].name for k, r in result.items()}, "records": records}, indent=1))
 print("\nDNS fix-up proven on the wire" if ok else "\nthe answer was NOT rewritten as the model says it should be")
 sys.exit(0 if ok else 1)

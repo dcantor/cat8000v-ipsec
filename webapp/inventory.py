@@ -194,6 +194,11 @@ class Inventory:
         return {"collected": time.time(), "ike": ike, "ifaces": ifaces, "bgp": bgp, "ipsec": ipsec, "resources": res}
 
     # ---- public --------------------------------------------------------------
+    def cached(self):
+        """What the last collection left, without starting one. The metrics endpoint reads this: collecting means SSH to every
+        headend, far too slow for a Prometheus scrape — a background thread in the portal keeps it warm instead."""
+        return self._cache
+
     def get(self, refresh=False, with_live=True):
         with self._lock:
             if self._cache and not refresh and time.time() - self._cache["generated"] < self.ttl: return self._cache

@@ -310,6 +310,26 @@ VictoriaLogs (the VyOS firewalls' remote syslog): dropped packets and new flows 
 the top dropped flows and the raw kernel log; `FirewallDropBurst` (>20 drops from one source in 5 min) and
 `FirewallDroppingPeerTraffic` (IKE / ESP hitting the drop rule) are evaluated by vmalert-logs from the same lines.
 
+The **interconnect** has no tunnels, so it is watched by what it actually does (`webapp/interconnect.py`, collected in the
+background and exported with the rest):
+
+| Metric | What it says |
+|---|---|
+| `lab_nat_static_translations` / `_expected` | the static translations on the DCI against the number the model generates — 2002 here, so 2000 means a chunk of a CLI template did not make it onto the box |
+| `lab_nat_active_translations`, `lab_nat_hits_total`, `lab_nat_misses_total` | the NAT table and how much it is used |
+| `lab_nat_drops_total{direction}` | packets dropped for want of a translation, per direction |
+| `lab_nat_aggregate_route{kind,prefix,source}` | 1 while the aggregate the two sides exchange instead of their overlapping prefixes is in the routing table |
+| `lab_dns_zone_records` / `_expected`, `lab_dns_server_up` | each zone's records against the model, and whether the router still answers for it |
+| `lab_dns_fixup_ok`, `lab_dns_fixup_timestamp_seconds` | the verdict of the packet capture suite 12 takes on both sides of the DCI, and when |
+
+The dashboard's **Data-centre interconnect** row draws them, and the alerts are `NatTranslationsMissing`, `NatDrops`,
+`NatAggregateRouteMissing`, `DnsZoneShrunk`, `DnsServerDown`, `DnsFixupFailing` and `InterconnectUnreachable` — all gated on
+the DCI VM running, so a powered-off lab is quiet.
+
+Both live collectors (the tunnel inventory and the interconnect) and Nautobot's compliance verdict are kept warm by
+background threads: collecting them takes 10–15 s each, which is longer than Prometheus waits, and doing it inside the
+scrape had the portal's own `up` sitting at 0.64. A scrape is now a cache read (~0.4 s).
+
 ### Sign-in, roles, audit
 The portal asks for a login (local users, lab defaults admin/admin · operator/operator · viewer/viewer — or **single sign-on**
 through OpenID Connect, the lab's Gitea acting as the provider; `webapp/oidc.json` maps accounts and groups to roles): **viewer**

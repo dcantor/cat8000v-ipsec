@@ -11,7 +11,7 @@ runs the pipeline behind the scenes and streams its progress:
 Runs are executed one at a time in a background thread; state is kept in memory and mirrored to runs/<id>.json.
 Start with ./lab.sh webapp (uvicorn on 0.0.0.0:8090).
 """
-import ipaddress, json, os, re, subprocess, sys, time
+import ipaddress, json, os, re, subprocess, sys, threading, time
 from datetime import datetime
 from pathlib import Path
 from labportal import RunBase, RunRegistry, install_runs_api, metric_line, run_metrics, exposition, metrics_generated
@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 import requests
 from inventory import Inventory, to_csv
 import spokes
+from interconnect import Interconnect
 
 LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB / "nautobot")); import intent as intent_mod   # noqa: E402
@@ -68,6 +69,8 @@ app = FastAPI(title="VPN Provisioning Portal API", version="1.0",
                           "Portal UI: [/](/) · this page: [/docs](/docs) · ReDoc: [/redoc](/redoc) · OpenAPI JSON: [/openapi.json](/openapi.json)",
               openapi_tags=TAGS, docs_url="/docs", redoc_url="/redoc")
 registry = RunRegistry(RUNS_DIR)
+interconnect = Interconnect(ttl=float(os.environ.get('INTERCONNECT_TTL', '60')),
+                            enabled=lambda: any(st == 'running' for (n, role), st in _vm_states().items() if role == 'dci'))
 inventory_svc = None   # created lazily (needs the Nautobot token)
 AUDIT = RUNS_DIR / "audit.jsonl"
 
@@ -739,11 +742,62 @@ def prometheus_metrics():
     # inventory service for its TTL) — only while the headends run, so a powered-off lab costs nothing and raises no alert
     hubs_up = any(st == "running" for (node, role), st in states.items() if role == "hub")
     if hubs_up:
-        try: out += tunnel_metrics(inv().get(with_live=True), L)
+        try:
+            live = inv().cached()            # kept warm by the refresher below: a scrape must never wait for SSH
+            if live: out += tunnel_metrics(live, L)
         except Exception as e:  # noqa: BLE001
             out += ["# HELP lab_inventory_error 1 if the tunnel inventory could not be collected", "# TYPE lab_inventory_error gauge", metric_line("lab_inventory_error", {"lab": L, "error": e.__class__.__name__}, 1)]
+    # the interconnect has no tunnels to watch: its health is the NAT table, the aggregates it routes and the two DNS zones.
+    # A background thread keeps that state warm (collecting it takes ~15 s, far too long for a scrape).
+    out += interconnect_metrics(L)
     out += compliance_metrics(L)
     return PlainTextResponse(exposition(out + run_metrics(L, registry.list())), media_type="text/plain; version=0.0.4")
+
+
+def interconnect_metrics(L):
+    """The DCI's twice-NAT and the two DNS zones (webapp/interconnect.py, cached): what is on the routers against what the
+    model says there should be, so a chunk of a CLI template that went missing shows up as a number rather than as a broken
+    branch. `lab_dns_fixup_ok` is the verdict of the packet capture the last test run took on both sides of the DCI."""
+    try: d = interconnect.get()          # whatever the background thread last collected; None until its first cycle
+    except Exception as e:  # noqa: BLE001
+        return ["# HELP lab_interconnect_error 1 if the interconnect state could not be collected", "# TYPE lab_interconnect_error gauge",
+                metric_line("lab_interconnect_error", {"lab": L, "error": e.__class__.__name__}, 1)]
+    if not d: return []
+    R = {"lab": L, "router": d["router"]}
+    out = ["# HELP lab_nat_static_translations Static translations on the interconnect router (two per overlapping prefix)", "# TYPE lab_nat_static_translations gauge",
+           "# HELP lab_nat_static_translations_expected Static translations the model says it should hold", "# TYPE lab_nat_static_translations_expected gauge",
+           "# HELP lab_nat_active_translations Entries in the NAT table, static and dynamic", "# TYPE lab_nat_active_translations gauge",
+           "# HELP lab_nat_drops_total Packets dropped for want of a translation, by direction", "# TYPE lab_nat_drops_total counter",
+           "# HELP lab_nat_hits_total Packets translated", "# TYPE lab_nat_hits_total counter",
+           "# HELP lab_nat_misses_total Packets that found no translation and went to the dynamic path", "# TYPE lab_nat_misses_total counter",
+           "# HELP lab_nat_aggregate_route 1 if the aggregate the two sides exchange instead of the overlapping prefixes is in the routing table", "# TYPE lab_nat_aggregate_route gauge",
+           "# HELP lab_dns_zone_records ip host records the zone answers with", "# TYPE lab_dns_zone_records gauge",
+           "# HELP lab_dns_zone_records_expected Records the model says the zone should have", "# TYPE lab_dns_zone_records_expected gauge",
+           "# HELP lab_dns_server_up 1 if the router answers for its zone (ip dns server)", "# TYPE lab_dns_server_up gauge",
+           "# HELP lab_dns_fixup_ok 1 if the last packet capture showed the DNS answer translated on its way through the NAT", "# TYPE lab_dns_fixup_ok gauge",
+           "# HELP lab_dns_fixup_timestamp_seconds When that capture was taken (unix time)", "# TYPE lab_dns_fixup_timestamp_seconds gauge",
+           "# HELP lab_interconnect_collect_error 1 if a router of the interconnect could not be read", "# TYPE lab_interconnect_collect_error gauge"]
+    exp = d["expected"]
+    out.append(metric_line("lab_nat_static_translations_expected", R, exp["statics"]))
+    for key, name in (("statics", "lab_nat_static_translations"), ("translations", "lab_nat_active_translations"),
+                      ("hits", "lab_nat_hits_total"), ("misses", "lab_nat_misses_total")):
+        if d.get(key) is not None: out.append(metric_line(name, R, d[key]))
+    for key, direction in (("in_to_out_drops", "in-to-out"), ("out_to_in_drops", "out-to-in")):
+        if d.get(key) is not None: out.append(metric_line("lab_nat_drops_total", {**R, "direction": direction}, d[key]))
+    for kind, a in (d.get("aggregates") or {}).items():
+        out.append(metric_line("lab_nat_aggregate_route", {**R, "kind": kind, "prefix": a["prefix"], "source": a.get("source") or "none"}, int(a["present"])))
+    for name, z in (d.get("zones") or {}).items():
+        lbl = {"lab": L, "router": name, "zone": z["domain"] or "?"}
+        out.append(metric_line("lab_dns_zone_records_expected", lbl, z["expected"]))
+        if z.get("records") is not None: out.append(metric_line("lab_dns_zone_records", lbl, z["records"]))
+        if z.get("server") is not None: out.append(metric_line("lab_dns_server_up", lbl, int(z["server"])))
+    v = d.get("fixup")
+    if v:
+        out.append(metric_line("lab_dns_fixup_ok", {"lab": L, "router": v.get("router") or d["router"]}, int(bool(v.get("ok")))))
+        if v.get("at"): out.append(metric_line("lab_dns_fixup_timestamp_seconds", {"lab": L}, int(v["at"])))
+    for node in list(exp["zones"]) + [d["router"]]:
+        out.append(metric_line("lab_interconnect_collect_error", {"lab": L, "router": node}, int(node in (d.get("errors") or {}))))
+    return out
 
 
 def compliance_metrics(L):
@@ -1030,13 +1084,17 @@ def branch_config(name: str, request: Request, refresh: bool = Query(False, desc
 
 
 _compliance_cache = {}
+# reading the verdict out of Nautobot takes about thirteen seconds (171 rows with their diffs), and it only changes when a Golden
+# Config run finishes — which the portal knows about, and refreshes the cache itself. So the cache lives long and the background
+# collector keeps it warm; a scrape or a page load never waits for Nautobot.
+COMPLIANCE_TTL = float(os.environ.get("COMPLIANCE_TTL", "120"))
 @app.get("/api/compliance", tags=["inventory"], summary="Nautobot Golden Config compliance for every router: one row per device, one column per feature, with the missing / extra lines and a diff")
 def compliance_report(refresh: bool = Query(False, description="read Nautobot again now (otherwise cached for 30 s)")):
     """The compliance rows Nautobot's Golden Config app computed on its last run (the portal's golden step, a `golden` run, or
     `./lab.sh nautobot golden`), grouped per device, plus when each device was last backed up / rendered / checked. Nothing is
     collected from the routers here — this is the source of truth's verdict."""
     c = _compliance_cache.get("r")
-    if refresh or not c or time.time() - c["generated"] > 30:
+    if refresh or not c or time.time() - c["generated"] > COMPLIANCE_TTL:
         import difflib
         I = intent_mod.load(); routers = {d["name"]: d for d in I["devices"] if d["role"] in intent_mod.ROUTER_ROLES}
         tok = nautobot_token(); H = {"Authorization": f"Token {tok}"}
@@ -1127,6 +1185,30 @@ def _golden_scheduler():
         except Exception as e:  # noqa: BLE001
             auth.audit(AUDIT, {"name": "scheduler", "role": "operator"}, "run.start", None, mode="golden", error=str(e)[:200])
         _schedule["next"] = time.time() + GOLDEN_INTERVAL_HOURS * 3600
+
+
+INVENTORY_REFRESH = float(os.environ.get("INVENTORY_REFRESH", "25"))   # just under the inventory's own TTL
+
+
+@app.on_event("startup")
+def _start_collectors():
+    """The two live collectors run in the background, not inside a scrape: the tunnel inventory (SSH to every headend) and the
+    interconnect (SSH to the DCI and the two zone servers) each take tens of seconds, which is more than Prometheus waits."""
+    interconnect.start()
+
+    warm = {"compliance": 0.0}
+
+    def inventory_loop():
+        while True:
+            try:
+                if any(st == "running" for (n, role), st in _vm_states().items() if role == "hub"):
+                    inv().get(refresh=True, with_live=True)
+                if time.time() - warm["compliance"] > COMPLIANCE_TTL / 2:   # keep Nautobot's verdict warm: the scrape reads this cache
+                    compliance_report(refresh=True); warm["compliance"] = time.time()
+            except Exception:  # noqa: BLE001 — a collector must not take the portal down
+                pass
+            time.sleep(INVENTORY_REFRESH)
+    threading.Thread(target=inventory_loop, name="inventory", daemon=True).start()
 
 
 @app.on_event("startup")
