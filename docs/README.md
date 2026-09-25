@@ -25,6 +25,7 @@
   `webapp/.venv/bin/python docs/build_deck.py`; the same layout description also writes `portal-workflows-preview.html`,
   and `portal-workflows.pdf` is that preview printed by Chrome — a read-only companion for anyone without PowerPoint
   (this host has no LibreOffice to convert the deck itself, which is why the preview exists at all).
+  `webapp/demo/portal-workflows.mp4` is the same walkthrough as a 2½-minute video, recorded against the live portal.
 - `requirements.pdf` / `requirements.xlsx` — the **requirements specification** of the service: 106 numbered requirements
   (NET, SOT, INT, NAC, FW, PKI, CUST, HOST, INET, SEC, RUN, UI, CMP, API, MON, TST, LAB, DOC, NFR) with a MUST / SHOULD / MAY
   priority, acceptance criteria and the Robot suite or code that verifies each, plus the system context, roles and glossary,

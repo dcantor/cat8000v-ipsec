@@ -303,6 +303,11 @@ plans, the branch pages, hosts and the ping mesh, firewalls, PKI, runs (queue, r
 ![Swagger](docs/screenshots/portal-swagger.png)
 
 ### Demos and documentation
+- `webapp/demo/portal-workflows.mp4` / `.gif` — the **executive walkthrough**, the moving version of
+  `docs/portal-workflows.pptx` beat for beat: sign-in and roles, the task launcher, the add-a-branch wizard step by step,
+  a finished job with its steps and tests, add a headend, changing a branch's IKE authentication, removal, the job ledger,
+  the daily view with the live topology and headend capacity, and drift. 2½ minutes, recorded against the live portal and
+  strictly read-only — every dialog is cancelled and no job is started (`webapp/demo/record_workflows.py` re-records it).
 - `webapp/demo/portal-demo.mp4` / `.gif` — a 3½-minute annotated tour of the portal: sign-in and roles, the intent form and the
   routers' day-2 actions, the spoke wizard with the customer block, runs and the queue, the inventory (topology, capacity, ping
   mesh live), Branches with the ACME customers / design patterns and filters, a router's page (live show, configuration, history),
