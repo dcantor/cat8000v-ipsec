@@ -18,6 +18,13 @@
   appendix carries the configuration of `host-spoke1`, the `DCI` and the acquisition's DNS server (from the last run's
   `configs/post-run/`, with the thousand generated lines collapsed) and a full topology diagram of the lab — every VM,
   every link, the ten VTIs and the DCI chain — with the tunnel and router tables, all generated from `lab.conf` and the intent.
+- `portal-workflows.pptx` — **Executive overview of the portal's workflows**, fifteen slides: the task launcher, what every
+  job looks like, the add-a-branch wizard step by step (identity → addressing → review → the run), add a headend, the
+  day-two changes, removal, the job ledger, the daily view and drift. Every screenshot is a real capture of the running
+  portal (`docs/screenshots/`, taken by `docs/screenshots.py` against the live lab). Rebuild with
+  `webapp/.venv/bin/python docs/build_deck.py`; the same layout description also writes `portal-workflows-preview.html`,
+  and `portal-workflows.pdf` is that preview printed by Chrome — a read-only companion for anyone without PowerPoint
+  (this host has no LibreOffice to convert the deck itself, which is why the preview exists at all).
 - `requirements.pdf` / `requirements.xlsx` — the **requirements specification** of the service: 106 numbered requirements
   (NET, SOT, INT, NAC, FW, PKI, CUST, HOST, INET, SEC, RUN, UI, CMP, API, MON, TST, LAB, DOC, NFR) with a MUST / SHOULD / MAY
   priority, acceptance criteria and the Robot suite or code that verifies each, plus the system context, roles and glossary,
