@@ -61,6 +61,8 @@ class Recorder:
         if not b: return
         x, y = b["x"] + b["width"] + 14, b["y"] + max(0, b["height"] / 2 - 16)
         if x > self.width - 360: x, y = max(10, b["x"] - 360), b["y"] + b["height"] + 10
+        x = min(max(10, x), self.width - 360)             # a callout that lands off-screen is a callout nobody sees:
+        y = min(max(10, y), self.height - 120)            # clamp it into the frame (wide elements pushed it past both edges)
         page.evaluate("([x, y, t]) => { const n = document.getElementById('demo-note'); n.textContent = t;"
                       " n.style.left = x + 'px'; n.style.top = y + 'px'; n.style.display = 'block'; }", [x, y, text])
         el.evaluate("e => e.classList.add('demo-ring')")
